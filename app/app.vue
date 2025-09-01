@@ -27,7 +27,7 @@ let activeNodes: AudioNode[] = [];
 let soundInterval: any;
 
 onMounted(async () => {
-  const samplePaths: Record<keyof typeof samples.value, string> = {
+  const samplePaths: Record<string, string> = {
     piano: '/piano-c4.wav', bass: '/bass-c1.wav', ride: '/drum-ride.wav', brush: '/drum-brush.wav',
     epiano: '/epiano-c4.wav', kick: '/drum-kick.wav', snare: '/drum-snare.wav', pad: '/pad-cmaj7.wav',
   };
@@ -50,15 +50,18 @@ onMounted(async () => {
       loadingMessage.value = `楽器を準備しています... (${loadedCount}/${audioFileKeys.length})`;
     };
     
-    // 順番に1つずつ読み込み、状況を表示する
+    // ★★★ ここからが修正箇所です ★★★
     for (const key of audioFileKeys) {
-      const path = samplePaths[key as keyof typeof samplePaths];
-      if (!path) continue; // reverbキーなどはスキップ
-      loadingMessage.value = `読み込み中: ${path}`;
-      const buffer = await loadSample(path);
-      samples.value[key] = buffer;
-      updateProgress();
+      const path = samplePaths[key];
+      // pathがundefinedでないことを保証
+      if (path) {
+        loadingMessage.value = `読み込み中: ${path}`;
+        const buffer = await loadSample(path);
+        samples.value[key] = buffer;
+        updateProgress();
+      }
     }
+    // ★★★ ここまで ★★★
 
     loadingMessage.value = '店内の響きを調整しています...';
     const sampleRate = audioContext.sampleRate;
@@ -107,7 +110,18 @@ const playMusic = (menuName: string, seed?: string) => {
   isPlaying.value = true;
   selectedMenu.value = menuName;
 };
-const stopMusic = () => { if (!isPlaying.value) return; clearInterval(soundInterval); clearTimeout(soundInterval); activeNodes.forEach(node => { if (node instanceof OscillatorNode || node instanceof AudioBufferSourceNode) { try { 'stop' in node && node.stop(); } catch (e) {} } node.disconnect(); }); activeNodes = []; isPlaying.value = false; };
+
+const stopMusic = () => {
+  if (!isPlaying.value) return;
+  clearInterval(soundInterval);
+  clearTimeout(soundInterval);
+  activeNodes.forEach(node => {
+    node.disconnect();
+  });
+  activeNodes = [];
+  isPlaying.value = false;
+};
+
 const togglePlayback = () => { if (isPlaying.value) { stopMusic(); } else { if (selectedMenu.value && currentSeed.value) { const [menuName, seed] = currentSeed.value.split(':'); if (menuName && seed) playMusic(menuName, seed); } } };
 const handleVolumeChange = (event: Event) => { const newVolume = parseFloat((event.target as HTMLInputElement).value); volume.value = newVolume; if (masterGainNode) { masterGainNode.gain.linearRampToValueAtTime(newVolume, audioContext.currentTime + 0.1); } };
 const openModal = () => { isModalVisible.value = true; };
@@ -139,6 +153,7 @@ const createConcentrationSound = (rng: () => number) => {
   lfo.start();
   activeNodes.push(whiteNoise, pinkFilter, lfo, lfoGain);
 };
+
 const createRelaxSound = (rng: () => number) => {
   if (!samples.value.pad) return;
   const source = audioContext.createBufferSource();
@@ -157,6 +172,7 @@ const createRelaxSound = (rng: () => number) => {
   detuneLfo.start();
   activeNodes.push(source, detuneLfo, detuneGain);
 };
+
 const createJazzSound = (rng: () => number) => {
   if (!samples.value.piano || !samples.value.bass || !samples.value.ride || !samples.value.brush) return;
   let beat = 0;
@@ -191,15 +207,16 @@ const createJazzSound = (rng: () => number) => {
   };
   const sequencer = () => {
     const now = audioContext.currentTime;
-    playSample(samples.value.ride!, now, { vol: 0.2, noReverb: true });
-    playSample(samples.value.ride!, now + (intervalTime / 1000) * 0.5, { vol: 0.1, noReverb: true });
-    if (beat % 2 === 1) playSample(samples.value.brush!, now, { vol: 0.15, noReverb: true });
+    playSample(samples.value.ride!, now, { vol: 0.2, noReverb: true, duration: 1.0 });
+    playSample(samples.value.ride!, now + (intervalTime / 1000) * 0.5, { vol: 0.1, noReverb: true, duration: 0.5 });
+    if (beat % 2 === 1) playSample(samples.value.brush!, now, { vol: 0.15, noReverb: true, duration: 0.2 });
     if (beat % 4 === 0) playSample(samples.value.bass!, now, { detune: bassScale[Math.floor(rng() * bassScale.length)], vol: 0.4, duration: intervalTime / 1000 });
     if (rng() < 0.25) playSample(samples.value.piano!, now, { detune: pianoScale[Math.floor(rng() * pianoScale.length)], vol: 0.35, duration: (intervalTime / 1000) * (1 + rng() * 2), loop: true });
     beat = (beat + 1) % 16;
   };
   soundInterval = setInterval(sequencer, intervalTime);
 };
+
 const createLoFiSound = (rng: () => number) => {
   if (!samples.value.epiano || !samples.value.kick || !samples.value.snare) return;
   let beat = 0;
@@ -221,6 +238,10 @@ const createLoFiSound = (rng: () => number) => {
       gain.connect(reverbNode);
     }
     source.start(startTime);
+    // Lo-Fiのドラムは短いので、stopMusicに任せず自動で止める
+    if(options.noReverb) {
+      source.stop(startTime + 0.5);
+    }
     activeNodes.push(source, gain);
   };
   const sequencer = () => {
