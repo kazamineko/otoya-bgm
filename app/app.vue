@@ -50,10 +50,8 @@ onMounted(async () => {
       loadingMessage.value = `楽器を準備しています... (${loadedCount}/${audioFileKeys.length})`;
     };
     
-    // ★★★ ここからが修正箇所です ★★★
     for (const key of audioFileKeys) {
       const path = samplePaths[key];
-      // pathがundefinedでないことを保証
       if (path) {
         loadingMessage.value = `読み込み中: ${path}`;
         const buffer = await loadSample(path);
@@ -61,7 +59,6 @@ onMounted(async () => {
         updateProgress();
       }
     }
-    // ★★★ ここまで ★★★
 
     loadingMessage.value = '店内の響きを調整しています...';
     const sampleRate = audioContext.sampleRate;
@@ -192,17 +189,21 @@ const createJazzSound = (rng: () => number) => {
     const gain = audioContext.createGain();
     gain.gain.setValueAtTime(0, startTime);
     gain.gain.linearRampToValueAtTime(options.vol || 1, startTime + 0.01);
-    if (options.duration) {
-      gain.gain.setValueAtTime(options.vol || 1, startTime + options.duration - 0.1);
-      gain.gain.linearRampToValueAtTime(0, startTime + options.duration);
-      source.stop(startTime + options.duration);
-    }
+    
     source.connect(gain);
     gain.connect(masterGainNode);
     if (!options.noReverb) {
       gain.connect(reverbNode);
     }
-    source.start(startTime);
+
+    source.start(startTime); // ★★★ 修正箇所: この行を上に移動しました ★★★
+
+    if (options.duration) {
+      gain.gain.setValueAtTime(options.vol || 1, startTime + options.duration - 0.1);
+      gain.gain.linearRampToValueAtTime(0, startTime + options.duration);
+      source.stop(startTime + options.duration);
+    }
+    
     activeNodes.push(source, gain);
   };
   const sequencer = () => {
