@@ -10,7 +10,7 @@ const volume = ref(0.5);
 let audioContext: AudioContext;
 let masterGainNode: GainNode;
 let activeNodes: AudioNode[] = [];
-let chordChangeInterval: number; // 和音を切り替えるタイマーのID
+let soundInterval: number; // タイマーのIDを管理する変数
 
 // --- 関数定義 ---
 
@@ -32,6 +32,9 @@ const playMusic = (menuName: string) => {
     case 'リラックス・デカフェ':
       createRelaxSound();
       break;
+    case 'ジャズ・スペシャル':
+      createJazzSound();
+      break;
     default:
       createTestSound();
       break;
@@ -44,7 +47,7 @@ const playMusic = (menuName: string) => {
 // 音楽を停止する関数
 const stopMusic = () => {
   if (!isPlaying.value) return;
-  clearInterval(chordChangeInterval); // 和音切り替えタイマーを停止
+  clearInterval(soundInterval); // ★全てのタイマーをこれで停止
 
   activeNodes.forEach(node => {
     if (node instanceof OscillatorNode || node instanceof AudioBufferSourceNode) {
@@ -105,7 +108,7 @@ const createConcentrationSound = () => {
   activeNodes.push(whiteNoise, pinkFilter, lfo, lfoGain);
 };
 
-// 「リラックス・デカフェ」のサウンドを生成 (改良版)
+// 「リラックス・デカフェ」のサウンドを生成
 const createRelaxSound = () => {
   const chords = [
     [261.63, 329.63, 392.00, 493.88], // Cmaj7
@@ -117,16 +120,13 @@ const createRelaxSound = () => {
   let currentOscillators: { osc: OscillatorNode, gain: GainNode }[] = [];
 
   const playChord = () => {
-    // 前の和音を滑らかに消す
     currentOscillators.forEach(({ osc, gain }) => {
       gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 2.5);
       osc.stop(audioContext.currentTime + 2.5);
     });
     
-    // 新しい和音を生成
     const frequencies = chords[currentChordIndex];
-    currentOscillators = frequencies.flatMap(freq => { // flatMapを使用して配列をフラットに
-      // ★変更点1: 基本の音（音域を元に戻す）
+    currentOscillators = frequencies.flatMap(freq => {
       const baseOsc = audioContext.createOscillator();
       baseOsc.type = 'sine';
       baseOsc.frequency.setValueAtTime(freq, audioContext.currentTime);
@@ -137,13 +137,12 @@ const createRelaxSound = () => {
       baseGain.connect(masterGainNode);
       baseOsc.start();
 
-      // ★変更点2: 1オクターブ上の倍音を追加して音色を豊かに
       const overtoneOsc = audioContext.createOscillator();
       overtoneOsc.type = 'sine';
       overtoneOsc.frequency.setValueAtTime(freq * 2, audioContext.currentTime);
       const overtoneGain = audioContext.createGain();
       overtoneGain.gain.setValueAtTime(0, audioContext.currentTime);
-      overtoneGain.gain.linearRampToValueAtTime(0.05, audioContext.currentTime + 2.0); // 音量は基本の半分
+      overtoneGain.gain.linearRampToValueAtTime(0.05, audioContext.currentTime + 2.0);
       overtoneOsc.connect(overtoneGain);
       overtoneGain.connect(masterGainNode);
       overtoneOsc.start();
@@ -154,12 +153,87 @@ const createRelaxSound = () => {
         { osc: overtoneOsc, gain: overtoneGain }
       ];
     });
-
     currentChordIndex = (currentChordIndex + 1) % chords.length;
   };
-
   playChord();
-  chordChangeInterval = window.setInterval(playChord, 5000);
+  soundInterval = window.setInterval(playChord, 5000);
+};
+
+// 「ジャズ・スペシャル」のサウンドを生成
+const createJazzSound = () => {
+  let beat = 0;
+  const tempo = 120; // BPM
+  const intervalTime = 60000 / tempo / 2; // 8分音符の間隔
+
+  // ピアノのメロディ用の音階 (Cマイナーペンタトニックスケール)
+  const pianoScale = [261.6, 311.1, 349.2, 392.0, 466.1, 523.2];
+  // ベースのコード進行 (Cm -> Fm -> G -> Cm)
+  const bassLine = [130.8, 174.6, 196.0, 130.8];
+
+  // 音符を再生するヘルパー関数
+  const playNote = (freq: number, startTime: number, duration: number, vol: number, type: OscillatorType = 'sine') => {
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, startTime);
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(vol, startTime + 0.01);
+    gain.gain.linearRampToValueAtTime(0, startTime + duration);
+    osc.connect(gain);
+    gain.connect(masterGainNode);
+    osc.start(startTime);
+    osc.stop(startTime + duration);
+  };
+  
+  // ハイハットを再生するヘルパー関数
+  const playHiHat = (startTime: number) => {
+    const noise = audioContext.createBufferSource();
+    const bufferSize = audioContext.sampleRate * 0.1;
+    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    noise.buffer = buffer;
+
+    const filter = audioContext.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 5000;
+
+    const gain = audioContext.createGain();
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(0.1, startTime + 0.01);
+    gain.gain.linearRampToValueAtTime(0, startTime + 0.05);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(masterGainNode);
+    noise.start(startTime);
+  };
+
+  // シーケンサー
+  const sequencer = () => {
+    const now = audioContext.currentTime;
+    
+    // 2拍目と4拍目にハイハット
+    if (beat % 2 === 1) {
+      playHiHat(now);
+    }
+
+    // 4拍ごとにベース音
+    if (beat % 4 === 0) {
+      const bassNote = bassLine[Math.floor(beat / 4) % bassLine.length];
+      playNote(bassNote, now, intervalTime / 1000 * 2, 0.3);
+    }
+    
+    // 15%の確率でピアノの音を鳴らす
+    if (Math.random() < 0.15) {
+      const pianoNote = pianoScale[Math.floor(Math.random() * pianoScale.length)];
+      playNote(pianoNote, now, intervalTime / 1000, 0.2, 'triangle');
+    }
+
+    beat = (beat + 1) % 16; // 4小節でループ
+  };
+
+  soundInterval = window.setInterval(sequencer, intervalTime);
 };
 
 // テスト用のサウンドを生成
