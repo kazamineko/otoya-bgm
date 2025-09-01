@@ -35,6 +35,9 @@ const playMusic = (menuName: string) => {
     case 'ジャズ・スペシャル':
       createJazzSound();
       break;
+    case 'Lo-Fi・ビター':
+      createLoFiSound();
+      break;
     default:
       createTestSound();
       break;
@@ -47,7 +50,7 @@ const playMusic = (menuName: string) => {
 // 音楽を停止する関数
 const stopMusic = () => {
   if (!isPlaying.value) return;
-  clearInterval(soundInterval); // ★全てのタイマーをこれで停止
+  clearInterval(soundInterval);
 
   activeNodes.forEach(node => {
     if (node instanceof OscillatorNode || node instanceof AudioBufferSourceNode) {
@@ -148,10 +151,7 @@ const createRelaxSound = () => {
       overtoneOsc.start();
       
       activeNodes.push(baseOsc, baseGain, overtoneOsc, overtoneGain);
-      return [
-        { osc: baseOsc, gain: baseGain },
-        { osc: overtoneOsc, gain: overtoneGain }
-      ];
+      return [ { osc: baseOsc, gain: baseGain }, { osc: overtoneOsc, gain: overtoneGain } ];
     });
     currentChordIndex = (currentChordIndex + 1) % chords.length;
   };
@@ -162,79 +162,74 @@ const createRelaxSound = () => {
 // 「ジャズ・スペシャル」のサウンドを生成
 const createJazzSound = () => {
   let beat = 0;
-  const tempo = 120; // BPM
-  const intervalTime = 60000 / tempo / 2; // 8分音符の間隔
-
-  // ピアノのメロディ用の音階 (Cマイナーペンタトニックスケール)
+  const tempo = 120;
+  const intervalTime = 60000 / tempo / 2;
   const pianoScale = [261.6, 311.1, 349.2, 392.0, 466.1, 523.2];
-  // ベースのコード進行 (Cm -> Fm -> G -> Cm)
   const bassLine = [130.8, 174.6, 196.0, 130.8];
+  const playNote = (freq: number, startTime: number, duration: number, vol: number, type: OscillatorType = 'sine') => { const osc = audioContext.createOscillator(); const gain = audioContext.createGain(); osc.type = type; osc.frequency.setValueAtTime(freq, startTime); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(vol, startTime + 0.01); gain.gain.linearRampToValueAtTime(0, startTime + duration); osc.connect(gain); gain.connect(masterGainNode); osc.start(startTime); osc.stop(startTime + duration); };
+  const playHiHat = (startTime: number) => { const noise = audioContext.createBufferSource(); const bufferSize = audioContext.sampleRate * 0.1; const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1; noise.buffer = buffer; const filter = audioContext.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 5000; const gain = audioContext.createGain(); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(0.1, startTime + 0.01); gain.gain.linearRampToValueAtTime(0, startTime + 0.05); noise.connect(filter); filter.connect(gain); gain.connect(masterGainNode); noise.start(startTime); };
+  const sequencer = () => { const now = audioContext.currentTime; if (beat % 2 === 1) { playHiHat(now); } if (beat % 4 === 0) { const bassNote = bassLine[Math.floor(beat / 4) % bassLine.length]; playNote(bassNote, now, intervalTime / 1000 * 2, 0.3); } if (Math.random() < 0.15) { const pianoNote = pianoScale[Math.floor(Math.random() * pianoScale.length)]; playNote(pianoNote, now, intervalTime / 1000, 0.2, 'triangle'); } beat = (beat + 1) % 16; };
+  soundInterval = window.setInterval(sequencer, intervalTime);
+};
 
-  // 音符を再生するヘルパー関数
-  const playNote = (freq: number, startTime: number, duration: number, vol: number, type: OscillatorType = 'sine') => {
-    const osc = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, startTime);
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(vol, startTime + 0.01);
-    gain.gain.linearRampToValueAtTime(0, startTime + duration);
-    osc.connect(gain);
-    gain.connect(masterGainNode);
-    osc.start(startTime);
-    osc.stop(startTime + duration);
-  };
+// 「Lo-Fi・ビター」のサウンドを生成
+const createLoFiSound = () => {
+  // 1. レコードノイズを常時再生
+  const bufferSize = 2 * audioContext.sampleRate;
+  const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+  const output = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() * 2 - 1; }
+  const vinylNoise = audioContext.createBufferSource();
+  vinylNoise.buffer = noiseBuffer;
+  vinylNoise.loop = true;
+  const vinylFilter = audioContext.createBiquadFilter();
+  vinylFilter.type = 'highpass';
+  vinylFilter.frequency.value = 3000; // 高音域だけ残す
+  const vinylGain = audioContext.createGain();
+  vinylGain.gain.value = 0.05; // 小さめの音量
+  vinylNoise.connect(vinylFilter);
+  vinylFilter.connect(vinylGain);
+  vinylGain.connect(masterGainNode);
+  vinylNoise.start();
+  activeNodes.push(vinylNoise, vinylFilter, vinylGain);
+
+  // 2. シーケンサーの準備
+  let beat = 0;
+  const tempo = 85; // Lo-Fiらしいゆったりしたテンポ
+  const intervalTime = 60000 / tempo / 4; // 16分音符の間隔
+  const chords = [ [130.81, 196.00, 246.94, 311.13], [174.61, 261.63, 329.63, 415.30], [196.00, 293.66, 349.23, 440.00], [155.56, 233.08, 293.66, 369.99] ]; // Cm7 -> F7 -> G7 -> Ebmaj7
   
-  // ハイハットを再生するヘルパー関数
-  const playHiHat = (startTime: number) => {
-    const noise = audioContext.createBufferSource();
-    const bufferSize = audioContext.sampleRate * 0.1;
-    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-    noise.buffer = buffer;
+  // 3. 各楽器の再生関数
+  const playNote = (freq: number, startTime: number, duration: number, vol: number, type: OscillatorType) => { const osc = audioContext.createOscillator(); const gain = audioContext.createGain(); osc.type = type; osc.frequency.setValueAtTime(freq, startTime); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(vol, startTime + 0.02); gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration); osc.connect(gain); gain.connect(masterGainNode); osc.start(startTime); osc.stop(startTime + duration); };
+  const playKick = (startTime: number) => { playNote(60, startTime, 0.2, 0.5, 'sine'); };
+  const playSnare = (startTime: number) => { const noise = audioContext.createBufferSource(); const bufferSize = audioContext.sampleRate * 0.1; const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1; noise.buffer = buffer; const filter = audioContext.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 1500; const gain = audioContext.createGain(); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(0.4, startTime + 0.01); gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.1); noise.connect(filter); filter.connect(gain); gain.connect(masterGainNode); noise.start(startTime); };
+  const playChord = (startTime: number, frequencies: number[]) => { frequencies.forEach(freq => { playNote(freq, startTime, 1.5, 0.1, 'triangle'); }); };
 
-    const filter = audioContext.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.value = 5000;
-
-    const gain = audioContext.createGain();
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(0.1, startTime + 0.01);
-    gain.gain.linearRampToValueAtTime(0, startTime + 0.05);
-
-    noise.connect(filter);
-    filter.connect(gain);
-    gain.connect(masterGainNode);
-    noise.start(startTime);
-  };
-
-  // シーケンサー
+  // 4. シーケンサーのメインループ
   const sequencer = () => {
     const now = audioContext.currentTime;
+    const current16th = beat % 16; // 1小節を16分割
     
-    // 2拍目と4拍目にハイハット
-    if (beat % 2 === 1) {
-      playHiHat(now);
+    // キック: 1拍目と3拍目の頭
+    if (current16th === 0 || current16th === 8) {
+      playKick(now);
     }
-
-    // 4拍ごとにベース音
-    if (beat % 4 === 0) {
-      const bassNote = bassLine[Math.floor(beat / 4) % bassLine.length];
-      playNote(bassNote, now, intervalTime / 1000 * 2, 0.3);
+    // スネア: 2拍目と4拍目の頭
+    if (current16th === 4 || current16th === 12) {
+      playSnare(now);
+    }
+    // コード: 各小節の頭
+    if (current16th === 0) {
+      const chord = chords[Math.floor(beat / 16) % chords.length];
+      playChord(now, chord);
     }
     
-    // 15%の確率でピアノの音を鳴らす
-    if (Math.random() < 0.15) {
-      const pianoNote = pianoScale[Math.floor(Math.random() * pianoScale.length)];
-      playNote(pianoNote, now, intervalTime / 1000, 0.2, 'triangle');
-    }
-
-    beat = (beat + 1) % 16; // 4小節でループ
+    beat = (beat + 1) % 64; // 4小節でループ
   };
 
   soundInterval = window.setInterval(sequencer, intervalTime);
 };
+
 
 // テスト用のサウンドを生成
 const createTestSound = () => {
