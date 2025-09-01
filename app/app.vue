@@ -36,6 +36,7 @@ const playMusic = (menuName: string) => {
 const stopMusic = () => {
   if (!isPlaying.value) return;
   clearInterval(soundInterval);
+  window.clearTimeout(soundInterval); // setTimeoutもクリア
   activeNodes.forEach(node => {
     if (node instanceof OscillatorNode || node instanceof AudioBufferSourceNode) {
       try { 'stop' in node && node.stop(); } catch (e) {}
@@ -62,19 +63,24 @@ const closeModal = () => { isModalVisible.value = false; };
 // --- サウンド生成関数 ---
 const createConcentrationSound = () => { const bufferSize = 2 * audioContext.sampleRate; const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const output = noiseBuffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() * 2 - 1; } const whiteNoise = audioContext.createBufferSource(); whiteNoise.buffer = noiseBuffer; whiteNoise.loop = true; const pinkFilter = audioContext.createBiquadFilter(); pinkFilter.type = 'lowpass'; pinkFilter.frequency.value = 1200; const lfo = audioContext.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.2; const lfoGain = audioContext.createGain(); lfoGain.gain.value = 0.05; whiteNoise.connect(pinkFilter); pinkFilter.connect(masterGainNode); lfo.connect(lfoGain); lfoGain.connect(masterGainNode.gain); whiteNoise.start(); lfo.start(); activeNodes.push(whiteNoise, pinkFilter, lfo, lfoGain); };
 
-// 「リラックス・デカフェ」のサウンドを生成 (修正済み)
+// 「リラックス・デカフェ」のサウンドを生成 (ランダム性向上版)
 const createRelaxSound = () => {
-  const chords = [ [261.63, 329.63, 392.00, 493.88], [349.23, 440.00, 523.25, 659.26], [392.00, 493.88, 587.33, 783.99], [261.63, 329.63, 392.00, 493.88] ];
-  let currentChordIndex = 0;
+  const chordPool = [
+    [261.63, 329.63, 392.00, 493.88], // Cmaj7
+    [349.23, 440.00, 523.25, 659.26], // Fmaj7
+    [392.00, 493.88, 587.33, 783.99], // G7
+    [293.66, 369.99, 440.00, 554.37]  // Dm7
+  ];
   let currentOscillators: { osc: OscillatorNode, gain: GainNode }[] = [];
+
   const playChord = () => {
     currentOscillators.forEach(({ osc, gain }) => {
       gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 2.5);
       osc.stop(audioContext.currentTime + 2.5);
     });
     
-    const frequencies = chords[currentChordIndex];
-    if (frequencies) { // ★★★ ここが修正箇所です ★★★
+    const frequencies = chordPool[Math.floor(Math.random() * chordPool.length)];
+    if (frequencies) {
       currentOscillators = frequencies.flatMap(freq => {
         const baseOsc = audioContext.createOscillator();
         baseOsc.type = 'sine';
@@ -100,36 +106,53 @@ const createRelaxSound = () => {
         return [ { osc: baseOsc, gain: baseGain }, { osc: overtoneOsc, gain: overtoneGain } ];
       });
     }
-    currentChordIndex = (currentChordIndex + 1) % chords.length;
   };
-  playChord();
-  soundInterval = window.setInterval(playChord, 5000);
+  
+  const scheduleNextChord = () => {
+    playChord();
+    const nextInterval = 4000 + Math.random() * 3000;
+    soundInterval = window.setTimeout(scheduleNextChord, nextInterval);
+  };
+  scheduleNextChord();
 };
 
 // 「ジャズ・スペシャル」のサウンドを生成 (修正済み)
 const createJazzSound = () => {
   let beat = 0;
   const tempo = 120;
-  const intervalTime = 60000 / tempo / 2;
-  const pianoScale = [261.6, 311.1, 349.2, 392.0, 466.1, 523.2];
-  const bassLine = [130.8, 174.6, 196.0, 130.8];
+  const intervalTime = 60000 / tempo;
+  const pianoScale = [261.6, 311.1, 349.2, 392.0, 466.1, 523.2, 587.3];
+  const bassPatterns = [
+      [130.8, 174.6, 196.0, 130.8],
+      [130.8, 196.0, 174.6, 130.8]
+  ];
+  const bassLine = bassPatterns[Math.floor(Math.random() * bassPatterns.length)];
+  let nextPianoTime = 0;
+
   const playNote = (freq: number, startTime: number, duration: number, vol: number, type: OscillatorType = 'sine') => { const osc = audioContext.createOscillator(); const gain = audioContext.createGain(); osc.type = type; osc.frequency.setValueAtTime(freq, startTime); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(vol, startTime + 0.01); gain.gain.linearRampToValueAtTime(0, startTime + duration); osc.connect(gain); gain.connect(masterGainNode); osc.start(startTime); osc.stop(startTime + duration); };
   const playHiHat = (startTime: number) => { const noise = audioContext.createBufferSource(); const bufferSize = audioContext.sampleRate * 0.1; const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1; noise.buffer = buffer; const filter = audioContext.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 5000; const gain = audioContext.createGain(); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(0.1, startTime + 0.01); gain.gain.linearRampToValueAtTime(0, startTime + 0.05); noise.connect(filter); filter.connect(gain); gain.connect(masterGainNode); noise.start(startTime); };
+  
   const sequencer = () => {
     const now = audioContext.currentTime;
-    if (beat % 2 === 1) { playHiHat(now); }
-    if (beat % 4 === 0) {
+    
+    playHiHat(now);
+    playHiHat(now + (intervalTime / 1000) * 0.66);
+
+    // ★★★ ここが修正箇所です ★★★
+    if (beat % 4 === 0 && bassLine) {
       const bassNote = bassLine[Math.floor(beat / 4) % bassLine.length];
-      if (bassNote !== undefined) {
-        playNote(bassNote, now, intervalTime / 1000 * 2, 0.3);
-      }
+      if (bassNote) playNote(bassNote, now, intervalTime / 1000 * 1.5, 0.3);
     }
-    if (Math.random() < 0.15) {
+    
+    if (now >= nextPianoTime) {
       const pianoNote = pianoScale[Math.floor(Math.random() * pianoScale.length)];
-      if (pianoNote !== undefined) {
-        playNote(pianoNote, now, intervalTime / 1000, 0.2, 'triangle');
+      if (pianoNote) {
+        const duration = (intervalTime / 1000) * (0.5 + Math.random() * 1.5);
+        playNote(pianoNote, now, duration, 0.2, 'triangle');
       }
+      nextPianoTime = now + 0.25 + Math.random() * 1.25;
     }
+
     beat = (beat + 1) % 16;
   };
   soundInterval = window.setInterval(sequencer, intervalTime);
@@ -169,7 +192,7 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hir
 .title { color: #363636; font-weight: bold; margin-bottom: 8px; }
 .subtitle { color: #555; margin-top: 0; margin-bottom: 30px; }
 .menu-container { display: flex; flex-direction: column; gap: 15px; }
-.menu-button { background-color: #f5f5f5; border: 1px solid #dbdbdb; border-radius: 4px; padding: 15px 20px; cursor: pointer; transition: all 0.2s ease; text-align: left; display: flex; flex-direction: column; font-family: inherit; }
+.menu-button { background-color: #f5f5ff; border: 1px solid #dbdbdb; border-radius: 4px; padding: 15px 20px; cursor: pointer; transition: all 0.2s ease; text-align: left; display: flex; flex-direction: column; font-family: inherit; }
 .menu-button:hover { background-color: #e8e8e8; border-color: #b5b5b5; transform: translateY(-2px); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 .menu-title { font-size: 1.1em; font-weight: bold; color: #363636; }
 .menu-description { font-size: 0.9em; color: #7a7a7a; margin-top: 4px; }
