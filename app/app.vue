@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import AboutModal from '../components/AboutModal.vue'; // 修正済みのパス
+import AboutModal from '../components/AboutModal.vue';
 
 // --- 状態変数 ---
 const selectedMenu = ref<string | null>(null);
@@ -61,7 +61,50 @@ const closeModal = () => { isModalVisible.value = false; };
 
 // --- サウンド生成関数 ---
 const createConcentrationSound = () => { const bufferSize = 2 * audioContext.sampleRate; const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const output = noiseBuffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() * 2 - 1; } const whiteNoise = audioContext.createBufferSource(); whiteNoise.buffer = noiseBuffer; whiteNoise.loop = true; const pinkFilter = audioContext.createBiquadFilter(); pinkFilter.type = 'lowpass'; pinkFilter.frequency.value = 1200; const lfo = audioContext.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.2; const lfoGain = audioContext.createGain(); lfoGain.gain.value = 0.05; whiteNoise.connect(pinkFilter); pinkFilter.connect(masterGainNode); lfo.connect(lfoGain); lfoGain.connect(masterGainNode.gain); whiteNoise.start(); lfo.start(); activeNodes.push(whiteNoise, pinkFilter, lfo, lfoGain); };
-const createRelaxSound = () => { const chords = [ [261.63, 329.63, 392.00, 493.88], [349.23, 440.00, 523.25, 659.26], [392.00, 493.88, 587.33, 783.99], [261.63, 329.63, 392.00, 493.88] ]; let currentChordIndex = 0; let currentOscillators: { osc: OscillatorNode, gain: GainNode }[] = []; const playChord = () => { currentOscillators.forEach(({ osc, gain }) => { gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 2.5); osc.stop(audioContext.currentTime + 2.5); }); const frequencies = chords[currentChordIndex]; currentOscillators = frequencies.flatMap(freq => { const baseOsc = audioContext.createOscillator(); baseOsc.type = 'sine'; baseOsc.frequency.setValueAtTime(freq, audioContext.currentTime); const baseGain = audioContext.createGain(); baseGain.gain.setValueAtTime(0, audioContext.currentTime); baseGain.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 2.0); baseOsc.connect(baseGain); baseGain.connect(masterGainNode); baseOsc.start(); const overtoneOsc = audioContext.createOscillator(); overtoneOsc.type = 'sine'; overtoneOsc.frequency.setValueAtTime(freq * 2, audioContext.currentTime); const overtoneGain = audioContext.createGain(); overtoneGain.gain.setValueAtTime(0, audioContext.currentTime); overtoneGain.gain.linearRampToValueAtTime(0.05, audioContext.currentTime + 2.0); overtoneOsc.connect(overtoneGain); overtoneGain.connect(masterGainNode); overtoneOsc.start(); activeNodes.push(baseOsc, baseGain, overtoneOsc, overtoneGain); return [ { osc: baseOsc, gain: baseGain }, { osc: overtoneOsc, gain: overtoneGain } ]; }); currentChordIndex = (currentChordIndex + 1) % chords.length; }; playChord(); soundInterval = window.setInterval(playChord, 5000); };
+
+// 「リラックス・デカフェ」のサウンドを生成 (修正済み)
+const createRelaxSound = () => {
+  const chords = [ [261.63, 329.63, 392.00, 493.88], [349.23, 440.00, 523.25, 659.26], [392.00, 493.88, 587.33, 783.99], [261.63, 329.63, 392.00, 493.88] ];
+  let currentChordIndex = 0;
+  let currentOscillators: { osc: OscillatorNode, gain: GainNode }[] = [];
+  const playChord = () => {
+    currentOscillators.forEach(({ osc, gain }) => {
+      gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 2.5);
+      osc.stop(audioContext.currentTime + 2.5);
+    });
+    
+    const frequencies = chords[currentChordIndex];
+    if (frequencies) { // ★★★ ここが修正箇所です ★★★
+      currentOscillators = frequencies.flatMap(freq => {
+        const baseOsc = audioContext.createOscillator();
+        baseOsc.type = 'sine';
+        baseOsc.frequency.setValueAtTime(freq, audioContext.currentTime);
+        const baseGain = audioContext.createGain();
+        baseGain.gain.setValueAtTime(0, audioContext.currentTime);
+        baseGain.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 2.0);
+        baseOsc.connect(baseGain);
+        baseGain.connect(masterGainNode);
+        baseOsc.start();
+
+        const overtoneOsc = audioContext.createOscillator();
+        overtoneOsc.type = 'sine';
+        overtoneOsc.frequency.setValueAtTime(freq * 2, audioContext.currentTime);
+        const overtoneGain = audioContext.createGain();
+        overtoneGain.gain.setValueAtTime(0, audioContext.currentTime);
+        overtoneGain.gain.linearRampToValueAtTime(0.05, audioContext.currentTime + 2.0);
+        overtoneOsc.connect(overtoneGain);
+        overtoneGain.connect(masterGainNode);
+        overtoneOsc.start();
+        
+        activeNodes.push(baseOsc, baseGain, overtoneOsc, overtoneGain);
+        return [ { osc: baseOsc, gain: baseGain }, { osc: overtoneOsc, gain: overtoneGain } ];
+      });
+    }
+    currentChordIndex = (currentChordIndex + 1) % chords.length;
+  };
+  playChord();
+  soundInterval = window.setInterval(playChord, 5000);
+};
 
 // 「ジャズ・スペシャル」のサウンドを生成 (修正済み)
 const createJazzSound = () => {
