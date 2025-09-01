@@ -105,10 +105,8 @@ const createConcentrationSound = () => {
   activeNodes.push(whiteNoise, pinkFilter, lfo, lfoGain);
 };
 
-// 「リラックス・デカフェ」のサウンドを生成
+// 「リラックス・デカフェ」のサウンドを生成 (改良版)
 const createRelaxSound = () => {
-  // 1. 和音の定義 (周波数Hzの配列)
-  // Cmaj7 -> Fmaj7 -> G7 -> Cmaj7
   const chords = [
     [261.63, 329.63, 392.00, 493.88], // Cmaj7
     [349.23, 440.00, 523.25, 659.26], // Fmaj7
@@ -116,44 +114,52 @@ const createRelaxSound = () => {
     [261.63, 329.63, 392.00, 493.88]  // Cmaj7
   ];
   let currentChordIndex = 0;
-  let currentOscillators: OscillatorNode[] = [];
+  let currentOscillators: { osc: OscillatorNode, gain: GainNode }[] = [];
 
-  // 2. 和音を再生する関数
   const playChord = () => {
     // 前の和音を滑らかに消す
-    currentOscillators.forEach(osc => {
-      const gain = audioContext.createGain();
-      osc.connect(gain);
-      gain.connect(masterGainNode);
-      gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 2.0); // 2秒かけて消える
-      osc.stop(audioContext.currentTime + 2.0);
+    currentOscillators.forEach(({ osc, gain }) => {
+      gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 2.5);
+      osc.stop(audioContext.currentTime + 2.5);
     });
     
-    // 新しい和音を生成して滑らかに再生
+    // 新しい和音を生成
     const frequencies = chords[currentChordIndex];
-    currentOscillators = frequencies.map(freq => {
-      const osc = audioContext.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.value = freq / 2; // 1オクターブ下げて落ち着いた音色に
+    currentOscillators = frequencies.flatMap(freq => { // flatMapを使用して配列をフラットに
+      // ★変更点1: 基本の音（音域を元に戻す）
+      const baseOsc = audioContext.createOscillator();
+      baseOsc.type = 'sine';
+      baseOsc.frequency.setValueAtTime(freq, audioContext.currentTime);
+      const baseGain = audioContext.createGain();
+      baseGain.gain.setValueAtTime(0, audioContext.currentTime);
+      baseGain.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 2.0);
+      baseOsc.connect(baseGain);
+      baseGain.connect(masterGainNode);
+      baseOsc.start();
 
-      const gain = audioContext.createGain();
-      gain.gain.setValueAtTime(0, audioContext.currentTime);
-      gain.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 2.0); // 2秒かけて現れる
-
-      osc.connect(gain);
-      gain.connect(masterGainNode);
-      osc.start();
-      activeNodes.push(osc, gain); // 管理配列に追加
-      return osc;
+      // ★変更点2: 1オクターブ上の倍音を追加して音色を豊かに
+      const overtoneOsc = audioContext.createOscillator();
+      overtoneOsc.type = 'sine';
+      overtoneOsc.frequency.setValueAtTime(freq * 2, audioContext.currentTime);
+      const overtoneGain = audioContext.createGain();
+      overtoneGain.gain.setValueAtTime(0, audioContext.currentTime);
+      overtoneGain.gain.linearRampToValueAtTime(0.05, audioContext.currentTime + 2.0); // 音量は基本の半分
+      overtoneOsc.connect(overtoneGain);
+      overtoneGain.connect(masterGainNode);
+      overtoneOsc.start();
+      
+      activeNodes.push(baseOsc, baseGain, overtoneOsc, overtoneGain);
+      return [
+        { osc: baseOsc, gain: baseGain },
+        { osc: overtoneOsc, gain: overtoneGain }
+      ];
     });
 
-    // 次の和音へ
     currentChordIndex = (currentChordIndex + 1) % chords.length;
   };
 
-  // 3. 最初の和音を再生し、タイマーをセット
   playChord();
-  chordChangeInterval = window.setInterval(playChord, 5000); // 5秒ごとに和音を切り替え
+  chordChangeInterval = window.setInterval(playChord, 5000);
 };
 
 // テスト用のサウンドを生成
@@ -267,7 +273,7 @@ body, html {
 .menu-button:hover {
   background-color: #e8e8e8;
   border-color: #b5b5b5;
-  transform: translateY(-px);
+  transform: translateY(-2px);
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 .menu-title {
