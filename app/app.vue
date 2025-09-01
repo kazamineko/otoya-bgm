@@ -22,12 +22,11 @@ let masterGainNode: GainNode;
 let activeNodes: AudioNode[] = [];
 let soundInterval: any;
 
-// ★初回ロード時にサンプル音源を読み込む
 onMounted(async () => {
   try {
     audioContext = new AudioContext();
     loadingMessage.value = 'ピアノを調律しています...';
-    const response = await fetch('/piano-c4.aiff');
+    const response = await fetch('/piano-c4.wav');
     const arrayBuffer = await response.arrayBuffer();
     pianoSample.value = await audioContext.decodeAudioData(arrayBuffer);
     loadingMessage.value = '準備ができました';
@@ -38,13 +37,11 @@ onMounted(async () => {
   }
 });
 
-// --- 関数定義 ---
 const playMusic = (menuName: string, seed?: string) => {
   if (isLoading.value || (audioContext && audioContext.state === 'suspended')) {
     audioContext.resume();
   }
   if (isPlaying.value) stopMusic();
-
   const randomPart = seed || Date.now().toString(36) + Math.random().toString(36).substring(2);
   currentSeed.value = `${menuName}:${randomPart}`;
   const rng = seedrandom(randomPart);
@@ -69,8 +66,6 @@ const closeModal = () => { isModalVisible.value = false; };
 const copySeed = () => { navigator.clipboard.writeText(currentSeed.value); };
 const playFromSeed = () => { if (seedInput.value) { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター']; if (menuName && seed && validMenus.includes(menuName)) { playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } } };
 
-// --- サウンド生成関数 ---
-
 const createJazzSound = (rng: () => number) => {
   if (!pianoSample.value) return;
 
@@ -80,36 +75,48 @@ const createJazzSound = (rng: () => number) => {
   const bassLine = bassPatterns[Math.floor(rng() * bassPatterns.length)];
   let nextPianoTime = 0;
 
-  // ピアノの音を再生する専用関数 (ループ機能追加版)
   const playPianoNote = (startTime: number, detune: number, duration: number, vol: number) => {
     const source = audioContext.createBufferSource();
     source.buffer = pianoSample.value;
     source.detune.value = detune;
-    
-    // ★★★ ここが変更箇所です ★★★
-    // 音が途切れないように、サステイン部分をループさせる
     source.loop = true;
-    source.loopStart = 0.1; // 音の立ち上がり直後
-    source.loopEnd = 2.5;   // 音が十分に減衰したあたり
-
+    source.loopStart = 0.1;
+    source.loopEnd = 2.5;
     const gain = audioContext.createGain();
     gain.gain.setValueAtTime(0, startTime);
     gain.gain.linearRampToValueAtTime(vol, startTime + 0.01);
-    // durationの少し手前から音を消し始めることで、自然な減衰を演出
     gain.gain.setValueAtTime(vol, startTime + duration - 0.1);
     gain.gain.linearRampToValueAtTime(0, startTime + duration);
-
     source.connect(gain);
     gain.connect(masterGainNode);
     source.start(startTime);
-    // durationが経過したら再生を停止する
     source.stop(startTime + duration);
-
     activeNodes.push(source, gain);
   };
   
   const playBassNote = (freq: number, startTime: number, duration: number, vol: number) => { const osc = audioContext.createOscillator(); osc.type = 'sine'; const gain = audioContext.createGain(); osc.frequency.setValueAtTime(freq, startTime); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(vol, startTime + 0.01); gain.gain.linearRampToValueAtTime(0, startTime + duration); osc.connect(gain); gain.connect(masterGainNode); osc.start(startTime); osc.stop(startTime + duration); activeNodes.push(osc, gain); };
-  const playHiHat = (startTime: number, vol: number) => { const noise = audioContext.createBufferSource(); const bufferSize = audioContext.sampleRate * 0.1; const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = rng() * 2 - 1; noise.buffer = buffer; const filter = audioContext.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 5000; const gain = audioContext.createGain(); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(vol, startTime + 0.01); gain.gain.linearRampToValueAtTime(0, startTime + 0.05); noise.connect(filter); filter.connect(gain); gain.connect(masterGainNode); noise.start(startTime); activeNodes.push(noise, filter, gain); };
+  
+  // ★★★ ここが修正箇所です ★★★
+  const playHiHat = (startTime: number, vol: number) => {
+    const noise = audioContext.createBufferSource();
+    const bufferSize = audioContext.sampleRate * 0.1;
+    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = rng() * 2 - 1;
+    noise.buffer = buffer;
+    const filter = audioContext.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 5000;
+    const gain = audioContext.createGain();
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(vol, startTime + 0.01);
+    gain.gain.linearRampToValueAtTime(0, startTime + 0.05); // a を追加
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(masterGainNode);
+    noise.start(startTime);
+    activeNodes.push(noise, filter, gain);
+  };
   
   const sequencer = () => {
     const now = audioContext.currentTime;
@@ -119,7 +126,6 @@ const createJazzSound = (rng: () => number) => {
     if (now >= nextPianoTime) {
       const detuneValue = pianoScale[Math.floor(rng() * pianoScale.length)];
       if (detuneValue !== undefined) {
-        // 長い音符も問題なく再生できるように
         const duration = (intervalTime / 1000) * (0.5 + rng() * 3.5); 
         playPianoNote(now, detuneValue, duration, 0.25);
       }
@@ -136,32 +142,16 @@ const createJazzSound = (rng: () => number) => {
     <div v-if="isLoading" class="loading-overlay">
       <div class="loading-text">{{ loadingMessage }}</div>
     </div>
-    
     <div v-else class="content-panel">
       <h1 class="title">AI-BGM 喫茶「おとや」</h1>
       <p class="subtitle">本日のBGMをお選びください</p>
       <div class="menu-container">
-        <button class="menu-button" @click="playMusic('集中ブレンド')" disabled>
-          <div class="menu-content"><span class="menu-title">集中ブレンド</span><span class="menu-description">思考を妨げない、静かな雨音のような音楽。</span></div>
-          <div v-if="selectedMenu === '集中ブレンド'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div>
-        </button>
-        <button class="menu-button" @click="playMusic('リラックス・デカフェ')" disabled>
-          <div class="menu-content"><span class="menu-title">リラックス・デカフェ</span><span class="menu-description">心のコリをほぐす、優しい陽だまりのような音楽。</span></div>
-          <div v-if="selectedMenu === 'リラックス・デカフェ'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div>
-        </button>
-        <button class="menu-button" @click="playMusic('ジャズ・スペシャル')">
-          <div class="menu-content"><span class="menu-title">ジャズ・スペシャル</span><span class="menu-description">夜の静寂に寄り添う、マスターこだわりの一杯。</span></div>
-           <div v-if="selectedMenu === 'ジャズ・スペシャル'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div>
-        </button>
-        <button class="menu-button" @click="playMusic('Lo-Fi・ビター')" disabled>
-          <div class="menu-content"><span class="menu-title">Lo-Fi・ビター</span><span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span></div>
-           <div v-if="selectedMenu === 'Lo-Fi・ビター'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div>
-        </button>
+        <button class="menu-button" @click="playMusic('集中ブレンド')" disabled><div class="menu-content"><span class="menu-title">集中ブレンド</span><span class="menu-description">思考を妨げない、静かな雨音のような音楽。</span></div><div v-if="selectedMenu === '集中ブレンド'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
+        <button class="menu-button" @click="playMusic('リラックス・デカフェ')" disabled><div class="menu-content"><span class="menu-title">リラックス・デカフェ</span><span class="menu-description">心のコリをほぐす、優しい陽だまりのような音楽。</span></div><div v-if="selectedMenu === 'リラックス・デカフェ'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
+        <button class="menu-button" @click="playMusic('ジャズ・スペシャル')"><div class="menu-content"><span class="menu-title">ジャズ・スペシャル</span><span class="menu-description">夜の静寂に寄り添う、マスターこだわりの一杯。</span></div><div v-if="selectedMenu === 'ジャズ・スペシャル'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
+        <button class="menu-button" @click="playMusic('Lo-Fi・ビター')" disabled><div class="menu-content"><span class="menu-title">Lo-Fi・ビター</span><span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span></div><div v-if="selectedMenu === 'Lo-Fi・ビター'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
       </div>
-      <div class="controls-container">
-        <button @click="togglePlayback" class="control-button" :disabled="!selectedMenu && !isPlaying" :class="{ 'is-disabled': !selectedMenu && !isPlaying }">{{ isPlaying ? '■' : '▶' }}</button>
-        <input type="range" min="0" max="1" step="0.01" :value="volume" @input="handleVolumeChange" class="volume-slider"/>
-      </div>
+      <div class="controls-container"><button @click="togglePlayback" class="control-button" :disabled="!selectedMenu && !isPlaying" :class="{ 'is-disabled': !selectedMenu && !isPlaying }">{{ isPlaying ? '■' : '▶' }}</button><input type="range" min="0" max="1" step="0.01" :value="volume" @input="handleVolumeChange" class="volume-slider"/></div>
       <div v-if="isPlaying" class="seed-container"><p>レコード番号 (シード値):</p><div class="seed-display"><span>{{ currentSeed }}</span><button @click="copySeed" title="コピー">📄</button></div></div>
       <div class="seed-input-container"><input type="text" v-model="seedInput" placeholder="レコード番号を入力" /><button @click="playFromSeed" :disabled="!seedInput">このレコードを聴く</button></div>
     </div>
