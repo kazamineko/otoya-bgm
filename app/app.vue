@@ -8,16 +8,20 @@ const volume = ref(0.5);
 
 // --- Web Audio API関連 ---
 let audioContext: AudioContext;
-let masterGainNode: GainNode; // 全体の音量を制御するマスターゲイン
-let activeNodes: AudioNode[] = []; // 再生中のオーディオノードを管理する配列
+let masterGainNode: GainNode;
+let activeNodes: AudioNode[] = [];
 
 // --- 関数定義 ---
 
-// 音楽再生を開始するメインの関数
+// 音楽再生を開始するメインの関数（改良版）
 const playMusic = (menuName: string) => {
-  if (isPlaying.value) return;
+  // もし既に何かが再生中なら、まずそれを停止する
+  if (isPlaying.value) {
+    stopMusic();
+  }
 
-  if (!audioContext) {
+  // AudioContextがなければ初期化
+  if (!audioContext || audioContext.state === 'closed') {
     audioContext = new AudioContext();
   }
   
@@ -32,7 +36,6 @@ const playMusic = (menuName: string) => {
       createConcentrationSound();
       break;
     default:
-      // 他メニューは一旦テスト音
       createTestSound();
       break;
   }
@@ -41,26 +44,37 @@ const playMusic = (menuName: string) => {
   selectedMenu.value = menuName;
 };
 
-// 音楽を停止する関数
+// 音楽を停止する関数（改良版）
 const stopMusic = () => {
   if (!isPlaying.value) return;
+
   // アクティブなノードをすべて停止・切断
   activeNodes.forEach(node => {
-    if (node instanceof OscillatorNode) node.stop();
+    if (node instanceof OscillatorNode || node instanceof AudioBufferSourceNode) {
+      try {
+        'stop' in node && node.stop();
+      } catch (e) {
+        // すでに停止している場合のエラーは無視
+      }
+    }
     node.disconnect();
   });
-  activeNodes = []; // 管理配列をクリア
+  activeNodes = [];
   
   isPlaying.value = false;
-  selectedMenu.value = null;
+  // selectedMenu.value は次の再生のために残しておく
 };
 
-// 再生/一時停止の切り替え
+// 再生/一時停止の切り替え（改良版）
 const togglePlayback = () => {
   if (isPlaying.value) {
     stopMusic();
+  } else {
+    // 最後に選択されていたメニューがあれば、それを再生する
+    if (selectedMenu.value) {
+      playMusic(selectedMenu.value);
+    }
   }
-  // 停止中の再生再開は、今回の実装では一旦無効化
 };
 
 // 音量変更のハンドリング
@@ -68,54 +82,35 @@ const handleVolumeChange = (event: Event) => {
   const newVolume = parseFloat((event.target as HTMLInputElement).value);
   volume.value = newVolume;
   if (masterGainNode) {
-    // マスターゲインの音量を滑らかに変更
     masterGainNode.gain.linearRampToValueAtTime(newVolume, audioContext.currentTime + 0.1);
   }
 };
 
-// --- サウンド生成関数 ---
-
-// 「集中ブレンド」のサウンドを生成
+// --- サウンド生成関数 (変更なし) ---
 const createConcentrationSound = () => {
-  // 1. ホワイトノイズを生成
-  const bufferSize = 2 * audioContext.sampleRate; // 2秒分のバッファ
+  const bufferSize = 2 * audioContext.sampleRate;
   const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
   const output = noiseBuffer.getChannelData(0);
-  for (let i = 0; i < bufferSize; i++) {
-    output[i] = Math.random() * 2 - 1; // -1.0から1.0のランダムな値
-  }
+  for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() * 2 - 1; }
   const whiteNoise = audioContext.createBufferSource();
   whiteNoise.buffer = noiseBuffer;
   whiteNoise.loop = true;
-
-  // 2. ピンクノイズに変換するフィルター
   const pinkFilter = audioContext.createBiquadFilter();
   pinkFilter.type = 'lowpass';
-  pinkFilter.frequency.value = 1200; // この値でノイズの質感を調整
-
-  // 3. 自然な「ゆらぎ」を作るLFO（低周波オシレーター）
+  pinkFilter.frequency.value = 1200;
   const lfo = audioContext.createOscillator();
   lfo.type = 'sine';
-  lfo.frequency.value = 0.2; // 5秒に1回のゆっくりとした周期
+  lfo.frequency.value = 0.2;
   const lfoGain = audioContext.createGain();
-  lfoGain.gain.value = 0.05; // ゆらぎの深さ
-
-  // 4. ノードの接続
+  lfoGain.gain.value = 0.05;
   whiteNoise.connect(pinkFilter);
-  pinkFilter.connect(masterGainNode); // フィルターを通った音をマスターゲインへ
-  
+  pinkFilter.connect(masterGainNode);
   lfo.connect(lfoGain);
-  lfoGain.connect(masterGainNode.gain); // LFOでマスターゲインの音量を揺らす
-
-  // 5. 再生開始
+  lfoGain.connect(masterGainNode.gain);
   whiteNoise.start();
   lfo.start();
-
-  // 6. 管理配列に追加
   activeNodes.push(whiteNoise, pinkFilter, lfo, lfoGain);
 };
-
-// テスト用のサウンドを生成
 const createTestSound = () => {
   const oscillator = audioContext.createOscillator();
   oscillator.type = 'sine';
@@ -130,6 +125,7 @@ const createTestSound = () => {
   <!-- (HTML部分は変更ありません) -->
   <div class="background-container">
     <div class="content-panel">
+      <!-- ... -->
       <h1 class="title">AI-BGM 喫茶「おとや」</h1>
       <p class="subtitle">本日のBGMをお選びください</p>
       <div class="menu-container">
@@ -171,6 +167,7 @@ const createTestSound = () => {
 <style>
 /* (CSS部分は変更ありません) */
 body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif; }
+/* ... (以下、変更なし) ... */
 .background-container { background-image: url('/bg-main.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
 .content-panel { background-color: rgba(255, 255, 255, 0.85); padding: 20px 40px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); backdrop-filter: blur(5px); width: 90%; max-width: 600px; text-align: center; }
 .title { color: #363636; font-weight: bold; margin-bottom: 8px; }
