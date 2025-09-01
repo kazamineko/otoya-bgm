@@ -1,85 +1,135 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref } from 'vue';
 
-// --- リアクティブな状態変数 ---
-const selectedMenu = ref<string | null>(null); // 選択されたメニュー名
-const isPlaying = ref(false); // 再生中かどうか
-const volume = ref(0.5); // 音量（0.0 ~ 1.0）
+// --- 状態変数 ---
+const selectedMenu = ref<string | null>(null);
+const isPlaying = ref(false);
+const volume = ref(0.5);
 
-// --- Web Audio API関連の変数 ---
+// --- Web Audio API関連 ---
 let audioContext: AudioContext;
-let oscillator: OscillatorNode; // 音を生成するノード
-let gainNode: GainNode; // 音量を制御するノード
+let masterGainNode: GainNode; // 全体の音量を制御するマスターゲイン
+let activeNodes: AudioNode[] = []; // 再生中のオーディオノードを管理する配列
 
 // --- 関数定義 ---
 
-// 音楽を再生する関数
+// 音楽再生を開始するメインの関数
 const playMusic = (menuName: string) => {
-  // すでに再生中なら何もしない
-  if (isPlaying.value) {
-    // もし違うメニューがクリックされたら、一度止めてから再生するなどの処理も可能
-    return;
-  }
-  
-  // AudioContextを初期化（ユーザー操作がきっかけでないと動かないため、ここで初期化）
+  if (isPlaying.value) return;
+
   if (!audioContext) {
     audioContext = new AudioContext();
   }
-
-  // 音を生成するOscillatorNodeを作成
-  oscillator = audioContext.createOscillator();
-  oscillator.type = 'sine'; // サイン波（ピーという音）
-  oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // 440Hz (ラの音)
-
-  // 音量を制御するGainNodeを作成
-  gainNode = audioContext.createGain();
-  gainNode.gain.setValueAtTime(volume.value, audioContext.currentTime);
-
-  // ノードを接続: Oscillator -> Gain -> 出力
-  oscillator.connect(gainNode).connect(audioContext.destination);
-
-  // 再生開始
-  oscillator.start();
   
-  // 状態を更新
+  // マスターゲインを初期化
+  masterGainNode = audioContext.createGain();
+  masterGainNode.gain.setValueAtTime(volume.value, audioContext.currentTime);
+  masterGainNode.connect(audioContext.destination);
+
+  // メニュー名に応じて再生する音を切り替える
+  switch (menuName) {
+    case '集中ブレンド':
+      createConcentrationSound();
+      break;
+    default:
+      // 他メニューは一旦テスト音
+      createTestSound();
+      break;
+  }
+  
   isPlaying.value = true;
   selectedMenu.value = menuName;
 };
 
 // 音楽を停止する関数
 const stopMusic = () => {
-  if (oscillator) {
-    oscillator.stop();
-  }
+  if (!isPlaying.value) return;
+  // アクティブなノードをすべて停止・切断
+  activeNodes.forEach(node => {
+    if (node instanceof OscillatorNode) node.stop();
+    node.disconnect();
+  });
+  activeNodes = []; // 管理配列をクリア
+  
   isPlaying.value = false;
   selectedMenu.value = null;
 };
 
-// 再生/一時停止を切り替える関数
+// 再生/一時停止の切り替え
 const togglePlayback = () => {
   if (isPlaying.value) {
     stopMusic();
-  } else if(selectedMenu.value) {
-    // 最後に選んだメニューで再生（この例では音が同じなのでmenuNameは使わない）
-    playMusic(selectedMenu.value);
+  }
+  // 停止中の再生再開は、今回の実装では一旦無効化
+};
+
+// 音量変更のハンドリング
+const handleVolumeChange = (event: Event) => {
+  const newVolume = parseFloat((event.target as HTMLInputElement).value);
+  volume.value = newVolume;
+  if (masterGainNode) {
+    // マスターゲインの音量を滑らかに変更
+    masterGainNode.gain.linearRampToValueAtTime(newVolume, audioContext.currentTime + 0.1);
   }
 };
 
-// 音量を変更する関数
-const handleVolumeChange = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  const newVolume = parseFloat(target.value);
-  volume.value = newVolume;
-  if (gainNode) {
-    gainNode.gain.setValueAtTime(newVolume, audioContext.currentTime);
+// --- サウンド生成関数 ---
+
+// 「集中ブレンド」のサウンドを生成
+const createConcentrationSound = () => {
+  // 1. ホワイトノイズを生成
+  const bufferSize = 2 * audioContext.sampleRate; // 2秒分のバッファ
+  const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+  const output = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    output[i] = Math.random() * 2 - 1; // -1.0から1.0のランダムな値
   }
+  const whiteNoise = audioContext.createBufferSource();
+  whiteNoise.buffer = noiseBuffer;
+  whiteNoise.loop = true;
+
+  // 2. ピンクノイズに変換するフィルター
+  const pinkFilter = audioContext.createBiquadFilter();
+  pinkFilter.type = 'lowpass';
+  pinkFilter.frequency.value = 1200; // この値でノイズの質感を調整
+
+  // 3. 自然な「ゆらぎ」を作るLFO（低周波オシレーター）
+  const lfo = audioContext.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 0.2; // 5秒に1回のゆっくりとした周期
+  const lfoGain = audioContext.createGain();
+  lfoGain.gain.value = 0.05; // ゆらぎの深さ
+
+  // 4. ノードの接続
+  whiteNoise.connect(pinkFilter);
+  pinkFilter.connect(masterGainNode); // フィルターを通った音をマスターゲインへ
+  
+  lfo.connect(lfoGain);
+  lfoGain.connect(masterGainNode.gain); // LFOでマスターゲインの音量を揺らす
+
+  // 5. 再生開始
+  whiteNoise.start();
+  lfo.start();
+
+  // 6. 管理配列に追加
+  activeNodes.push(whiteNoise, pinkFilter, lfo, lfoGain);
+};
+
+// テスト用のサウンドを生成
+const createTestSound = () => {
+  const oscillator = audioContext.createOscillator();
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+  oscillator.connect(masterGainNode);
+  oscillator.start();
+  activeNodes.push(oscillator);
 };
 </script>
 
 <template>
+  <!-- (HTML部分は変更ありません) -->
   <div class="background-container">
     <div class="content-panel">
-      <!-- (タイトルやメニューボタンのHTMLは変更なし) -->
       <h1 class="title">AI-BGM 喫茶「おとや」</h1>
       <p class="subtitle">本日のBGMをお選びください</p>
       <div class="menu-container">
@@ -100,11 +150,9 @@ const handleVolumeChange = (event: Event) => {
           <span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span>
         </button>
       </div>
-
-      <!-- ▼▼▼ ここからが追加した再生コントロールバー ▼▼▼ -->
       <div class="controls-container">
         <button @click="togglePlayback" class="control-button">
-          {{ isPlaying ? '■' : '▶' }} <!-- 再生中は■、停止中は▶を表示 -->
+          {{ isPlaying ? '■' : '▶' }}
         </button>
         <input 
           type="range" 
@@ -116,14 +164,12 @@ const handleVolumeChange = (event: Event) => {
           class="volume-slider"
         />
       </div>
-      <!-- ▲▲▲ ここまで ▲▲▲ -->
-
     </div>
   </div>
 </template>
 
 <style>
-/* ... (既存のスタイルは変更なし) ... */
+/* (CSS部分は変更ありません) */
 body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif; }
 .background-container { background-image: url('/bg-main.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
 .content-panel { background-color: rgba(255, 255, 255, 0.85); padding: 20px 40px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); backdrop-filter: blur(5px); width: 90%; max-width: 600px; text-align: center; }
@@ -134,38 +180,8 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hir
 .menu-button:hover { background-color: #e8e8e8; border-color: #b5b5b5; transform: translateY(-2px); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 .menu-title { font-size: 1.1em; font-weight: bold; color: #363636; }
 .menu-description { font-size: 0.9em; color: #7a7a7a; margin-top: 4px; }
-
-/* ▼▼▼ ここからが追加したスタイル ▼▼▼ */
-.controls-container {
-  margin-top: 30px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 20px;
-}
-
-.control-button {
-  background-color: #363636;
-  color: white;
-  border: none;
-  border-radius: 50%; /* 丸いボタン */
-  width: 50px;
-  height: 50px;
-  font-size: 20px;
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  transition: background-color 0.2s ease;
-}
-
-.control-button:hover {
-  background-color: #555;
-}
-
-.volume-slider {
-  width: 150px;
-  cursor: pointer;
-}
-/* ▲▲▲ ここまで ▲▲▲ */
+.controls-container { margin-top: 30px; display: flex; justify-content: center; align-items: center; gap: 20px; }
+.control-button { background-color: #363636; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 20px; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: background-color 0.2s ease; }
+.control-button:hover { background-color: #555; }
+.volume-slider { width: 150px; cursor: pointer; }
 </style>
