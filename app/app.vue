@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import AboutModal from './components/AboutModal.vue'; // ★作成したモーダルコンポーネントをインポート
-
+import AboutModal from '../components/AboutModal.vue';
 // --- 状態変数 ---
 const selectedMenu = ref<string | null>(null);
 const isPlaying = ref(false);
