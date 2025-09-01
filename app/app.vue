@@ -14,46 +14,86 @@ const isLoading = ref<boolean>(true);
 const loadingMessage = ref<string>('コーヒー豆を挽いています...');
 
 // --- サンプル音源バッファ ---
-const pianoSample = ref<AudioBuffer | null>(null);
+const samples = ref<Record<string, AudioBuffer | null>>({
+  piano: null, bass: null, ride: null, brush: null,
+  epiano: null, kick: null, snare: null, pad: null,
+  reverb: null,
+});
 
 // --- Web Audio API関連 ---
 let audioContext: AudioContext;
 let masterGainNode: GainNode;
+let reverbNode: ConvolverNode;
 let activeNodes: AudioNode[] = [];
 let soundInterval: any;
 
+// ★初回ロード時にすべてのサンプル音源を読み込む
 onMounted(async () => {
+  const samplePaths: Record<keyof typeof samples.value, string> = {
+    piano: '/piano-c4.wav', bass: '/bass-c1.wav', ride: '/drum-ride.wav', brush: '/drum-brush.wav',
+    epiano: '/epiano-c4.wav', kick: '/drum-kick.wav', snare: '/drum-snare.wav', pad: '/pad-cmaj7.wav',
+    reverb: '/ir.wav',
+  };
+  
   try {
     audioContext = new AudioContext();
-    loadingMessage.value = 'ピアノを調律しています...';
-    const response = await fetch('/piano-c4.wav');
-    const arrayBuffer = await response.arrayBuffer();
-    pianoSample.value = await audioContext.decodeAudioData(arrayBuffer);
+    const loadSample = async (path: string): Promise<AudioBuffer> => {
+      const response = await fetch(path);
+      const arrayBuffer = await response.arrayBuffer();
+      return audioContext.decodeAudioData(arrayBuffer);
+    };
+
+    loadingMessage.value = '楽器を準備しています... (0/9)';
+    let loadedCount = 0;
+    const updateProgress = () => {
+      loadedCount++;
+      loadingMessage.value = `楽器を準備しています... (${loadedCount}/9)`;
+    };
+    
+    const promises = Object.entries(samplePaths).map(async ([key, path]) => {
+      const buffer = await loadSample(path);
+      samples.value[key] = buffer;
+      updateProgress();
+    });
+
+    await Promise.all(promises);
+
+    reverbNode = audioContext.createConvolver();
+    if (samples.value.reverb) { // ★安全チェックを追加
+      reverbNode.buffer = samples.value.reverb;
+    }
+
     loadingMessage.value = '準備ができました';
     isLoading.value = false;
   } catch (error) {
     loadingMessage.value = '楽器の準備に失敗しました。ページを再読み込みしてください。';
-    console.error("Error loading audio sample:", error);
+    console.error("Error loading audio assets:", error);
   }
 });
 
+// --- 関数定義 ---
 const playMusic = (menuName: string, seed?: string) => {
-  if (isLoading.value || (audioContext && audioContext.state === 'suspended')) {
-    audioContext.resume();
-  }
+  if (isLoading.value || (audioContext && audioContext.state === 'suspended')) { audioContext.resume(); }
   if (isPlaying.value) stopMusic();
   const randomPart = seed || Date.now().toString(36) + Math.random().toString(36).substring(2);
   currentSeed.value = `${menuName}:${randomPart}`;
   const rng = seedrandom(randomPart);
-  masterGainNode = audioContext.createGain();
+  
+  masterGainNode = audioContext.createGain(); // ★ここで初期化
   masterGainNode.gain.setValueAtTime(volume.value, audioContext.currentTime);
   masterGainNode.connect(audioContext.destination);
+  
+  const reverbGain = audioContext.createGain();
+  reverbGain.gain.value = 0.3;
+  masterGainNode.connect(reverbNode);
+  reverbNode.connect(reverbGain);
+  reverbGain.connect(audioContext.destination);
 
   switch (menuName) {
+    case '集中ブレンド': createConcentrationSound(rng); break;
+    case 'リラックス・デカフェ': createRelaxSound(rng); break;
     case 'ジャズ・スペシャル': createJazzSound(rng); break;
-    default: 
-      alert('現在、ジャズ・スペシャルの調律のみ完了しております。');
-      return;
+    case 'Lo-Fi・ビター': createLoFiSound(rng); break;
   }
   isPlaying.value = true;
   selectedMenu.value = menuName;
@@ -66,72 +106,105 @@ const closeModal = () => { isModalVisible.value = false; };
 const copySeed = () => { navigator.clipboard.writeText(currentSeed.value); };
 const playFromSeed = () => { if (seedInput.value) { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター']; if (menuName && seed && validMenus.includes(menuName)) { playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } } };
 
+// --- サウンド生成関数 ---
+const createConcentrationSound = (rng: () => number) => { const bufferSize = 2 * audioContext.sampleRate; const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const output = noiseBuffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) { output[i] = rng() * 2 - 1; } const whiteNoise = audioContext.createBufferSource(); whiteNoise.buffer = noiseBuffer; whiteNoise.loop = true; const pinkFilter = audioContext.createBiquadFilter(); pinkFilter.type = 'lowpass'; pinkFilter.frequency.value = 1000 + rng() * 500; const lfo = audioContext.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.1 + rng() * 0.3; const lfoGain = audioContext.createGain(); lfoGain.gain.value = 0.03 + rng() * 0.05; whiteNoise.connect(pinkFilter); pinkFilter.connect(masterGainNode); lfo.connect(lfoGain); lfoGain.connect(masterGainNode.gain); whiteNoise.start(); lfo.start(); activeNodes.push(whiteNoise, pinkFilter, lfo, lfoGain); };
+
+const createRelaxSound = (rng: () => number) => {
+  if (!samples.value.pad) return;
+  const source = audioContext.createBufferSource();
+  source.buffer = samples.value.pad;
+  source.loop = true;
+  
+  const detuneLfo = audioContext.createOscillator();
+  detuneLfo.type = 'sine';
+  detuneLfo.frequency.value = 0.1 + rng() * 0.2;
+  const detuneGain = audioContext.createGain();
+  detuneGain.gain.value = 2 + rng() * 3;
+  detuneLfo.connect(detuneGain);
+  detuneGain.connect(source.detune);
+
+  source.connect(masterGainNode);
+  source.connect(reverbNode);
+  source.start();
+  detuneLfo.start();
+  activeNodes.push(source, detuneLfo, detuneGain);
+};
+
 const createJazzSound = (rng: () => number) => {
-  if (!pianoSample.value) return;
-
+  if (!samples.value.piano || !samples.value.bass || !samples.value.ride || !samples.value.brush) return;
   let beat = 0; const tempo = 100 + rng() * 20; const intervalTime = 60000 / tempo;
-  const pianoScale = [-1200, -1000, -800, -700, -500, -300, 0, 200, 300, 500, 700, 800, 1000, 1200];
-  const bassPatterns = [ [130.8, 174.6, 196.0, 130.8], [130.8, 196.0, 174.6, 130.8] ];
-  const bassLine = bassPatterns[Math.floor(rng() * bassPatterns.length)];
-  let nextPianoTime = 0;
-
-  const playPianoNote = (startTime: number, detune: number, duration: number, vol: number) => {
+  const pianoScale = [-1200, -700, 0, 500, 700, 1200];
+  const bassScale = [-1200, -500, 0];
+  
+  const playSample = (buffer: AudioBuffer, startTime: number, options: { detune?: number, duration?: number, vol?: number, loop?: boolean, noReverb?: boolean }) => {
     const source = audioContext.createBufferSource();
-    source.buffer = pianoSample.value;
-    source.detune.value = detune;
-    source.loop = true;
-    source.loopStart = 0.1;
-    source.loopEnd = 2.5;
+    source.buffer = buffer;
+    source.detune.value = options.detune || 0;
+    if (options.loop) { source.loop = true; source.loopStart = 0.1; source.loopEnd = buffer.duration > 0.2 ? buffer.duration - 0.1 : 0; }
+    
     const gain = audioContext.createGain();
     gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(vol, startTime + 0.01);
-    gain.gain.setValueAtTime(vol, startTime + duration - 0.1);
-    gain.gain.linearRampToValueAtTime(0, startTime + duration);
+    gain.gain.linearRampToValueAtTime(options.vol || 1, startTime + 0.01);
+    if (options.duration) {
+      gain.gain.setValueAtTime(options.vol || 1, startTime + options.duration - 0.1);
+      gain.gain.linearRampToValueAtTime(0, startTime + options.duration);
+      source.stop(startTime + options.duration);
+    }
+    
     source.connect(gain);
     gain.connect(masterGainNode);
+    if (!options.noReverb) {
+      gain.connect(reverbNode);
+    }
     source.start(startTime);
-    source.stop(startTime + duration);
     activeNodes.push(source, gain);
   };
-  
-  const playBassNote = (freq: number, startTime: number, duration: number, vol: number) => { const osc = audioContext.createOscillator(); osc.type = 'sine'; const gain = audioContext.createGain(); osc.frequency.setValueAtTime(freq, startTime); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(vol, startTime + 0.01); gain.gain.linearRampToValueAtTime(0, startTime + duration); osc.connect(gain); gain.connect(masterGainNode); osc.start(startTime); osc.stop(startTime + duration); activeNodes.push(osc, gain); };
-  
-  // ★★★ ここが修正箇所です ★★★
-  const playHiHat = (startTime: number, vol: number) => {
-    const noise = audioContext.createBufferSource();
-    const bufferSize = audioContext.sampleRate * 0.1;
-    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) data[i] = rng() * 2 - 1;
-    noise.buffer = buffer;
-    const filter = audioContext.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.value = 5000;
-    const gain = audioContext.createGain();
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(vol, startTime + 0.01);
-    gain.gain.linearRampToValueAtTime(0, startTime + 0.05); // a を追加
-    noise.connect(filter);
-    filter.connect(gain);
-    gain.connect(masterGainNode);
-    noise.start(startTime);
-    activeNodes.push(noise, filter, gain);
-  };
-  
+
   const sequencer = () => {
     const now = audioContext.currentTime;
-    playHiHat(now, 0.1); playHiHat(now + (intervalTime / 1000) * 0.66, 0.05);
-    if (beat % 4 === 0 && bassLine) { const bassNote = bassLine[Math.floor(beat / 4) % bassLine.length]; if (bassNote) playBassNote(bassNote, now, intervalTime / 1000 * 1.5, 0.3); }
+    playSample(samples.value.ride!, now, { vol: 0.2, noReverb: true });
+    playSample(samples.value.ride!, now + (intervalTime / 1000) * 0.5, { vol: 0.1, noReverb: true });
+    if (beat % 2 === 1) playSample(samples.value.brush!, now, { vol: 0.15, noReverb: true });
+    if (beat % 4 === 0) playSample(samples.value.bass!, now, { detune: bassScale[Math.floor(rng() * bassScale.length)], vol: 0.4, duration: intervalTime / 1000 });
+    if (rng() < 0.25) playSample(samples.value.piano!, now, { detune: pianoScale[Math.floor(rng() * pianoScale.length)], vol: 0.35, duration: (intervalTime / 1000) * (1 + rng() * 2), loop: true });
     
-    if (now >= nextPianoTime) {
-      const detuneValue = pianoScale[Math.floor(rng() * pianoScale.length)];
-      if (detuneValue !== undefined) {
-        const duration = (intervalTime / 1000) * (0.5 + rng() * 3.5); 
-        playPianoNote(now, detuneValue, duration, 0.25);
-      }
-      nextPianoTime = now + (intervalTime / 1000) * (0.5 + rng() * 1.5);
-    }
     beat = (beat + 1) % 16;
+  };
+  soundInterval = setInterval(sequencer, intervalTime);
+};
+
+const createLoFiSound = (rng: () => number) => {
+  if (!samples.value.epiano || !samples.value.kick || !samples.value.snare) return;
+  let beat = 0; const tempo = 80 + rng() * 15; const intervalTime = 60000 / tempo / 4;
+  const chordPatterns = [ [0, 500, 800], [-500, 0, 300] ];
+  const chords = chordPatterns[Math.floor(rng() * chordPatterns.length)];
+  const kickPattern = [1,0,0,0, 1,0,0,1, 0,0,0,0, 1,0,0,0];
+  const snarePattern = [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
+  
+  const playSample = (buffer: AudioBuffer, startTime: number, options: { detune?: number, vol?: number, noReverb?: boolean }) => {
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.detune.value = options.detune || 0;
+    const gain = audioContext.createGain();
+    gain.gain.setValueAtTime(options.vol || 1, startTime);
+    source.connect(gain);
+    gain.connect(masterGainNode);
+    if (!options.noReverb) {
+      gain.connect(reverbNode);
+    }
+    source.start(startTime);
+    activeNodes.push(source, gain);
+  };
+
+  const sequencer = () => {
+    const now = audioContext.currentTime;
+    const c16 = beat % 16;
+    if (kickPattern?.[c16]) playSample(samples.value.kick!, now, { vol: 0.6, noReverb: true });
+    if (snarePattern?.[c16]) playSample(samples.value.snare!, now, { vol: 0.4, noReverb: true });
+    if (c16 === 0 && chords) {
+      chords.forEach(detune => playSample(samples.value.epiano!, now, { detune, vol: 0.2 }));
+    }
+    beat = (beat + 1) % 64;
   };
   soundInterval = setInterval(sequencer, intervalTime);
 };
@@ -146,10 +219,10 @@ const createJazzSound = (rng: () => number) => {
       <h1 class="title">AI-BGM 喫茶「おとや」</h1>
       <p class="subtitle">本日のBGMをお選びください</p>
       <div class="menu-container">
-        <button class="menu-button" @click="playMusic('集中ブレンド')" disabled><div class="menu-content"><span class="menu-title">集中ブレンド</span><span class="menu-description">思考を妨げない、静かな雨音のような音楽。</span></div><div v-if="selectedMenu === '集中ブレンド'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
-        <button class="menu-button" @click="playMusic('リラックス・デカフェ')" disabled><div class="menu-content"><span class="menu-title">リラックス・デカフェ</span><span class="menu-description">心のコリをほぐす、優しい陽だまりのような音楽。</span></div><div v-if="selectedMenu === 'リラックス・デカフェ'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
+        <button class="menu-button" @click="playMusic('集中ブレンド')"><div class="menu-content"><span class="menu-title">集中ブレンド</span><span class="menu-description">思考を妨げない、静かな雨音のような音楽。</span></div><div v-if="selectedMenu === '集中ブレンド'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
+        <button class="menu-button" @click="playMusic('リラックス・デカフェ')"><div class="menu-content"><span class="menu-title">リラックス・デカフェ</span><span class="menu-description">心のコリをほぐす、優しい陽だまりのような音楽。</span></div><div v-if="selectedMenu === 'リラックス・デカフェ'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
         <button class="menu-button" @click="playMusic('ジャズ・スペシャル')"><div class="menu-content"><span class="menu-title">ジャズ・スペシャル</span><span class="menu-description">夜の静寂に寄り添う、マスターこだわりの一杯。</span></div><div v-if="selectedMenu === 'ジャズ・スペシャル'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
-        <button class="menu-button" @click="playMusic('Lo-Fi・ビター')" disabled><div class="menu-content"><span class="menu-title">Lo-Fi・ビター</span><span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span></div><div v-if="selectedMenu === 'Lo-Fi・ビター'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
+        <button class="menu-button" @click="playMusic('Lo-Fi・ビター')"><div class="menu-content"><span class="menu-title">Lo-Fi・ビター</span><span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span></div><div v-if="selectedMenu === 'Lo-Fi・ビター'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
       </div>
       <div class="controls-container"><button @click="togglePlayback" class="control-button" :disabled="!selectedMenu && !isPlaying" :class="{ 'is-disabled': !selectedMenu && !isPlaying }">{{ isPlaying ? '■' : '▶' }}</button><input type="range" min="0" max="1" step="0.01" :value="volume" @input="handleVolumeChange" class="volume-slider"/></div>
       <div v-if="isPlaying" class="seed-container"><p>レコード番号 (シード値):</p><div class="seed-display"><span>{{ currentSeed }}</span><button @click="copySeed" title="コピー">📄</button></div></div>
@@ -160,7 +233,6 @@ const createJazzSound = (rng: () => number) => {
 </template>
 
 <style>
-/* (Styleは変更なし) */
 body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif; }
 .background-container { background-image: url('/bg-main.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
 .content-panel { background-color: rgba(255, 255, 255, 0.88); padding: 20px 40px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); backdrop-filter: blur(5px); width: 90%; max-width: 600px; text-align: center; }
