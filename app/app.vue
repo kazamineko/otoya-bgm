@@ -10,30 +10,27 @@ const volume = ref(0.5);
 let audioContext: AudioContext;
 let masterGainNode: GainNode;
 let activeNodes: AudioNode[] = [];
+let chordChangeInterval: number; // 和音を切り替えるタイマーのID
 
 // --- 関数定義 ---
 
-// 音楽再生を開始するメインの関数（改良版）
+// 音楽再生を開始するメインの関数
 const playMusic = (menuName: string) => {
-  // もし既に何かが再生中なら、まずそれを停止する
-  if (isPlaying.value) {
-    stopMusic();
-  }
-
-  // AudioContextがなければ初期化
+  if (isPlaying.value) stopMusic();
   if (!audioContext || audioContext.state === 'closed') {
     audioContext = new AudioContext();
   }
   
-  // マスターゲインを初期化
   masterGainNode = audioContext.createGain();
   masterGainNode.gain.setValueAtTime(volume.value, audioContext.currentTime);
   masterGainNode.connect(audioContext.destination);
 
-  // メニュー名に応じて再生する音を切り替える
   switch (menuName) {
     case '集中ブレンド':
       createConcentrationSound();
+      break;
+    case 'リラックス・デカフェ':
+      createRelaxSound();
       break;
     default:
       createTestSound();
@@ -44,33 +41,27 @@ const playMusic = (menuName: string) => {
   selectedMenu.value = menuName;
 };
 
-// 音楽を停止する関数（改良版）
+// 音楽を停止する関数
 const stopMusic = () => {
   if (!isPlaying.value) return;
+  clearInterval(chordChangeInterval); // 和音切り替えタイマーを停止
 
-  // アクティブなノードをすべて停止・切断
   activeNodes.forEach(node => {
     if (node instanceof OscillatorNode || node instanceof AudioBufferSourceNode) {
-      try {
-        'stop' in node && node.stop();
-      } catch (e) {
-        // すでに停止している場合のエラーは無視
-      }
+      try { 'stop' in node && node.stop(); } catch (e) {}
     }
     node.disconnect();
   });
   activeNodes = [];
   
   isPlaying.value = false;
-  // selectedMenu.value は次の再生のために残しておく
 };
 
-// 再生/一時停止の切り替え（改良版）
+// 再生/一時停止の切り替え
 const togglePlayback = () => {
   if (isPlaying.value) {
     stopMusic();
   } else {
-    // 最後に選択されていたメニューがあれば、それを再生する
     if (selectedMenu.value) {
       playMusic(selectedMenu.value);
     }
@@ -86,7 +77,9 @@ const handleVolumeChange = (event: Event) => {
   }
 };
 
-// --- サウンド生成関数 (変更なし) ---
+// --- サウンド生成関数 ---
+
+// 「集中ブレンド」のサウンドを生成
 const createConcentrationSound = () => {
   const bufferSize = 2 * audioContext.sampleRate;
   const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
@@ -111,6 +104,59 @@ const createConcentrationSound = () => {
   lfo.start();
   activeNodes.push(whiteNoise, pinkFilter, lfo, lfoGain);
 };
+
+// 「リラックス・デカフェ」のサウンドを生成
+const createRelaxSound = () => {
+  // 1. 和音の定義 (周波数Hzの配列)
+  // Cmaj7 -> Fmaj7 -> G7 -> Cmaj7
+  const chords = [
+    [261.63, 329.63, 392.00, 493.88], // Cmaj7
+    [349.23, 440.00, 523.25, 659.26], // Fmaj7
+    [392.00, 493.88, 587.33, 783.99], // G7
+    [261.63, 329.63, 392.00, 493.88]  // Cmaj7
+  ];
+  let currentChordIndex = 0;
+  let currentOscillators: OscillatorNode[] = [];
+
+  // 2. 和音を再生する関数
+  const playChord = () => {
+    // 前の和音を滑らかに消す
+    currentOscillators.forEach(osc => {
+      const gain = audioContext.createGain();
+      osc.connect(gain);
+      gain.connect(masterGainNode);
+      gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 2.0); // 2秒かけて消える
+      osc.stop(audioContext.currentTime + 2.0);
+    });
+    
+    // 新しい和音を生成して滑らかに再生
+    const frequencies = chords[currentChordIndex];
+    currentOscillators = frequencies.map(freq => {
+      const osc = audioContext.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq / 2; // 1オクターブ下げて落ち着いた音色に
+
+      const gain = audioContext.createGain();
+      gain.gain.setValueAtTime(0, audioContext.currentTime);
+      gain.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 2.0); // 2秒かけて現れる
+
+      osc.connect(gain);
+      gain.connect(masterGainNode);
+      osc.start();
+      activeNodes.push(osc, gain); // 管理配列に追加
+      return osc;
+    });
+
+    // 次の和音へ
+    currentChordIndex = (currentChordIndex + 1) % chords.length;
+  };
+
+  // 3. 最初の和音を再生し、タイマーをセット
+  playChord();
+  chordChangeInterval = window.setInterval(playChord, 5000); // 5秒ごとに和音を切り替え
+};
+
+// テスト用のサウンドを生成
 const createTestSound = () => {
   const oscillator = audioContext.createOscillator();
   oscillator.type = 'sine';
@@ -122,10 +168,8 @@ const createTestSound = () => {
 </script>
 
 <template>
-  <!-- (HTML部分は変更ありません) -->
   <div class="background-container">
     <div class="content-panel">
-      <!-- ... -->
       <h1 class="title">AI-BGM 喫茶「おとや」</h1>
       <p class="subtitle">本日のBGMをお選びください</p>
       <div class="menu-container">
@@ -165,20 +209,103 @@ const createTestSound = () => {
 </template>
 
 <style>
-/* (CSS部分は変更ありません) */
-body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif; }
-/* ... (以下、変更なし) ... */
-.background-container { background-image: url('/bg-main.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
-.content-panel { background-color: rgba(255, 255, 255, 0.85); padding: 20px 40px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); backdrop-filter: blur(5px); width: 90%; max-width: 600px; text-align: center; }
-.title { color: #363636; font-weight: bold; margin-bottom: 8px; }
-.subtitle { color: #555; margin-top: 0; margin-bottom: 30px; }
-.menu-container { display: flex; flex-direction: column; gap: 15px; }
-.menu-button { background-color: #f5f5f5; border: 1px solid #dbdbdb; border-radius: 4px; padding: 15px 20px; cursor: pointer; transition: all 0.2s ease; text-align: left; display: flex; flex-direction: column; font-family: inherit; }
-.menu-button:hover { background-color: #e8e8e8; border-color: #b5b5b5; transform: translateY(-2px); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-.menu-title { font-size: 1.1em; font-weight: bold; color: #363636; }
-.menu-description { font-size: 0.9em; color: #7a7a7a; margin-top: 4px; }
-.controls-container { margin-top: 30px; display: flex; justify-content: center; align-items: center; gap: 20px; }
-.control-button { background-color: #363636; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 20px; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: background-color 0.2s ease; }
-.control-button:hover { background-color: #555; }
-.volume-slider { width: 150px; cursor: pointer; }
+body, html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif;
+}
+.background-container {
+  background-image: url('/bg-main.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.content-panel {
+  background-color: rgba(255, 255, 255, 0.85);
+  padding: 20px 40px 30px;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(5px);
+  width: 90%;
+  max-width: 600px;
+  text-align: center;
+}
+.title {
+  color: #363636;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+.subtitle {
+  color: #555;
+  margin-top: 0;
+  margin-bottom: 30px;
+}
+.menu-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.menu-button {
+  background-color: #f5f5f5;
+  border: 1px solid #dbdbdb;
+  border-radius: 4px;
+  padding: 15px 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  font-family: inherit;
+}
+.menu-button:hover {
+  background-color: #e8e8e8;
+  border-color: #b5b5b5;
+  transform: translateY(-px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.menu-title {
+  font-size: 1.1em;
+  font-weight: bold;
+  color: #363636;
+}
+.menu-description {
+  font-size: 0.9em;
+  color: #7a7a7a;
+  margin-top: 4px;
+}
+.controls-container {
+  margin-top: 30px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+}
+.control-button {
+  background-color: #363636;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: background-color 0.2s ease;
+}
+.control-button:hover {
+  background-color: #555;
+}
+.volume-slider {
+  width: 150px;
+  cursor: pointer;
+}
 </style>
