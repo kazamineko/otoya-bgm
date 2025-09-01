@@ -15,7 +15,7 @@ const seedInput = ref<string>('');
 let audioContext: AudioContext;
 let masterGainNode: GainNode;
 let activeNodes: AudioNode[] = [];
-let soundInterval: any; // setIntervalとsetTimeoutの両方に対応
+let soundInterval: any;
 
 // --- 関数定義 ---
 
@@ -26,9 +26,9 @@ const playMusic = (menuName: string, seed?: string) => {
     audioContext = new AudioContext();
   }
   
-  // シードを決定
-  currentSeed.value = seed || Date.now().toString(36) + Math.random().toString(36).substring(2);
-  const rng = seedrandom(currentSeed.value);
+  const randomPart = seed || Date.now().toString(36) + Math.random().toString(36).substring(2);
+  currentSeed.value = `${menuName}:${randomPart}`;
+  const rng = seedrandom(randomPart);
 
   masterGainNode = audioContext.createGain();
   masterGainNode.gain.setValueAtTime(volume.value, audioContext.currentTime);
@@ -44,6 +44,7 @@ const playMusic = (menuName: string, seed?: string) => {
   isPlaying.value = true;
   selectedMenu.value = menuName;
 };
+
 const stopMusic = () => {
   if (!isPlaying.value) return;
   clearInterval(soundInterval);
@@ -57,26 +58,42 @@ const stopMusic = () => {
   activeNodes = [];
   isPlaying.value = false;
 };
+
 const togglePlayback = () => {
-  if (isPlaying.value) { stopMusic(); }
-  else { if (selectedMenu.value) { playMusic(selectedMenu.value); } }
+  if (isPlaying.value) {
+    stopMusic();
+  } else {
+    if (selectedMenu.value && currentSeed.value) {
+      const [menuName, seed] = currentSeed.value.split(':');
+      if (menuName && seed) playMusic(menuName, seed);
+    }
+  }
 };
+
 const handleVolumeChange = (event: Event) => {
   const newVolume = parseFloat((event.target as HTMLInputElement).value);
   volume.value = newVolume;
   if (masterGainNode) { masterGainNode.gain.linearRampToValueAtTime(newVolume, audioContext.currentTime + 0.1); }
 };
+
 const openModal = () => { isModalVisible.value = true; };
 const closeModal = () => { isModalVisible.value = false; };
 const copySeed = () => { navigator.clipboard.writeText(currentSeed.value); };
+
 const playFromSeed = () => {
-  if (seedInput.value && selectedMenu.value) {
-    playMusic(selectedMenu.value, seedInput.value);
+  if (seedInput.value) {
+    const [menuName, seed] = seedInput.value.split(':');
+    const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター'];
+    if (menuName && seed && validMenus.includes(menuName)) {
+      playMusic(menuName, seed);
+    } else {
+      alert('レコード番号の形式が正しくないか、存在しないジャンルです。');
+    }
   }
 };
 
 
-// --- サウンド生成関数 (すべてrngを受け取るように変更) ---
+// --- サウンド生成関数 ---
 const createConcentrationSound = (rng: () => number) => {
   const bufferSize = 2 * audioContext.sampleRate;
   const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
@@ -165,6 +182,7 @@ const createLoFiSound = (rng: () => number) => {
   };
   soundInterval = setInterval(sequencer, intervalTime);
 };
+
 const createTestSound = () => { const o=audioContext.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(440, audioContext.currentTime); o.connect(masterGainNode); o.start(); activeNodes.push(o);};
 </script>
 
@@ -225,9 +243,9 @@ const createTestSound = () => { const o=audioContext.createOscillator(); o.type=
           <button @click="copySeed" title="コピー">📄</button>
         </div>
       </div>
-      <div v-if="selectedMenu" class="seed-input-container">
-        <input type="text" v-model="seedInput" placeholder="レコード番号を入力してお好きな曲を再現" />
-        <button @click="playFromSeed">このレコードを聴く</button>
+      <div class="seed-input-container">
+        <input type="text" v-model="seedInput" placeholder="レコード番号を入力" />
+        <button @click="playFromSeed" :disabled="!seedInput">このレコードを聴く</button>
       </div>
 
     </div>
@@ -247,7 +265,8 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hir
 .menu-content { display: flex; flex-direction: column; }
 .menu-title { font-size: 1.1em; font-weight: bold; color: #363636; }
 .menu-description { font-size: 0.9em; color: #7a7a7a; margin-top: 4px; }
-.active-indicator svg { color: #a5a5a5; }
+.active-indicator svg { color: #a5a5a5; animation: fadeIn 0.5s ease; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .controls-container { margin-top: 30px; display: flex; justify-content: center; align-items: center; gap: 20px; }
 .control-button { background-color: #363636; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 20px; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: all 0.2s ease; }
 .control-button:hover { background-color: #555; }
@@ -257,11 +276,13 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hir
 .footer-link { font-size: 14px; color: rgba(255, 255, 255, 0.7); text-decoration: none; transition: color 0.2s ease; }
 .footer-link:hover { color: rgba(255, 255, 255, 1); }
 .seed-container, .seed-input-container { margin-top: 20px; font-size: 14px; color: #555; }
-.seed-display { display: flex; justify-content: center; align-items: center; background: #eee; padding: 5px 10px; border-radius: 4px; margin-top: 5px; }
-.seed-display span { font-family: monospace; letter-spacing: 1px; }
+.seed-container p { margin: 0 0 5px 0; }
+.seed-display { display: flex; justify-content: center; align-items: center; background: #eee; padding: 5px 10px; border-radius: 4px; }
+.seed-display span { font-family: monospace; letter-spacing: 1px; word-break: break-all; }
 .seed-display button { background: none; border: none; cursor: pointer; margin-left: 10px; font-size: 16px; }
-.seed-input-container { display: flex; gap: 10px; }
-.seed-input-container input { flex-grow: 1; border: 1px solid #dbdbdb; border-radius: 4px; padding: 8px; }
+.seed-input-container { display: flex; gap: 10px; margin-top: 10px; }
+.seed-input-container input { flex-grow: 1; border: 1px solid #dbdbdb; border-radius: 4px; padding: 8px; font-family: monospace; }
 .seed-input-container button { background-color: #363636; color: white; border: none; border-radius: 4px; padding: 8px 12px; cursor: pointer; transition: background-color 0.2s ease; }
 .seed-input-container button:hover { background-color: #555; }
+.seed-input-container button:disabled { background-color: #c5c5c5; cursor: not-allowed; }
 </style>
