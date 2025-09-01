@@ -27,6 +27,7 @@ let activeNodes: AudioNode[] = [];
 let soundInterval: any;
 
 onMounted(async () => {
+  console.log('[Otoya Master] 開店準備を開始します。');
   const samplePaths: Record<string, string> = {
     piano: '/piano-c4.wav', bass: '/bass-c1.wav', ride: '/drum-ride.wav', brush: '/drum-brush.wav',
     epiano: '/epiano-c4.wav', kick: '/drum-kick.wav', snare: '/drum-snare.wav', pad: '/pad-cmaj7.wav',
@@ -56,6 +57,8 @@ onMounted(async () => {
         loadingMessage.value = `読み込み中: ${path}`;
         const buffer = await loadSample(path);
         samples.value[key] = buffer;
+        // ★★★ デバッグログ追加 (1) ★★★
+        console.log(`[Otoya Master] ✅ 音源準備完了: ${key} (${path}), Duration: ${buffer.duration.toFixed(2)}s`);
         updateProgress();
       }
     }
@@ -74,12 +77,14 @@ onMounted(async () => {
     }
     reverbNode = audioContext.createConvolver();
     reverbNode.buffer = impulse;
+    console.log('[Otoya Master] ✅ 店内の響き、調整完了。');
 
     loadingMessage.value = '準備ができました';
     isLoading.value = false;
+    console.log('[Otoya Master] 開店準備が完了しました。いつでもどうぞ。');
   } catch (error: any) {
     loadingMessage.value = `エラー: ${loadingMessage.value} の解析に失敗しました。ファイルが破損しているか、非対応の形式の可能性があります。`;
-    console.error("Error loading audio assets:", error);
+    console.error("[Otoya Master] 💥 開店準備中に致命的なエラーが発生しました:", error);
   }
 });
 
@@ -98,6 +103,7 @@ const playMusic = (menuName: string, seed?: string) => {
   reverbNode.connect(reverbGain);
   reverbGain.connect(audioContext.destination);
 
+  console.log(`[Otoya Master] BGMを淹れます: ${menuName} (レコード番号: ${currentSeed.value})`);
   switch (menuName) {
     case '集中ブレンド': createConcentrationSound(rng); break;
     case 'リラックス・デカフェ': createRelaxSound(rng); break;
@@ -110,10 +116,13 @@ const playMusic = (menuName: string, seed?: string) => {
 
 const stopMusic = () => {
   if (!isPlaying.value) return;
+  console.log('[Otoya Master] 演奏を停止します。');
   clearInterval(soundInterval);
   clearTimeout(soundInterval);
   activeNodes.forEach(node => {
-    node.disconnect();
+    try {
+      node.disconnect();
+    } catch(e) { /* ignore */ }
   });
   activeNodes = [];
   isPlaying.value = false;
@@ -171,13 +180,18 @@ const createRelaxSound = (rng: () => number) => {
 };
 
 const createJazzSound = (rng: () => number) => {
-  if (!samples.value.piano || !samples.value.bass || !samples.value.ride || !samples.value.brush) return;
+  if (!samples.value.piano || !samples.value.bass || !samples.value.ride || !samples.value.brush) {
+      console.error('[Jazz] 💥 演奏に必要な楽器の音源が不足しています。');
+      return;
+  }
   let beat = 0;
   const tempo = 100 + rng() * 20;
   const intervalTime = 60000 / tempo;
   const pianoScale = [-1200, -700, 0, 500, 700, 1200];
   const bassScale = [-1200, -500, 0];
-  const playSample = (buffer: AudioBuffer, startTime: number, options: { detune?: number, duration?: number, vol?: number, loop?: boolean, noReverb?: boolean }) => {
+  
+  // ★★★ デバッグログ追加 (2) ★★★
+  const playSample = (buffer: AudioBuffer, startTime: number, instrument: string, options: { detune?: number, duration?: number, vol?: number, loop?: boolean, noReverb?: boolean }) => {
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
     source.detune.value = options.detune || 0;
@@ -196,23 +210,38 @@ const createJazzSound = (rng: () => number) => {
       gain.connect(reverbNode);
     }
 
-    source.start(startTime); // ★★★ 修正箇所: この行を上に移動しました ★★★
+    console.log(`[Jazz] 🎵 ${instrument}: play scheduled at ${startTime.toFixed(2)}s (Current: ${audioContext.currentTime.toFixed(2)}s)`);
+    source.start(startTime);
 
     if (options.duration) {
-      gain.gain.setValueAtTime(options.vol || 1, startTime + options.duration - 0.1);
-      gain.gain.linearRampToValueAtTime(0, startTime + options.duration);
-      source.stop(startTime + options.duration);
+      const stopTime = startTime + options.duration;
+      gain.gain.setValueAtTime(options.vol || 1, stopTime - 0.1 > startTime ? stopTime - 0.1 : startTime);
+      gain.gain.linearRampToValueAtTime(0, stopTime);
+      
+      console.log(`[Jazz] ⏹️ ${instrument}: stop scheduled at ${stopTime.toFixed(2)}s`);
+      try {
+        source.stop(stopTime);
+      } catch (e) {
+        console.error(`[Jazz] 💥 ERROR scheduling stop for ${instrument}`, {
+            error: e,
+            currentTime: audioContext.currentTime,
+            startTime: startTime,
+            stopTime: stopTime,
+        });
+      }
     }
     
     activeNodes.push(source, gain);
   };
+  
   const sequencer = () => {
     const now = audioContext.currentTime;
-    playSample(samples.value.ride!, now, { vol: 0.2, noReverb: true, duration: 1.0 });
-    playSample(samples.value.ride!, now + (intervalTime / 1000) * 0.5, { vol: 0.1, noReverb: true, duration: 0.5 });
-    if (beat % 2 === 1) playSample(samples.value.brush!, now, { vol: 0.15, noReverb: true, duration: 0.2 });
-    if (beat % 4 === 0) playSample(samples.value.bass!, now, { detune: bassScale[Math.floor(rng() * bassScale.length)], vol: 0.4, duration: intervalTime / 1000 });
-    if (rng() < 0.25) playSample(samples.value.piano!, now, { detune: pianoScale[Math.floor(rng() * pianoScale.length)], vol: 0.35, duration: (intervalTime / 1000) * (1 + rng() * 2), loop: true });
+    console.log(`\n[Jazz] --- Beat: ${beat}, Time: ${now.toFixed(2)}s ---`);
+    playSample(samples.value.ride!, now, 'Ride 1', { vol: 0.2, noReverb: true, duration: 1.0 });
+    playSample(samples.value.ride!, now + (intervalTime / 1000) * 0.5, 'Ride 2', { vol: 0.1, noReverb: true, duration: 0.5 });
+    if (beat % 2 === 1) playSample(samples.value.brush!, now, 'Brush', { vol: 0.15, noReverb: true, duration: 0.2 });
+    if (beat % 4 === 0) playSample(samples.value.bass!, now, 'Bass', { detune: bassScale[Math.floor(rng() * bassScale.length)], vol: 0.4, duration: intervalTime / 1000 });
+    if (rng() < 0.25) playSample(samples.value.piano!, now, 'Piano', { detune: pianoScale[Math.floor(rng() * pianoScale.length)], vol: 0.35, duration: (intervalTime / 1000) * (1 + rng() * 2), loop: true });
     beat = (beat + 1) % 16;
   };
   soundInterval = setInterval(sequencer, intervalTime);
@@ -239,7 +268,6 @@ const createLoFiSound = (rng: () => number) => {
       gain.connect(reverbNode);
     }
     source.start(startTime);
-    // Lo-Fiのドラムは短いので、stopMusicに任せず自動で止める
     if(options.noReverb) {
       source.stop(startTime + 0.5);
     }
@@ -258,6 +286,8 @@ const createLoFiSound = (rng: () => number) => {
   soundInterval = setInterval(sequencer, intervalTime);
 };
 </script>
+
+<!-- <template> と <style> は変更ありません -->
 
 <template>
   <div class="background-container">
