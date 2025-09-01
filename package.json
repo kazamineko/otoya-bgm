@@ -10,7 +10,9 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@types/seedrandom": "^3.0.8",
     "nuxt": "^4.0.3",
+    "seedrandom": "^3.0.5",
     "vue": "^3.5.20",
     "vue-router": "^4.5.1"
   }
