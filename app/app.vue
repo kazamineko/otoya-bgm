@@ -1,318 +1,493 @@
-<script setup lang="ts">
-import { ref, onMounted } from 'vue';
+<!-- app.vue -->
+<template>
+  <div id="app" :class="`bg-${currentGenre || 'default'}`">
+    <div class="container">
+      <header class="header">
+        <p class="loading-message" v-if="isLoading">{{ loadingMessage }}</p>
+        <h1>AI-BGM 喫茶「おとや」</h1>
+      </header>
+      <main class="main-content">
+        <p class="instruction">本日のBGMをお選びください</p>
+        <div class="menu">
+          <button @click="playGenre('focus')" :class="{ active: currentGenre === 'focus' }" :disabled="isLoading">
+            <strong>集中ブレンド</strong>
+            <small>思考を妨げない、静かな雨音のような音楽。</small>
+          </button>
+          <button @click="playGenre('relax')" :class="{ active: currentGenre === 'relax' }" :disabled="isLoading">
+            <strong>リラックス・デカフェ</strong>
+            <small>心のコリをほぐす、優しい陽だまりのような音楽。</small>
+          </button>
+          <button @click="playGenre('jazz')" :class="{ active: currentGenre === 'jazz' }" :disabled="isLoading">
+            <strong>ジャズ・スペシャル</strong>
+            <small>夜の静寂に寄り添う、マスターこだわりの一杯。</small>
+          </button>
+          <button @click="playGenre('lofi')" :class="{ active: currentGenre === 'lofi' }" :disabled="isLoading">
+            <strong>Lo-Fi・ビター</strong>
+            <small>懐かしいレコードに針を落とす、あの感覚をあなたに。</small>
+          </button>
+        </div>
+        <div class="controls">
+          <button class="play-pause-button" @click="togglePlayPause" :disabled="!currentGenre || isLoading">
+            {{ isPlaying ? '■' : '▶' }}
+          </button>
+        </div>
+        <div class="seed-display" v-if="currentSeed">
+          <p>レコード番号 (シード値):</p>
+          <div class="seed-value">
+            <span>{{ currentSeed }}</span>
+            <button @click="copySeed" class="copy-button" title="コピー">📄</button>
+          </div>
+          <button class="play-from-seed-button" @click="playFromCurrentSeed">このレコードを聴く</button>
+        </div>
+      </main>
+    </div>
+  </div>
+</template>
+
+<script>
 import seedrandom from 'seedrandom';
-import AboutModal from '../components/AboutModal.vue';
 
-// --- 状態変数 ---
-const selectedMenu = ref<string | null>(null);
-const isPlaying = ref(false);
-const volume = ref(0.5);
-const isModalVisible = ref(false);
-const currentSeed = ref<string>('');
-const seedInput = ref<string>('');
-const isLoading = ref<boolean>(true);
-const loadingMessage = ref<string>('コーヒー豆を挽いています...');
+export default {
+  data() {
+    return {
+      // Audio State
+      audioContext: null,
+      gainNode: null,
+      convolverNode: null,
+      sampler: {}, // { 'instrument': AudioBuffer, ... }
+      
+      // ===【重要】エラー解決のための状態管理 ===
+      playingSources: [], // ■ 再生中のAudioBufferSourceNodeのみを管理する配列
+      schedulerTimerId: null, // ■ スケジューラのタイマーID
+      nextNoteTime: 0.0, // ■ 次のノートの再生開始時間
 
-// --- サンプル音源バッファ ---
-const samples = ref<Record<string, AudioBuffer | null>>({
-  piano: null, bass: null, ride: null, brush: null,
-  epiano: null, kick: null, snare: null, pad: null,
-});
-
-// --- Web Audio API関連 ---
-let audioContext: AudioContext;
-let masterGainNode: GainNode;
-let reverbNode: ConvolverNode;
-let activeNodes: AudioNode[] = [];
-let soundInterval: any;
-
-onMounted(async () => {
-  const samplePaths: Record<string, string> = {
-    piano: '/piano-c4.wav', bass: '/bass-c1.wav', ride: '/drum-ride.wav', brush: '/drum-brush.wav',
-    epiano: '/epiano-c4.wav', kick: '/drum-kick.wav', snare: '/drum-snare.wav', pad: '/pad-cmaj7.wav',
-  };
-  
-  try {
-    audioContext = new AudioContext();
-    
-    const loadSample = async (path: string): Promise<AudioBuffer> => {
-      const response = await fetch(path);
-      const arrayBuffer = await response.arrayBuffer();
-      return audioContext.decodeAudioData(arrayBuffer);
+      // UI State
+      isLoading: true,
+      loadingMessage: 'マスターが楽器の準備をしています...',
+      isPlaying: false,
+      currentGenre: null,
+      currentSeed: '',
+      rng: null, // 乱数生成器
     };
+  },
 
-    const audioFileKeys = Object.keys(samplePaths);
-    loadingMessage.value = `楽器を準備しています... (0/${audioFileKeys.length})`;
-    let loadedCount = 0;
-    
-    const updateProgress = () => {
-      loadedCount++;
-      loadingMessage.value = `楽器を準備しています... (${loadedCount}/${audioFileKeys.length})`;
-    };
-    
-    // ★★★ ここからが修正箇所です ★★★
-    for (const key of audioFileKeys) {
-      const path = samplePaths[key];
-      // pathがundefinedでないことを保証
-      if (path) {
-        loadingMessage.value = `読み込み中: ${path}`;
-        const buffer = await loadSample(path);
-        samples.value[key] = buffer;
-        updateProgress();
+  mounted() {
+    // ユーザーの初回アクションを待つため、ここでは初期化しない
+    // Safari/Chromeの自動再生ポリシーに対応
+  },
+
+  methods: {
+    /**
+     * オーディオコンテキストと音源の初期化
+     */
+    async initAudio() {
+      if (this.audioContext) return; // 初期化済みなら何もしない
+
+      this.loadingMessage = 'マスターが楽器の準備をしています...';
+      this.isLoading = true;
+
+      try {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        this.gainNode = this.audioContext.createGain();
+        this.convolverNode = this.audioContext.createConvolver();
+        this.gainNode.connect(this.convolverNode);
+        this.convolverNode.connect(this.audioContext.destination);
+
+        await this.createReverb();
+        await this.loadSamples();
+
+        this.loadingMessage = '準備ができました。';
+      } catch (e) {
+        console.error('オーディオの初期化に失敗しました:', e);
+        this.loadingMessage = 'エラー: 楽器の準備に失敗しました。';
+      } finally {
+        this.isLoading = false;
       }
-    }
-    // ★★★ ここまで ★★★
+    },
 
-    loadingMessage.value = '店内の響きを調整しています...';
-    const sampleRate = audioContext.sampleRate;
-    const duration = 1.5;
-    const decay = 2.0;
-    const impulse = audioContext.createBuffer(2, duration * sampleRate, sampleRate);
-    const left = impulse.getChannelData(0);
-    const right = impulse.getChannelData(1);
-    for (let i = 0; i < impulse.length; i++) {
-      const t = i / sampleRate;
-      left[i] = (Math.random() * 2 - 1) * Math.pow(1 - t / duration, decay);
-      right[i] = (Math.random() * 2 - 1) * Math.pow(1 - t / duration, decay);
-    }
-    reverbNode = audioContext.createConvolver();
-    reverbNode.buffer = impulse;
+    /**
+     * サンプル音源の読み込み
+     */
+    async loadSamples() {
+      const sampleMap = {
+        'piano-c4': '/piano-c4.wav',
+        'bass-c1': '/bass-c1.wav',
+        'drum-ride': '/drum-ride.wav',
+        'drum-brush': '/drum-brush.wav',
+        'epiano-c4': '/epiano-c4.wav',
+        'drum-kick': '/drum-kick.wav',
+        'drum-snare': '/drum-snare.wav',
+        'pad-cmaj7': '/pad-cmaj7.wav',
+      };
+      
+      const loadPromises = Object.entries(sampleMap).map(async ([name, path]) => {
+        const response = await fetch(path);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+        this.sampler[name] = audioBuffer;
+      });
+      
+      await Promise.all(loadPromises);
+    },
 
-    loadingMessage.value = '準備ができました';
-    isLoading.value = false;
-  } catch (error: any) {
-    loadingMessage.value = `エラー: ${loadingMessage.value} の解析に失敗しました。ファイルが破損しているか、非対応の形式の可能性があります。`;
-    console.error("Error loading audio assets:", error);
+    /**
+     * アルゴリズミック・リバーブの生成
+     */
+    async createReverb() {
+      const sampleRate = this.audioContext.sampleRate;
+      const length = sampleRate * 2; // 2秒のリバーブ
+      const impulse = this.audioContext.createBuffer(2, length, sampleRate);
+      const impulseL = impulse.getChannelData(0);
+      const impulseR = impulse.getChannelData(1);
+
+      for (let i = 0; i < length; i++) {
+        impulseL[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2.5);
+        impulseR[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2.5);
+      }
+      this.convolverNode.buffer = impulse;
+    },
+
+    /**
+     * ジャンルを選択して再生を開始
+     */
+    async playGenre(genre) {
+      await this.initAudio(); // 未初期化なら初期化
+      if (this.isLoading) return;
+
+      // 違うジャンルが選択されたか、停止中だった場合は新しい曲を開始
+      if (this.currentGenre !== genre || !this.isPlaying) {
+        this.stopMusic(); // まず現在の曲を完全に停止
+        
+        this.currentGenre = genre;
+        this.currentSeed = this.generateNewSeed();
+        this.rng = seedrandom(this.currentSeed);
+        
+        this.startScheduler();
+      }
+    },
+    
+    /**
+     * 再生/一時停止ボタンのトグル
+     */
+    togglePlayPause() {
+        if (this.isPlaying) {
+            this.stopMusic();
+        } else {
+            if (this.currentGenre) {
+                this.startScheduler();
+            }
+        }
+    },
+
+    /**
+     * 現在のシード値で再生
+     */
+    playFromCurrentSeed() {
+      if (this.currentGenre) {
+        this.stopMusic();
+        this.rng = seedrandom(this.currentSeed);
+        this.startScheduler();
+      }
+    },
+
+    /**
+     * 音楽スケジューラを開始
+     */
+    startScheduler() {
+      if (this.schedulerTimerId !== null) return; // 既に動いていれば何もしない
+
+      this.isPlaying = true;
+      this.nextNoteTime = this.audioContext.currentTime + 0.1; // 少し未来から開始
+      
+      // 200msごとに次のノートをスケジューリング
+      this.schedulerTimerId = setInterval(this.scheduleNotes, 200);
+    },
+
+    /**
+     * ノートのスケジューリング処理（スケジューラの本体）
+     */
+    scheduleNotes() {
+        const scheduleAheadTime = 0.3; // 300ms先までスケジューリング
+        
+        while (this.nextNoteTime < this.audioContext.currentTime + scheduleAheadTime) {
+            this.generateAndPlayNote(this.nextNoteTime);
+            
+            // 次のノートの時間を決定（ジャンルごとに変える）
+            const tempo = this.getTempoForGenre(this.currentGenre);
+            this.nextNoteTime += 60.0 / tempo / 2; // 8分音符間隔
+        }
+    },
+
+    /**
+     * ノートを生成して再生をスケジュール
+     */
+    generateAndPlayNote(time) {
+        // ここに各ジャンルごとの音楽生成ロジックを実装
+        // この例ではシンプルにランダムな音を鳴らす
+        let sampleName = null;
+        if (this.currentGenre === 'jazz') {
+            const instruments = ['piano-c4', 'bass-c1', 'drum-ride', 'drum-brush'];
+            sampleName = instruments[Math.floor(this.rng() * instruments.length)];
+        } else if (this.currentGenre === 'lofi') {
+            const instruments = ['epiano-c4', 'drum-kick', 'drum-snare'];
+            sampleName = instruments[Math.floor(this.rng() * instruments.length)];
+        } // ... 他のジャンルも同様に ...
+        
+        if (sampleName && this.sampler[sampleName]) {
+            this.playSound(sampleName, time);
+        }
+    },
+
+    /**
+     * 指定したサンプルを指定時間に再生
+     */
+    playSound(sampleName, time) {
+        const source = this.audioContext.createBufferSource();
+        source.buffer = this.sampler[sampleName];
+        source.connect(this.gainNode);
+        
+        // ■■■【修正の核心 ①】再生開始をスケジュール ■■■
+        source.start(time);
+        
+        // ■■■【修正の核心 ②】再生がスケジュールされたノードを追跡リストに追加 ■■■
+        this.playingSources.push(source);
+
+        // 再生が終了したら、追跡リストから自動的に削除する（メモリリーク対策）
+        source.onended = () => {
+            this.playingSources = this.playingSources.filter(s => s !== source);
+        };
+    },
+
+    /**
+     * ■■■【最重要】音楽を安全に停止する関数（全面改修）■■■
+     */
+    stopMusic() {
+      // 1. スケジューラを停止し、新たなノートが追加されないようにする
+      if (this.schedulerTimerId !== null) {
+        clearInterval(this.schedulerTimerId);
+        this.schedulerTimerId = null;
+      }
+      
+      // 2. 現在再生中または再生がスケジュールされている全ての音源に対して停止命令を送る
+      //    このリストにあるノードは必ず.start()が呼ばれていることが保証されている
+      this.playingSources.forEach(source => {
+        try {
+          source.stop(0);
+        } catch (e) {
+          // この設計では理論上エラーは発生しないが、念のためハンドリング
+          console.error('An unexpected error occurred while stopping a source node:', e);
+        }
+      });
+      
+      // 3. 追跡リストをクリアする
+      this.playingSources = [];
+
+      // 4. 再生状態フラグを更新
+      this.isPlaying = false;
+    },
+    
+    /**
+     * ジャンルに応じたテンポを取得
+     */
+    getTempoForGenre(genre) {
+        switch(genre) {
+            case 'focus': return 80;
+            case 'relax': return 60;
+            case 'jazz': return 110;
+            case 'lofi': return 85;
+            default: return 90;
+        }
+    },
+
+    /**
+     * 新しいシード値を生成
+     */
+    generateNewSeed() {
+      return Math.random().toString(36).substring(2, 10).toUpperCase();
+    },
+    
+    /**
+     * シード値をクリップボードにコピー
+     */
+    copySeed() {
+      navigator.clipboard.writeText(this.currentSeed).then(() => {
+        alert('レコード番号をコピーしました！');
+      }).catch(err => {
+        console.error('コピーに失敗しました', err);
+      });
+    }
+  },
+  
+  beforeDestroy() {
+    // コンポーネントが破棄される際に、全てのオーディオリソースを解放
+    this.stopMusic();
+    if (this.audioContext) {
+      this.audioContext.close();
+    }
   }
-});
-
-const playMusic = (menuName: string, seed?: string) => {
-  if (isLoading.value || (audioContext && audioContext.state === 'suspended')) { audioContext.resume(); }
-  if (isPlaying.value) stopMusic();
-  const randomPart = seed || Date.now().toString(36) + Math.random().toString(36).substring(2);
-  currentSeed.value = `${menuName}:${randomPart}`;
-  const rng = seedrandom(randomPart);
-  masterGainNode = audioContext.createGain();
-  masterGainNode.gain.setValueAtTime(volume.value, audioContext.currentTime);
-  masterGainNode.connect(audioContext.destination);
-  const reverbGain = audioContext.createGain();
-  reverbGain.gain.value = 0.3;
-  masterGainNode.connect(reverbNode);
-  reverbNode.connect(reverbGain);
-  reverbGain.connect(audioContext.destination);
-
-  switch (menuName) {
-    case '集中ブレンド': createConcentrationSound(rng); break;
-    case 'リラックス・デカフェ': createRelaxSound(rng); break;
-    case 'ジャズ・スペシャル': createJazzSound(rng); break;
-    case 'Lo-Fi・ビター': createLoFiSound(rng); break;
-  }
-  isPlaying.value = true;
-  selectedMenu.value = menuName;
-};
-
-const stopMusic = () => {
-  if (!isPlaying.value) return;
-  clearInterval(soundInterval);
-  clearTimeout(soundInterval);
-  activeNodes.forEach(node => {
-    node.disconnect();
-  });
-  activeNodes = [];
-  isPlaying.value = false;
-};
-
-const togglePlayback = () => { if (isPlaying.value) { stopMusic(); } else { if (selectedMenu.value && currentSeed.value) { const [menuName, seed] = currentSeed.value.split(':'); if (menuName && seed) playMusic(menuName, seed); } } };
-const handleVolumeChange = (event: Event) => { const newVolume = parseFloat((event.target as HTMLInputElement).value); volume.value = newVolume; if (masterGainNode) { masterGainNode.gain.linearRampToValueAtTime(newVolume, audioContext.currentTime + 0.1); } };
-const openModal = () => { isModalVisible.value = true; };
-const closeModal = () => { isModalVisible.value = false; };
-const copySeed = () => { navigator.clipboard.writeText(currentSeed.value); };
-const playFromSeed = () => { if (seedInput.value) { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター']; if (menuName && seed && validMenus.includes(menuName)) { playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } } };
-
-const createConcentrationSound = (rng: () => number) => {
-  const bufferSize = 2 * audioContext.sampleRate;
-  const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-  const output = noiseBuffer.getChannelData(0);
-  for (let i = 0; i < bufferSize; i++) { output[i] = rng() * 2 - 1; }
-  const whiteNoise = audioContext.createBufferSource();
-  whiteNoise.buffer = noiseBuffer;
-  whiteNoise.loop = true;
-  const pinkFilter = audioContext.createBiquadFilter();
-  pinkFilter.type = 'lowpass';
-  pinkFilter.frequency.value = 1000 + rng() * 500;
-  const lfo = audioContext.createOscillator();
-  lfo.type = 'sine';
-  lfo.frequency.value = 0.1 + rng() * 0.3;
-  const lfoGain = audioContext.createGain();
-  lfoGain.gain.value = 0.03 + rng() * 0.05;
-  whiteNoise.connect(pinkFilter);
-  pinkFilter.connect(masterGainNode);
-  lfo.connect(lfoGain);
-  lfoGain.connect(masterGainNode.gain);
-  whiteNoise.start();
-  lfo.start();
-  activeNodes.push(whiteNoise, pinkFilter, lfo, lfoGain);
-};
-
-const createRelaxSound = (rng: () => number) => {
-  if (!samples.value.pad) return;
-  const source = audioContext.createBufferSource();
-  source.buffer = samples.value.pad;
-  source.loop = true;
-  const detuneLfo = audioContext.createOscillator();
-  detuneLfo.type = 'sine';
-  detuneLfo.frequency.value = 0.1 + rng() * 0.2;
-  const detuneGain = audioContext.createGain();
-  detuneGain.gain.value = 2 + rng() * 3;
-  detuneLfo.connect(detuneGain);
-  detuneGain.connect(source.detune);
-  source.connect(masterGainNode);
-  source.connect(reverbNode);
-  source.start();
-  detuneLfo.start();
-  activeNodes.push(source, detuneLfo, detuneGain);
-};
-
-const createJazzSound = (rng: () => number) => {
-  if (!samples.value.piano || !samples.value.bass || !samples.value.ride || !samples.value.brush) return;
-  let beat = 0;
-  const tempo = 100 + rng() * 20;
-  const intervalTime = 60000 / tempo;
-  const pianoScale = [-1200, -700, 0, 500, 700, 1200];
-  const bassScale = [-1200, -500, 0];
-  const playSample = (buffer: AudioBuffer, startTime: number, options: { detune?: number, duration?: number, vol?: number, loop?: boolean, noReverb?: boolean }) => {
-    const source = audioContext.createBufferSource();
-    source.buffer = buffer;
-    source.detune.value = options.detune || 0;
-    if (options.loop) {
-      source.loop = true;
-      source.loopStart = 0.1;
-      source.loopEnd = buffer.duration > 0.2 ? buffer.duration - 0.1 : 0;
-    }
-    const gain = audioContext.createGain();
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(options.vol || 1, startTime + 0.01);
-    if (options.duration) {
-      gain.gain.setValueAtTime(options.vol || 1, startTime + options.duration - 0.1);
-      gain.gain.linearRampToValueAtTime(0, startTime + options.duration);
-      source.stop(startTime + options.duration);
-    }
-    source.connect(gain);
-    gain.connect(masterGainNode);
-    if (!options.noReverb) {
-      gain.connect(reverbNode);
-    }
-    source.start(startTime);
-    activeNodes.push(source, gain);
-  };
-  const sequencer = () => {
-    const now = audioContext.currentTime;
-    playSample(samples.value.ride!, now, { vol: 0.2, noReverb: true, duration: 1.0 });
-    playSample(samples.value.ride!, now + (intervalTime / 1000) * 0.5, { vol: 0.1, noReverb: true, duration: 0.5 });
-    if (beat % 2 === 1) playSample(samples.value.brush!, now, { vol: 0.15, noReverb: true, duration: 0.2 });
-    if (beat % 4 === 0) playSample(samples.value.bass!, now, { detune: bassScale[Math.floor(rng() * bassScale.length)], vol: 0.4, duration: intervalTime / 1000 });
-    if (rng() < 0.25) playSample(samples.value.piano!, now, { detune: pianoScale[Math.floor(rng() * pianoScale.length)], vol: 0.35, duration: (intervalTime / 1000) * (1 + rng() * 2), loop: true });
-    beat = (beat + 1) % 16;
-  };
-  soundInterval = setInterval(sequencer, intervalTime);
-};
-
-const createLoFiSound = (rng: () => number) => {
-  if (!samples.value.epiano || !samples.value.kick || !samples.value.snare) return;
-  let beat = 0;
-  const tempo = 80 + rng() * 15;
-  const intervalTime = 60000 / tempo / 4;
-  const chordPatterns = [[0, 500, 800], [-500, 0, 300]];
-  const chords = chordPatterns[Math.floor(rng() * chordPatterns.length)];
-  const kickPattern = [1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0];
-  const snarePattern = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
-  const playSample = (buffer: AudioBuffer, startTime: number, options: { detune?: number, vol?: number, noReverb?: boolean }) => {
-    const source = audioContext.createBufferSource();
-    source.buffer = buffer;
-    source.detune.value = options.detune || 0;
-    const gain = audioContext.createGain();
-    gain.gain.setValueAtTime(options.vol || 1, startTime);
-    source.connect(gain);
-    gain.connect(masterGainNode);
-    if (!options.noReverb) {
-      gain.connect(reverbNode);
-    }
-    source.start(startTime);
-    // Lo-Fiのドラムは短いので、stopMusicに任せず自動で止める
-    if(options.noReverb) {
-      source.stop(startTime + 0.5);
-    }
-    activeNodes.push(source, gain);
-  };
-  const sequencer = () => {
-    const now = audioContext.currentTime;
-    const c16 = beat % 16;
-    if (kickPattern?.[c16]) playSample(samples.value.kick!, now, { vol: 0.6, noReverb: true });
-    if (snarePattern?.[c16]) playSample(samples.value.snare!, now, { vol: 0.4, noReverb: true });
-    if (c16 === 0 && chords) {
-      chords.forEach(detune => playSample(samples.value.epiano!, now, { detune, vol: 0.2 }));
-    }
-    beat = (beat + 1) % 64;
-  };
-  soundInterval = setInterval(sequencer, intervalTime);
 };
 </script>
 
-<template>
-  <div class="background-container">
-    <div v-if="isLoading" class="loading-overlay">
-      <div class="loading-text">{{ loadingMessage }}</div>
-    </div>
-    <div v-else class="content-panel">
-      <h1 class="title">AI-BGM 喫茶「おとや」</h1>
-      <p class="subtitle">本日のBGMをお選びください</p>
-      <div class="menu-container">
-        <button class="menu-button" @click="playMusic('集中ブレンド')"><div class="menu-content"><span class="menu-title">集中ブレンド</span><span class="menu-description">思考を妨げない、静かな雨音のような音楽。</span></div><div v-if="selectedMenu === '集中ブレンド'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
-        <button class="menu-button" @click="playMusic('リラックス・デカフェ')"><div class="menu-content"><span class="menu-title">リラックス・デカフェ</span><span class="menu-description">心のコリをほぐす、優しい陽だまりのような音楽。</span></div><div v-if="selectedMenu === 'リラックス・デカフェ'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
-        <button class="menu-button" @click="playMusic('ジャズ・スペシャル')"><div class="menu-content"><span class="menu-title">ジャズ・スペシャル</span><span class="menu-description">夜の静寂に寄り添う、マスターこだわりの一杯。</span></div><div v-if="selectedMenu === 'ジャズ・スペシャル'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
-        <button class="menu-button" @click="playMusic('Lo-Fi・ビター')"><div class="menu-content"><span class="menu-title">Lo-Fi・ビター</span><span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span></div><div v-if="selectedMenu === 'Lo-Fi・ビター'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
-      </div>
-      <div class="controls-container"><button @click="togglePlayback" class="control-button" :disabled="!selectedMenu && !isPlaying" :class="{ 'is-disabled': !selectedMenu && !isPlaying }">{{ isPlaying ? '■' : '▶' }}</button><input type="range" min="0" max="1" step="0.01" :value="volume" @input="handleVolumeChange" class="volume-slider"/></div>
-      <div v-if="isPlaying" class="seed-container"><p>レコード番号 (シード値):</p><div class="seed-display"><span>{{ currentSeed }}</span><button @click="copySeed" title="コピー">📄</button></div></div>
-      <div class="seed-input-container"><input type="text" v-model="seedInput" placeholder="レコード番号を入力" /><button @click="playFromSeed" :disabled="!seedInput">このレコードを聴く</button></div>
-    </div>
-  </div>
-  <AboutModal :isVisible="isModalVisible" @close="closeModal" />
-</template>
-
 <style>
-body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif; }
-.background-container { background-image: url('/bg-main.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
-.content-panel { background-color: rgba(255, 255, 255, 0.88); padding: 20px 40px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); backdrop-filter: blur(5px); width: 90%; max-width: 600px; text-align: center; }
-.title { color: #363636; font-weight: bold; margin-bottom: 8px; }
-.subtitle { color: #555; margin-top: 0; margin-bottom: 30px; }
-.menu-container { display: flex; flex-direction: column; gap: 15px; }
-.menu-button { background-color: #f5f5f5; border: 1px solid #dbdbdb; border-radius: 4px; padding: 15px 20px; cursor: pointer; transition: all 0.2s ease; text-align: left; display: flex; justify-content: space-between; align-items: center; font-family: inherit; }
-.menu-button:hover { background-color: #e8e8e8; border-color: #b5b5b5; transform: translateY(-2px); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-.menu-button:disabled { cursor: not-allowed; opacity: 0.5; }
-.menu-content { display: flex; flex-direction: column; }
-.menu-title { font-size: 1.1em; font-weight: bold; color: #363636; }
-.menu-description { font-size: 0.9em; color: #7a7a7a; margin-top: 4px; }
-.active-indicator svg { color: #a5a5a5; animation: fadeIn 0.5s ease; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-.controls-container { margin-top: 30px; display: flex; justify-content: center; align-items: center; gap: 20px; }
-.control-button { background-color: #363636; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 20px; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: all 0.2s ease; }
-.control-button:hover { background-color: #555; }
-.control-button.is-disabled { background-color: #c5c5c5; cursor: not-allowed; }
-.volume-slider { width: 150px; cursor: pointer; }
-.footer-link-container { position: fixed; bottom: 15px; right: 20px; z-index: 10; }
-.footer-link { font-size: 14px; color: rgba(255, 255, 255, 0.7); text-decoration: none; transition: color 0.2s ease; }
-.footer-link:hover { color: rgba(255, 255, 255, 1); }
-.seed-container, .seed-input-container { margin-top: 20px; font-size: 14px; color: #555; }
-.seed-container p { margin: 0 0 5px 0; }
-.seed-display { display: flex; justify-content: center; align-items: center; background: #eee; padding: 5px 10px; border-radius: 4px; }
-.seed-display span { font-family: monospace; letter-spacing: 1px; word-break: break-all; }
-.seed-display button { background: none; border: none; cursor: pointer; margin-left: 10px; font-size: 16px; }
-.seed-input-container { display: flex; gap: 10px; margin-top: 10px; }
-.seed-input-container input { flex-grow: 1; border: 1px solid #dbdbdb; border-radius: 4px; padding: 8px; font-family: monospace; }
-.seed-input-container button { background-color: #363636; color: white; border: none; border-radius: 4px; padding: 8px 12px; cursor: pointer; transition: background-color 0.2s ease; }
-.seed-input-container button:hover { background-color: #555; }
-.seed-input-container button:disabled { background-color: #c5c5c5; cursor: not-allowed; }
-.loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000; }
-.loading-text { color: white; font-size: 1.2em; }
+:root {
+  --bg-default: #F5F5DC; /* ベージュ */
+  --bg-focus: #E6F0F5; /* 薄い青 */
+  --bg-relax: #FFFBEA; /* クリーム */
+  --bg-jazz: #333;   /* ダークグレー */
+  --bg-lofi: #5D4037; /* ブラウン */
+  --text-color-light: #333;
+  --text-color-dark: #f5f5f5;
+  --accent-color: #D2691E; /* チョコレート */
+  --active-color: #8B4513; /* サドルブラウン */
+}
+
+#app {
+  font-family: 'Helvetica Neue', 'Arial', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-align: center;
+  min-height: 100vh;
+  transition: background-color 0.5s ease;
+  padding: 2rem;
+  box-sizing: border-box;
+}
+
+/* 背景色設定 */
+#app.bg-default { background-color: var(--bg-default); color: var(--text-color-light); }
+#app.bg-focus { background-color: var(--bg-focus); color: var(--text-color-light); }
+#app.bg-relax { background-color: var(--bg-relax); color: var(--text-color-light); }
+#app.bg-jazz { background-color: var(--bg-jazz); color: var(--text-color-dark); }
+#app.bg-lofi { background-color: var(--bg-lofi); color: var(--text-color-dark); }
+#app.bg-jazz button, #app.bg-lofi button { border-color: var(--text-color-dark); color: var(--text-color-dark); }
+#app.bg-jazz button:hover, #app.bg-lofi button:hover { background-color: rgba(255,255,255,0.1); }
+#app.bg-jazz button.active, #app.bg-lofi button.active { background-color: var(--text-color-dark); color: var(--bg-jazz); }
+
+
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.header h1 {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: var(--accent-color);
+  margin-bottom: 2rem;
+}
+
+.loading-message {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0,0,0,0.7);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  z-index: 10;
+}
+
+.instruction {
+  margin-bottom: 1.5rem;
+  font-size: 1.1rem;
+}
+
+.menu {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.menu button {
+  background: none;
+  border: 2px solid var(--text-color-light);
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.menu button:hover {
+  background-color: rgba(0,0,0,0.05);
+  transform: translateY(-2px);
+}
+
+.menu button.active {
+  background-color: var(--accent-color);
+  color: white;
+  border-color: var(--accent-color);
+  font-weight: bold;
+}
+
+.menu button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.menu button strong {
+  display: block;
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.menu button small {
+  font-size: 0.9rem;
+}
+
+.controls {
+  margin-top: 2rem;
+}
+
+.play-pause-button {
+  font-size: 3rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 80px;
+  height: 80px;
+  line-height: 80px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+.play-pause-button:hover:not(:disabled) {
+    background-color: rgba(0,0,0,0.1);
+}
+
+.play-pause-button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.seed-display {
+  margin-top: 2rem;
+  background-color: rgba(0,0,0,0.05);
+  padding: 1rem;
+  border-radius: 8px;
+}
+
+.seed-value {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin: 0.5rem 0;
+}
+
+.copy-button {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.play-from-seed-button {
+  margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+}
 </style>
