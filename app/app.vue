@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import AboutModal from '../components/AboutModal.vue';
+import AboutModal from '../components/AboutModal.vue'; // 修正済みのパス
+
 // --- 状態変数 ---
 const selectedMenu = ref<string | null>(null);
 const isPlaying = ref(false);
 const volume = ref(0.5);
-const isModalVisible = ref(false); // ★モーダルの表示状態を管理する変数
+const isModalVisible = ref(false);
 
 // --- Web Audio API関連 ---
 let audioContext: AudioContext;
@@ -55,51 +56,70 @@ const handleVolumeChange = (event: Event) => {
     masterGainNode.gain.linearRampToValueAtTime(newVolume, audioContext.currentTime + 0.1);
   }
 };
-
-// ★モーダルを開閉する関数
 const openModal = () => { isModalVisible.value = true; };
 const closeModal = () => { isModalVisible.value = false; };
 
-// --- サウンド生成関数 (変更なし) ---
+// --- サウンド生成関数 ---
 const createConcentrationSound = () => { const bufferSize = 2 * audioContext.sampleRate; const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const output = noiseBuffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() * 2 - 1; } const whiteNoise = audioContext.createBufferSource(); whiteNoise.buffer = noiseBuffer; whiteNoise.loop = true; const pinkFilter = audioContext.createBiquadFilter(); pinkFilter.type = 'lowpass'; pinkFilter.frequency.value = 1200; const lfo = audioContext.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.2; const lfoGain = audioContext.createGain(); lfoGain.gain.value = 0.05; whiteNoise.connect(pinkFilter); pinkFilter.connect(masterGainNode); lfo.connect(lfoGain); lfoGain.connect(masterGainNode.gain); whiteNoise.start(); lfo.start(); activeNodes.push(whiteNoise, pinkFilter, lfo, lfoGain); };
 const createRelaxSound = () => { const chords = [ [261.63, 329.63, 392.00, 493.88], [349.23, 440.00, 523.25, 659.26], [392.00, 493.88, 587.33, 783.99], [261.63, 329.63, 392.00, 493.88] ]; let currentChordIndex = 0; let currentOscillators: { osc: OscillatorNode, gain: GainNode }[] = []; const playChord = () => { currentOscillators.forEach(({ osc, gain }) => { gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 2.5); osc.stop(audioContext.currentTime + 2.5); }); const frequencies = chords[currentChordIndex]; currentOscillators = frequencies.flatMap(freq => { const baseOsc = audioContext.createOscillator(); baseOsc.type = 'sine'; baseOsc.frequency.setValueAtTime(freq, audioContext.currentTime); const baseGain = audioContext.createGain(); baseGain.gain.setValueAtTime(0, audioContext.currentTime); baseGain.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 2.0); baseOsc.connect(baseGain); baseGain.connect(masterGainNode); baseOsc.start(); const overtoneOsc = audioContext.createOscillator(); overtoneOsc.type = 'sine'; overtoneOsc.frequency.setValueAtTime(freq * 2, audioContext.currentTime); const overtoneGain = audioContext.createGain(); overtoneGain.gain.setValueAtTime(0, audioContext.currentTime); overtoneGain.gain.linearRampToValueAtTime(0.05, audioContext.currentTime + 2.0); overtoneOsc.connect(overtoneGain); overtoneGain.connect(masterGainNode); overtoneOsc.start(); activeNodes.push(baseOsc, baseGain, overtoneOsc, overtoneGain); return [ { osc: baseOsc, gain: baseGain }, { osc: overtoneOsc, gain: overtoneGain } ]; }); currentChordIndex = (currentChordIndex + 1) % chords.length; }; playChord(); soundInterval = window.setInterval(playChord, 5000); };
-const createJazzSound = () => { let beat = 0; const tempo = 120; const intervalTime = 60000 / tempo / 2; const pianoScale = [261.6, 311.1, 349.2, 392.0, 466.1, 523.2]; const bassLine = [130.8, 174.6, 196.0, 130.8]; const playNote = (freq: number, startTime: number, duration: number, vol: number, type: OscillatorType = 'sine') => { const osc = audioContext.createOscillator(); const gain = audioContext.createGain(); osc.type = type; osc.frequency.setValueAtTime(freq, startTime); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(vol, startTime + 0.01); gain.gain.linearRampToValueAtTime(0, startTime + duration); osc.connect(gain); gain.connect(masterGainNode); osc.start(startTime); osc.stop(startTime + duration); }; const playHiHat = (startTime: number) => { const noise = audioContext.createBufferSource(); const bufferSize = audioContext.sampleRate * 0.1; const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1; noise.buffer = buffer; const filter = audioContext.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 5000; const gain = audioContext.createGain(); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(0.1, startTime + 0.01); gain.gain.linearRampToValueAtTime(0, startTime + 0.05); noise.connect(filter); filter.connect(gain); gain.connect(masterGainNode); noise.start(startTime); }; const sequencer = () => { const now = audioContext.currentTime; if (beat % 2 === 1) { playHiHat(now); } if (beat % 4 === 0) { const bassNote = bassLine[Math.floor(beat / 4) % bassLine.length]; playNote(bassNote, now, intervalTime / 1000 * 2, 0.3); } if (Math.random() < 0.15) { const pianoNote = pianoScale[Math.floor(Math.random() * pianoScale.length)]; playNote(pianoNote, now, intervalTime / 1000, 0.2, 'triangle'); } beat = (beat + 1) % 16; }; soundInterval = window.setInterval(sequencer, intervalTime); };
-const createLoFiSound = () => { const bufferSize = 2 * audioContext.sampleRate; const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const output = noiseBuffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() * 2 - 1; } const vinylNoise = audioContext.createBufferSource(); vinylNoise.buffer = noiseBuffer; vinylNoise.loop = true; const vinylFilter = audioContext.createBiquadFilter(); vinylFilter.type = 'highpass'; vinylFilter.frequency.value = 3000; const vinylGain = audioContext.createGain(); vinylGain.gain.value = 0.05; vinylNoise.connect(vinylFilter); vinylFilter.connect(vinylGain); vinylGain.connect(masterGainNode); vinylNoise.start(); activeNodes.push(vinylNoise, vinylFilter, vinylGain); let beat = 0; const tempo = 85; const intervalTime = 60000 / tempo / 4; const chords = [ [130.81, 196.00, 246.94, 311.13], [174.61, 261.63, 329.63, 415.30], [196.00, 293.66, 349.23, 440.00], [155.56, 233.08, 293.66, 369.99] ]; const playNote = (freq: number, startTime: number, duration: number, vol: number, type: OscillatorType) => { const osc = audioContext.createOscillator(); const gain = audioContext.createGain(); osc.type = type; osc.frequency.setValueAtTime(freq, startTime); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(vol, startTime + 0.02); gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration); osc.connect(gain); gain.connect(masterGainNode); osc.start(startTime); osc.stop(startTime + duration); }; const playKick = (startTime: number) => { playNote(60, startTime, 0.2, 0.5, 'sine'); }; const playSnare = (startTime: number) => { const noise = audioContext.createBufferSource(); const bufferSize = audioContext.sampleRate * 0.1; const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1; noise.buffer = buffer; const filter = audioContext.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 1500; const gain = audioContext.createGain(); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(0.4, startTime + 0.01); gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.1); noise.connect(filter); filter.connect(gain); gain.connect(masterGainNode); noise.start(startTime); }; const playChord = (startTime: number, frequencies: number[]) => { frequencies.forEach(freq => { playNote(freq, startTime, 1.5, 0.1, 'triangle'); }); }; const sequencer = () => { const now = audioContext.currentTime; const current16th = beat % 16; if (current16th === 0 || current16th === 8) { playKick(now); } if (current16th === 4 || current16th === 12) { playSnare(now); } if (current16th === 0) { const chord = chords[Math.floor(beat / 16) % chords.length]; playChord(now, chord); } beat = (beat + 1) % 64; }; soundInterval = window.setInterval(sequencer, intervalTime); };
+
+// 「ジャズ・スペシャル」のサウンドを生成 (修正済み)
+const createJazzSound = () => {
+  let beat = 0;
+  const tempo = 120;
+  const intervalTime = 60000 / tempo / 2;
+  const pianoScale = [261.6, 311.1, 349.2, 392.0, 466.1, 523.2];
+  const bassLine = [130.8, 174.6, 196.0, 130.8];
+  const playNote = (freq: number, startTime: number, duration: number, vol: number, type: OscillatorType = 'sine') => { const osc = audioContext.createOscillator(); const gain = audioContext.createGain(); osc.type = type; osc.frequency.setValueAtTime(freq, startTime); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(vol, startTime + 0.01); gain.gain.linearRampToValueAtTime(0, startTime + duration); osc.connect(gain); gain.connect(masterGainNode); osc.start(startTime); osc.stop(startTime + duration); };
+  const playHiHat = (startTime: number) => { const noise = audioContext.createBufferSource(); const bufferSize = audioContext.sampleRate * 0.1; const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1; noise.buffer = buffer; const filter = audioContext.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 5000; const gain = audioContext.createGain(); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(0.1, startTime + 0.01); gain.gain.linearRampToValueAtTime(0, startTime + 0.05); noise.connect(filter); filter.connect(gain); gain.connect(masterGainNode); noise.start(startTime); };
+  const sequencer = () => {
+    const now = audioContext.currentTime;
+    if (beat % 2 === 1) { playHiHat(now); }
+    if (beat % 4 === 0) {
+      const bassNote = bassLine[Math.floor(beat / 4) % bassLine.length];
+      if (bassNote !== undefined) {
+        playNote(bassNote, now, intervalTime / 1000 * 2, 0.3);
+      }
+    }
+    if (Math.random() < 0.15) {
+      const pianoNote = pianoScale[Math.floor(Math.random() * pianoScale.length)];
+      if (pianoNote !== undefined) {
+        playNote(pianoNote, now, intervalTime / 1000, 0.2, 'triangle');
+      }
+    }
+    beat = (beat + 1) % 16;
+  };
+  soundInterval = window.setInterval(sequencer, intervalTime);
+};
+
+const createLoFiSound = () => { const bufferSize = 2 * audioContext.sampleRate; const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const output = noiseBuffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() * 2 - 1; } const vinylNoise = audioContext.createBufferSource(); vinylNoise.buffer = noiseBuffer; vinylNoise.loop = true; const vinylFilter = audioContext.createBiquadFilter(); vinylFilter.type = 'highpass'; vinylFilter.frequency.value = 3000; const vinylGain = audioContext.createGain(); vinylGain.gain.value = 0.05; vinylNoise.connect(vinylFilter); vinylFilter.connect(vinylGain); vinylGain.connect(masterGainNode); vinylNoise.start(); activeNodes.push(vinylNoise, vinylFilter, vinylGain); let beat = 0; const tempo = 85; const intervalTime = 60000 / tempo / 4; const chords = [ [130.81, 196.00, 246.94, 311.13], [174.61, 261.63, 329.63, 415.30], [196.00, 293.66, 349.23, 440.00], [155.56, 233.08, 293.66, 369.99] ]; const playNote = (freq: number, startTime: number, duration: number, vol: number, type: OscillatorType) => { const osc = audioContext.createOscillator(); const gain = audioContext.createGain(); osc.type = type; osc.frequency.setValueAtTime(freq, startTime); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(vol, startTime + 0.02); gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration); osc.connect(gain); gain.connect(masterGainNode); osc.start(startTime); osc.stop(startTime + duration); }; const playKick = (startTime: number) => { playNote(60, startTime, 0.2, 0.5, 'sine'); }; const playSnare = (startTime: number) => { const noise = audioContext.createBufferSource(); const bufferSize = audioContext.sampleRate * 0.1; const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1; noise.buffer = buffer; const filter = audioContext.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 1500; const gain = audioContext.createGain(); gain.gain.setValueAtTime(0, startTime); gain.gain.linearRampToValueAtTime(0.4, startTime + 0.01); gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.1); noise.connect(filter); filter.connect(gain); gain.connect(masterGainNode); noise.start(startTime); }; const playChord = (startTime: number, frequencies: number[]) => { frequencies.forEach(freq => { playNote(freq, startTime, 1.5, 0.1, 'triangle'); }); }; const sequencer = () => { const now = audioContext.currentTime; const current16th = beat % 16; if (current16th === 0 || current16th === 8) { playKick(now); } if (current16th === 4 || current16th === 12) { playSnare(now); } if (current16th === 0) { const chord = chords[Math.floor(beat / 16) % chords.length]; if (chord !== undefined) playChord(now, chord); } beat = (beat + 1) % 64; }; soundInterval = window.setInterval(sequencer, intervalTime); };
 const createTestSound = () => { const oscillator = audioContext.createOscillator(); oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(440, audioContext.currentTime); oscillator.connect(masterGainNode); oscillator.start(); activeNodes.push(oscillator); };
 </script>
 
 <template>
   <div class="background-container">
     <div class="content-panel">
-      <!-- (中身は変更なし) -->
       <h1 class="title">AI-BGM 喫茶「おとや」</h1>
       <p class="subtitle">本日のBGMをお選びください</p>
       <div class="menu-container">
-        <!-- (ボタン部分は変更なし) -->
         <button class="menu-button" @click="playMusic('集中ブレンド')"><span class="menu-title">集中ブレンド</span><span class="menu-description">思考を妨げない、静かな雨音のような音楽。</span></button>
         <button class="menu-button" @click="playMusic('リラックス・デカフェ')"><span class="menu-title">リラックス・デカフェ</span><span class="menu-description">心のコリをほぐす、優しい陽だまりのような音楽。</span></button>
         <button class="menu-button" @click="playMusic('ジャズ・スペシャル')"><span class="menu-title">ジャズ・スペシャル</span><span class="menu-description">夜の静寂に寄り添う、マスターこだわりの一杯。</span></button>
         <button class="menu-button" @click="playMusic('Lo-Fi・ビター')"><span class="menu-title">Lo-Fi・ビター</span><span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span></button>
       </div>
       <div class="controls-container">
-        <!-- (コントロールバーは変更なし) -->
         <button @click="togglePlayback" class="control-button">{{ isPlaying ? '■' : '▶' }}</button>
         <input type="range" min="0" max="1" step="0.01" :value="volume" @input="handleVolumeChange" class="volume-slider"/>
       </div>
     </div>
-
-    <!-- ★「当店のBGMについて」のリンクを追加 -->
     <div class="footer-link-container">
       <a href="#" @click.prevent="openModal" class="footer-link">当店のBGMについて</a>
     </div>
   </div>
-
-  <!-- ★モーダルコンポーネントを呼び出し -->
   <AboutModal :isVisible="isModalVisible" @close="closeModal" />
 </template>
 
 <style>
-/* (既存のスタイルは変更なし) */
 body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif; }
 .background-container { background-image: url('/bg-main.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
 .content-panel { background-color: rgba(255, 255, 255, 0.85); padding: 20px 40px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); backdrop-filter: blur(5px); width: 90%; max-width: 600px; text-align: center; }
@@ -114,21 +134,7 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hir
 .control-button { background-color: #363636; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 20px; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: background-color 0.2s ease; }
 .control-button:hover { background-color: #555; }
 .volume-slider { width: 150px; cursor: pointer; }
-
-/* ★追加したフッターリンクのスタイル */
-.footer-link-container {
-  position: fixed;
-  bottom: 15px;
-  right: 20px;
-  z-index: 10;
-}
-.footer-link {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
-  text-decoration: none;
-  transition: color 0.2s ease;
-}
-.footer-link:hover {
-  color: rgba(255, 255, 255, 1);
-}
+.footer-link-container { position: fixed; bottom: 15px; right: 20px; z-index: 10; }
+.footer-link { font-size: 14px; color: rgba(255, 255, 255, 0.7); text-decoration: none; transition: color 0.2s ease; }
+.footer-link:hover { color: rgba(255, 255, 255, 1); }
 </style>
