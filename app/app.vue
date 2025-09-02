@@ -50,7 +50,11 @@ const initializeAudio = async () => {
     await Tone.start();
     loadingMessage.value = '店内の響きを調整しています...';
     
-    masterComp = new Tone.Compressor(-12, 3).toDestination();
+    // 【チューニング1】コンプレッサーの設定を緩和し、音のダイナミクスを確保
+    masterComp = new Tone.Compressor({
+      threshold: -6, // より大きな音にのみ反応するように
+      ratio: 2,      // 圧縮率を緩やかに
+    }).toDestination();
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
 
     distortion = new Tone.Distortion(0.6).connect(masterComp);
@@ -69,7 +73,7 @@ const initializeAudio = async () => {
         });
     });
 
-    instrumentList.value = Object.keys(samplePaths); // 【修正】samplePathsのキーから楽器リストを生成
+    instrumentList.value = Object.keys(samplePaths);
 
     const instrumentsToPan = ['piano', 'epiano', 'sax', 'trombone', 'eguitar', 'ebass'];
     instrumentsToPan.forEach(inst => {
@@ -150,14 +154,17 @@ const handlePlaySoundCheck = async (instrumentName: string) => {
   }
 
   if (players && players.has(instrumentName)) {
-    players.player(instrumentName).start();
+    const player = players.player(instrumentName);
+    // 【チューニング2】サウンドチェックでは必ず100%の音量で再生
+    player.volume.value = 0; // 0dB = 100% volume
+    player.start();
   }
 };
 
 const copySeed = () => { if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value); };
 const playFromSeed = async () => { if (seedInput.value) { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート']; if (menuName && seed && validMenus.includes(menuName)) { await playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } } };
 
-// --- 音楽生成関数 --- (変更なし)
+// --- 音楽生成関数 --- (ロジック内の音量指定を100%基準に修正)
 
 const createConcentrationSound = (rng: () => number) => {
     if (!Tone || !masterComp) return;
@@ -192,21 +199,21 @@ const createLoFiSound = (rng: () => number) => {
 
     const kickSeq = new Tone.Sequence((time, note) => { 
         if (note) {
-            kickPlayer.volume.value = Tone!.gainToDb(0.7 + rng() * 0.3);
+            kickPlayer.volume.value = Tone!.gainToDb(0.9 + rng() * 0.1); // 90-100%
             kickPlayer.start(time, 0, "8n");
         }
     }, [1,0,1,0,1,0,1,0], "8n").start(0);
 
     const snareSeq = new Tone.Sequence((time, note) => { 
         if (note) {
-            snarePlayer.volume.value = Tone!.gainToDb(0.6 + rng() * 0.2);
+            snarePlayer.volume.value = Tone!.gainToDb(0.8 + rng() * 0.2); // 80-100%
             snarePlayer.start(time, 0, "8n");
         }
     }, [0,1,0,1], "4n").start(0);
     
     const chordLoop = new Tone.Loop((time) => {
         currentChord.forEach((detune, i) => {
-            epiano.volume.value = Tone!.gainToDb(0.5 + rng() * 0.2);
+            epiano.volume.value = Tone!.gainToDb(0.7 + rng() * 0.2); // 70-90%
             epiano.playbackRate = Math.pow(2, detune / 1200);
             epiano.start(time + i * 0.05, 0, "2n");
         });
@@ -232,15 +239,15 @@ const createRockSound = (rng: () => number) => {
     
     const drumPart = new Tone.Part((time, value) => {
         if (value.kick) {
-            rockKickPlayer.volume.value = Tone!.gainToDb(0.9 + rng() * 0.1);
+            rockKickPlayer.volume.value = Tone!.gainToDb(1.0); // 100%
             rockKickPlayer.start(time, 0, "8n");
         }
         if (value.snare) {
-            rockSnarePlayer.volume.value = Tone!.gainToDb(value.accent ? 0.9 : 0.7);
+            rockSnarePlayer.volume.value = Tone!.gainToDb(value.accent ? 1.0 : 0.8); // 80-100%
             rockSnarePlayer.start(time, 0, "8n");
         }
         if (value.crash) {
-            crashPlayer.volume.value = Tone!.gainToDb(0.6);
+            crashPlayer.volume.value = Tone!.gainToDb(0.7); // 70%
             crashPlayer.start(time, 0, "2n");
         }
     }, [ { time: '0:0', kick: true, crash: true }, { time: '0:1', kick: true }, { time: '0:2', snare: true, accent: true }, { time: '0:3', kick: true }, { time: '1:0', kick: true }, { time: '1:1', snare: true }, { time: '1:2', kick: true }, { time: '1:3', snare: true, accent: true } ]).start(0);
@@ -248,7 +255,7 @@ const createRockSound = (rng: () => number) => {
 
     const bassPart = new Tone.Sequence((time, note) => { 
         if (note !== null) {
-            bass.volume.value = Tone!.gainToDb(0.8 + rng() * 0.2);
+            bass.volume.value = Tone!.gainToDb(0.9); // 90%
             bass.playbackRate = Math.pow(2, note/1200);
             bass.start(time, 0, "8n"); 
         }
@@ -257,11 +264,11 @@ const createRockSound = (rng: () => number) => {
     const guitarPart = new Tone.Part((time, value) => {
         if (isSolo) {
             const note = [-12, -9, -7, -5, 0][Math.floor(rng()*5)]!;
-            guitar.volume.value = Tone!.gainToDb(0.8);
+            guitar.volume.value = Tone!.gainToDb(0.9); // 90%
             guitar.playbackRate = Math.pow(2, note / 1200);
             guitar.start(time, 0, "16n");
         } else {
-            guitar.volume.value = Tone!.gainToDb(0.7);
+            guitar.volume.value = Tone!.gainToDb(0.8); // 80%
             guitar.playbackRate = Math.pow(2, value.detune / 1200);
             guitar.start(time, 0, value.dur);
         }
@@ -295,7 +302,7 @@ const createJazzSound = (rng: () => number) => {
     const pianoPart = new Tone.Part((time, value) => {
         if (isSolo && rng() < 0.6) return;
         value.chord.forEach((note) => {
-            const vel = isSolo ? 0.3 + rng() * 0.2 : 0.4 + rng() * 0.2;
+            const vel = isSolo ? 0.5 + rng() * 0.2 : 0.6 + rng() * 0.2; // 50-80%
             piano.volume.value = Tone!.gainToDb(vel);
             piano.playbackRate = Tone!.Frequency(note).toFrequency() / Tone!.Frequency('C4').toFrequency();
             piano.start(time + rng() * 0.05, 0, "2n");
@@ -304,20 +311,20 @@ const createJazzSound = (rng: () => number) => {
     pianoPart.loop = true; pianoPart.loopEnd = '8m';
 
     const bassPart = new Tone.Sequence((time, note) => {
-        bass.volume.value = Tone!.gainToDb(0.7 + rng() * 0.2);
+        bass.volume.value = Tone!.gainToDb(0.9 + rng() * 0.1); // 90-100%
         bass.playbackRate = Tone!.Frequency(note).toFrequency() / Tone!.Frequency('C1').toFrequency();
         bass.start(time, 0, "4n");
     }, ['D1', 'A1', 'G1', 'D2', 'C1', 'G1', 'A1', 'E2'], "2n").start(0);
     bassPart.loop = true;
 
     const ridePart = new Tone.Loop((time) => { 
-        ride.volume.value = Tone!.gainToDb(0.4 + rng() * 0.2);
+        ride.volume.value = Tone!.gainToDb(0.7 + rng() * 0.2); // 70-90%
         ride.start(time, 0, "4n");
     }, "4n").start(0);
 
     const saxPart = new Tone.Sequence((time, note) => {
         if (!isSolo || !note) return;
-        sax.volume.value = Tone!.gainToDb(0.6 + rng() * 0.2);
+        sax.volume.value = Tone!.gainToDb(0.8 + rng() * 0.2); // 80-100%
         sax.playbackRate = Tone!.Frequency(note).toFrequency() / Tone!.Frequency('C4').toFrequency();
         sax.start(time, 0, "8n");
     }, ['C5', 'A4', 'G4', null, 'E4', 'D4', null, 'G4'], "8n").start(0);
@@ -329,6 +336,7 @@ const createJazzSound = (rng: () => number) => {
 </script>
 
 <template>
+  <!-- Template remains unchanged -->
   <div>
     <div class="background-container">
       <div v-if="isLoading" class="loading-overlay">
