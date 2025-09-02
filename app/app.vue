@@ -30,11 +30,10 @@ const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
-// 【修正】正しいパラメータのデータ構造
 type TuningParams = Record<string, { volume: number; attack: number; release: number }>;
 
 const tuningParams = ref<TuningParams>({});
-const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v3'; // 仕様変更のためキーを更新
+const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v3';
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value) return;
@@ -61,19 +60,30 @@ const initializeAudio = async () => {
   };
   instrumentList.value = Object.keys(allSamplePaths);
 
-  const defaultParams: TuningParams = {};
-  instrumentList.value.forEach(name => {
-    defaultParams[name] = { volume: 0, attack: 0.01, release: 1.0 };
-  });
-  ['kick', 'rockKick', 'snare', 'rockSnare', 'ride', 'brush', 'crash'].forEach(name => {
-    if(defaultParams[name]) defaultParams[name]!.release = 0.2;
-  });
-  tuningParams.value = defaultParams;
-
+  // 【反映】マスター認定のサウンドパラメータをデフォルト値として設定
+  const masterTunedParams: TuningParams = {
+    "piano": { "volume": 0.1, "attack": 0, "release": 0 },
+    "bass": { "volume": 0, "attack": 2, "release": 5 },
+    "ride": { "volume": 0, "attack": 0, "release": 0 },
+    "brush": { "volume": 0, "attack": 0.01, "release": 0.2 },
+    "epiano": { "volume": 0, "attack": 0.01, "release": 1 },
+    "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
+    "snare": { "volume": 0, "attack": 0.01, "release": 0.2 },
+    "pad": { "volume": 0, "attack": 0.01, "release": 1 },
+    "sax": { "volume": 0, "attack": 0.01, "release": 1 },
+    "trombone": { "volume": 0, "attack": 0.01, "release": 1 },
+    "eguitar": { "volume": 0, "attack": 0.01, "release": 1 },
+    "ebass": { "volume": 0, "attack": 0.01, "release": 1 },
+    "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 },
+    "rockSnare": { "volume": 0, "attack": 0.01, "release": 0.2 },
+    "crash": { "volume": 0, "attack": 0.01, "release": 0.2 }
+  };
+  tuningParams.value = masterTunedParams;
+  
   try {
     const savedParams = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (savedParams) {
-      tuningParams.value = { ...defaultParams, ...JSON.parse(savedParams) };
+      tuningParams.value = { ...masterTunedParams, ...JSON.parse(savedParams) };
     }
   } catch (e) {
     console.error("Failed to load tuning params from LocalStorage", e);
@@ -97,7 +107,6 @@ const initializeAudio = async () => {
     
     for (const name of instrumentList.value) {
       const params = tuningParams.value[name]!;
-      // 【修正】コンストラクタには存在するプロパティのみ渡す
       const sampler = new Tone.Sampler({
         urls: { C4: allSamplePaths[name]! },
         baseUrl: "/",
@@ -183,7 +192,9 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw') 
   if (type === 'sampler' && samplers[instrumentName]) {
     samplers[instrumentName]!.triggerAttackRelease('C4', '1n');
   } else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) {
-    rawSamplePlayers.player(instrumentName).start();
+    const player = rawSamplePlayers.player(instrumentName);
+    player.loop = false; // 【修正】再生の都度、ループを確実に無効化
+    player.start();
   }
 };
 
