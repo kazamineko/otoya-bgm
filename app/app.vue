@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onUnmounted } from 'vue';
 import seedrandom from 'seedrandom';
-import * as Tone from 'tone';
+// 【修正】Tone.jsの型情報のみを静的にインポートする
+import type * as ToneType from 'tone';
 import AboutModal from '../components/AboutModal.vue';
 
 // --- 状態変数 ---
@@ -11,21 +12,24 @@ const volume = ref(0.5);
 const isModalVisible = ref(false);
 const currentSeed = ref<string>('');
 const seedInput = ref<string>('');
-const isLoading = ref<boolean>(false); // 【修正】初期ロードは不要なためfalseに
+const isLoading = ref<boolean>(false);
 const loadingMessage = ref<string>('');
 
 // --- Tone.js関連 ---
-let players: Tone.Players | null = null;
-let distortion: Tone.Distortion | null = null;
-let reverb: Tone.Reverb | null = null;
-const scheduledEvents: (Tone.Loop | Tone.Part | Tone.Sequence)[] = [];
-let noise: Tone.Noise | null = null;
-let isAudioInitialized = ref(false); // 【追加】音声初期化が完了したかを追跡するフラグ
+// 【修正】実際のTone.jsモジュールを保持する変数を準備
+let Tone: typeof ToneType | null = null;
+let players: ToneType.Players | null = null;
+let distortion: ToneType.Distortion | null = null;
+let reverb: ToneType.Reverb | null = null;
+const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [];
+let noise: ToneType.Noise | null = null;
+let isAudioInitialized = ref(false);
 
 /**
- * 【新設】ユーザーの初回アクション時に音声関連のすべてを初期化する関数
+ * ユーザーの初回アクション時に音声関連のすべてを初期化する関数
  */
 const initializeAudio = async () => {
+  // isAudioInitialized.value = true; // 先にフラグを立てて二重実行を防止
   isLoading.value = true;
   loadingMessage.value = '喫茶店の準備をしています...';
 
@@ -37,20 +41,19 @@ const initializeAudio = async () => {
   };
 
   try {
-    // ユーザー操作に応じてAudioContextを開始
+    // 【修正】ここで初めてTone.jsモジュールを動的に読み込む
+    Tone = await import('tone');
     await Tone.start();
     loadingMessage.value = '店内の響きを調整しています...';
 
-    // エフェクトの準備
     distortion = new Tone.Distortion(0.6).toDestination();
     reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.01 }).toDestination();
     await reverb.generate();
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
 
-    // サンプラーの読み込み
     loadingMessage.value = '楽器を準備しています...';
-    players = await new Promise<Tone.Players>((resolve, reject) => {
-        const p = new Tone.Players({
+    players = await new Promise<ToneType.Players>((resolve, reject) => {
+        const p = new Tone!.Players({
             urls: samplePaths,
             baseUrl: "/",
             onload: () => resolve(p),
@@ -58,7 +61,6 @@ const initializeAudio = async () => {
         }).toDestination();
     });
 
-    // エフェクトチェインの設定
     if (players && reverb && distortion) {
         players.connect(reverb);
         const eguitarPlayer = players.player('eguitar');
@@ -79,24 +81,19 @@ const initializeAudio = async () => {
   } catch (error: any) {
     loadingMessage.value = `エラーが発生しました: ${error.message}`;
     console.error("Error setting up Tone.js:", error);
+    isAudioInitialized.value = false; // 失敗した場合はフラグを戻す
   } finally {
     isLoading.value = false;
   }
 };
-
-onMounted(() => {
-  // onMountedでは音声関連の初期化を行わない
-});
 
 onUnmounted(() => {
     stopMusic();
 });
 
 const playMusic = async (menuName: string, seed?: string) => {
-  // 【修正】初回再生時にのみ音声初期化処理を実行
   if (!isAudioInitialized.value) {
     await initializeAudio();
-    // 初期化に失敗した場合は再生を中断
     if (!isAudioInitialized.value) return;
   }
 
@@ -114,13 +111,13 @@ const playMusic = async (menuName: string, seed?: string) => {
     case 'ロック・ビート': createRockSound(rng); break;
   }
 
-  Tone.Transport.start();
+  Tone!.Transport.start();
   isPlaying.value = true;
   selectedMenu.value = menuName;
 };
 
 const stopMusic = () => {
-  if (!isPlaying.value && scheduledEvents.length === 0) return;
+  if (!isPlaying.value || !Tone) return;
   Tone.Transport.stop();
   Tone.Transport.cancel(0);
 
@@ -139,7 +136,6 @@ const stopMusic = () => {
       players.stopAll();
   }
   isPlaying.value = false;
-  // selectedMenuは再生が止まっても維持し、再開できるようにする
 };
 
 // --- UIイベントハンドラ ---
@@ -147,7 +143,7 @@ const togglePlayback = async () => {
   if (isPlaying.value) {
     stopMusic();
   } else {
-    if (selectedMenu.value) { // currentSeedのチェックはplayMusicに任せる
+    if (selectedMenu.value) {
       const [menuName, seed] = currentSeed.value.split(':');
       if (menuName && seed) await playMusic(menuName, seed);
     }
@@ -157,9 +153,8 @@ const togglePlayback = async () => {
 const handleVolumeChange = (event: Event) => {
   const newVolume = parseFloat((event.target as HTMLInputElement).value);
   volume.value = newVolume;
-  // 音声初期化後のみボリュームを操作
   if (isAudioInitialized.value) {
-    Tone.Destination.volume.value = Tone.gainToDb(newVolume);
+    Tone!.Destination.volume.value = Tone!.gainToDb(newVolume);
   }
 };
 
@@ -185,6 +180,7 @@ const playFromSeed = async () => {
 // --- 音楽生成関数 ---
 
 const createConcentrationSound = (rng: () => number) => {
+    if (!Tone) return;
     if (!noise) {
         noise = new Tone.Noise("pink").start();
     }
@@ -192,7 +188,6 @@ const createConcentrationSound = (rng: () => number) => {
     noise.connect(filter);
 
     const loop = new Tone.Loop((time) => {
-        // 【修正】スケジューリングされたコールバックのtime引数を使用して正確なタイミングでrampToを呼び出す
         filter.frequency.rampTo(600 + rng() * 400, 4, time);
     }, "4m").start(0);
     scheduledEvents.push(loop);
@@ -208,7 +203,7 @@ const createRelaxSound = (rng: () => number) => {
 };
 
 const createLoFiSound = (rng: () => number) => {
-    if (!players) return;
+    if (!players || !Tone) return;
     Tone.Transport.bpm.value = 80 + rng() * 15;
 
     const kickPattern = [[1,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0], [1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0]][Math.floor(rng()*2)];
@@ -241,7 +236,7 @@ const createLoFiSound = (rng: () => number) => {
 };
 
 const createRockSound = (rng: () => number) => {
-    if (!players) return;
+    if (!players || !Tone) return;
     Tone.Transport.bpm.value = 125 + rng() * 20;
 
     const guitar = players.player('eguitar');
@@ -296,7 +291,7 @@ const createRockSound = (rng: () => number) => {
 };
 
 const createJazzSound = (rng: () => number) => {
-    if (!players) return;
+    if (!players || !Tone) return;
     Tone.Transport.bpm.value = 100 + rng() * 20;
     Tone.Transport.swingSubdivision = "8n";
     Tone.Transport.swing = 0.05;
@@ -317,7 +312,7 @@ const createJazzSound = (rng: () => number) => {
         if (isSolo && rng() < 0.7) return;
         const notesToPlay = rng() < 0.6 ? [value.chord[0], value.chord[2]] : value.chord;
         notesToPlay.forEach((note, i) => {
-            piano.playbackRate = Tone.Frequency(note).toFrequency() / Tone.Frequency('C4').toFrequency();
+            piano.playbackRate = Tone!.Frequency(note).toFrequency() / Tone!.Frequency('C4').toFrequency();
             piano.start(time + i * 0.03, 0, "1n");
         });
     }, chords).start(0);
@@ -326,7 +321,7 @@ const createJazzSound = (rng: () => number) => {
 
     const bassPart = new Tone.Sequence((time, note) => {
         if (!bass) return;
-        bass.playbackRate = Tone.Frequency(note).toFrequency() / Tone.Frequency('C1').toFrequency();
+        bass.playbackRate = Tone!.Frequency(note).toFrequency() / Tone!.Frequency('C1').toFrequency();
         bass.start(time, 0, "4n");
     }, ['C2', 'E2', 'G2', 'A2', 'D2', 'F2', 'A2', 'B2', 'G2', 'B2', 'D3', 'F3'], "4n").start(0);
     bassPart.loop = true;
@@ -335,7 +330,7 @@ const createJazzSound = (rng: () => number) => {
 
     const saxPart = new Tone.Sequence((time, note) => {
         if (!isSolo || typeof note !== 'string' || !sax) return;
-        sax.playbackRate = Tone.Frequency(note).toFrequency() / Tone.Frequency('C4').toFrequency();
+        sax.playbackRate = Tone!.Frequency(note).toFrequency() / Tone!.Frequency('C4').toFrequency();
         sax.start(time, 0, "8n");
     }, ['G4', 'A4', null, 'C5', 'A4', 'G4', null, 'E4'], "8n").start(0);
     saxPart.loop = true;
