@@ -232,11 +232,21 @@ const createLoFiSound = (rng: () => number) => {
       chords = chordPatterns[Math.floor(rng() * chordPatterns.length)]!;
     }
 
-    if (kickPattern[c16]) playSample(samples.value.kick!, now, { vol: 0.7, noReverb: true, duration: 0.5 });
-    if (snarePattern[c16]) playSample(samples.value.snare!, now, { vol: 0.5, noReverb: true, duration: 0.5 });
+    // --- 音楽性向上: フィルインの導入 ---
+    const isFillInTiming = (beat % 32) >= 28; // 8小節の最後の4拍
+    if (isFillInTiming && rng() < 0.5) {
+        if(c16 % 2 === 0) playSample(samples.value.snare!, now, { vol: 0.3 + rng()*0.2, noReverb: true, duration: 0.3 });
+    } else {
+        if (kickPattern[c16]) playSample(samples.value.kick!, now, { vol: 0.6 + rng()*0.1, noReverb: true, duration: 0.5 });
+        if (snarePattern[c16]) playSample(samples.value.snare!, now, { vol: 0.4 + rng()*0.1, noReverb: true, duration: 0.5 });
+    }
     
-    if (c16 % 8 === 0) {
-      chords.forEach(detune => playSample(samples.value.epiano!, now, { detune, vol: 0.3, duration: intervalTime * 4 / 1000 }));
+    // --- 音楽性向上: ブレイクの導入 ---
+    const isBreakTiming = beat > 0 && beat % 64 === 0;
+    if (!isBreakTiming) {
+        if (c16 % 8 === 0) {
+          chords.forEach(detune => playSample(samples.value.epiano!, now, { detune, vol: 0.3, duration: intervalTime * 4 / 1000 }));
+        }
     }
     
     beat++;
@@ -246,7 +256,7 @@ const createLoFiSound = (rng: () => number) => {
 };
 
 const createRockSound = (rng: () => number) => {
-  const instruments = { guitar: samples.value.eguitar, bass: samples.value.ebass, kick: samples.value.rockKick, snare: samples.value.rockSnare, crash: samples.value.crash, };
+  const instruments = { guitar: samples.value.eguitar, bass: samples.value.ebass, kick: samples.value.rockKick, snare: samples.value.rockSnare, crash: samples.value.crash };
   for(const [name, buffer] of Object.entries(instruments)) { if (!buffer) return; }
 
   let beat = 0;
@@ -271,17 +281,32 @@ const createRockSound = (rng: () => number) => {
       snarePattern = snarePatterns[Math.floor(rng() * snarePatterns.length)]!;
       bassRiff = bassRiffs[Math.floor(rng() * bassRiffs.length)]!;
     }
-    
-    if (kickPattern[c16]) playSample(instruments.kick!, now, { vol: 0.8, noReverb: true, duration: 0.5 });
-    if (snarePattern[c16]) playSample(instruments.snare!, now, { vol: 0.6, noReverb: true, duration: 0.5 });
-    if (c16 === 0) playSample(instruments.crash!, now, { vol: 0.4, duration: intervalTime * 8 / 1000 });
-    
-    const bassNote = bassRiff[c16]!;
-    playSample(instruments.bass!, now, { detune: bassNote - 1200, vol: 0.7, noReverb: true, duration: intervalTime / 1000 * 1.5 });
 
-    if (c16 === 0 || (c16 === 8 && rng() < 0.7)) {
-        const detune = [-500, 0, 200][Math.floor(rng() * 3)]!;
-        playSample(instruments.guitar!, now, { detune: detune, vol: 0.5, duration: intervalTime * 8 / 1000 });
+    // --- 音楽性向上: ゆらぎの導入 ---
+    const timingOffset = (rng() - 0.5) * 0.02; // ±10msのタイミングゆらぎ
+    const dynamicVol = (baseVol: number) => baseVol * (0.9 + rng() * 0.2); // ±10%の音量ゆらぎ
+    
+    // --- 音楽性向上: フィルインの導入 ---
+    const isFillInTiming = (beat % 32) >= 30; // 8小節の最後の2拍
+    if (isFillInTiming && rng() < 0.7) {
+        if(c16 % 2 !== 0) playSample(instruments.snare!, now + timingOffset, { vol: dynamicVol(0.6), noReverb: true, duration: 0.3 });
+    } else {
+        if (kickPattern[c16]) playSample(instruments.kick!, now + timingOffset, { vol: dynamicVol(0.8), noReverb: true, duration: 0.5 });
+        if (snarePattern[c16]) playSample(instruments.snare!, now + timingOffset, { vol: dynamicVol(0.6), noReverb: true, duration: 0.5 });
+    }
+
+    // --- 音楽性向上: ブレイクの導入 ---
+    const isBreakTiming = beat > 0 && beat % 32 === 0;
+    if (c16 === 0 && !isBreakTiming) playSample(instruments.crash!, now + timingOffset, { vol: dynamicVol(0.4), duration: intervalTime * 8 / 1000 });
+    
+    if (!isBreakTiming) {
+        const bassNote = bassRiff[c16]!;
+        playSample(instruments.bass!, now + timingOffset, { detune: bassNote - 1200, vol: dynamicVol(0.7), noReverb: true, duration: intervalTime / 1000 * 1.5 });
+
+        if (c16 === 0 || (c16 === 8 && rng() < 0.7)) {
+            const detune = [-500, 0, 200][Math.floor(rng() * 3)]!;
+            playSample(instruments.guitar!, now + timingOffset, { detune: detune, vol: dynamicVol(0.5), duration: intervalTime * 8 / 1000 });
+        }
     }
     beat++;
     soundScheduler = setTimeout(scheduleNext, intervalTime);
@@ -294,31 +319,33 @@ const createJazzSound = (rng: () => number) => {
   for(const [name, buffer] of Object.entries(instruments)) { if (!buffer) { return; } }
 
   let beat = 0;
-  const tempo = 110 + rng() * 20;
+  let dynamicTempo = 110 + rng() * 20;
   const beatsPerMeasure = 4;
   
   type ChordName = 'Dm7' | 'G7' | 'Cmaj7' | 'Am7';
-  const chordDefs: Record<ChordName, { root: number; notes: number[]; }> = {
-    'Dm7': { root: 200, notes: [0, 300, 700, 1000] },
-    'G7':  { root: 700, notes: [0, 400, 700, 1000] },
-    'Cmaj7':{ root: 0,  notes: [0, 400, 700, 1100] },
-    'Am7': { root: 900, notes: [0, 300, 700, 1000] },
+  const chordDefs: Record<ChordName, { root: number; notes: number[]; scale: number[] }> = {
+    'Cmaj7': { root: 0,   notes: [0, 400, 700, 1100], scale: [0, 200, 400, 500, 700, 900, 1100] }, // C Ionian
+    'Am7':   { root: 900, notes: [0, 300, 700, 1000], scale: [0, 200, 300, 500, 700, 800, 1000] }, // A Aeolian
+    'Dm7':   { root: 200, notes: [0, 300, 700, 1000], scale: [0, 200, 300, 500, 700, 900, 1000] }, // D Dorian
+    'G7':    { root: 700, notes: [0, 400, 700, 1000], scale: [0, 200, 400, 500, 700, 900, 1000] }, // G Mixolydian
   };
   const progressionA: ChordName[] = ['Cmaj7', 'Am7', 'Dm7', 'G7'];
   const progressionB: ChordName[] = ['Am7', 'Dm7', 'G7', 'Cmaj7'];
-  const blueNotes = [300, 600, 1000];
+  const keyOfCBlueNotes = [300, 500, 600, 1000]; // Cキーに対するブルーノート (ミ♭, ファ, ファ#, シ♭)
 
   let soloMotif: number[] = [];
   let currentSoloInstrument: any = null;
+  let lastSoloNote = 700; // 初期値をソ(G)にしておく
 
   const scheduleNextBeat = () => {
     if (!isPlaying.value) return;
-    const beatStartTime = audioContext.currentTime;
-    const beatDuration = 60 / tempo;
+    if (rng() < 0.01) dynamicTempo += (rng() - 0.5) * 4; // たまにテンポが揺れる
+    const beatDuration = 60 / dynamicTempo;
     const swingRatio = 0.65;
     const isOffBeat = beat % 2 !== 0;
     const delay = isOffBeat ? beatDuration * (1 - swingRatio) : beatDuration * swingRatio;
-
+    
+    const beatStartTime = audioContext.currentTime;
     const currentMeasure = Math.floor(beat / beatsPerMeasure);
     const currentBeatInMeasure = beat % beatsPerMeasure;
     
@@ -326,44 +353,58 @@ const createJazzSound = (rng: () => number) => {
     const progression = isSectionA ? progressionA : progressionB;
     const currentChordName = progression[currentMeasure % 4]!;
     const currentChord = chordDefs[currentChordName];
+    const nextChordName = progression[(currentMeasure + 1) % 4]!;
+    const nextChord = chordDefs[nextChordName];
+
+    // --- 音楽性向上: ゆらぎの導入 ---
+    const timingOffset = (rng() - 0.5) * 0.03; // ±15msのタイミングゆらぎ
+    const dynamicVol = (baseVol: number) => baseVol * (0.8 + rng() * 0.4); // ±20%の音量ゆらぎ
 
     // Drums
-    if (!isOffBeat) playSample(instruments.ride!, beatStartTime, { vol: isSectionA ? 0.3 : 0.4, noReverb: true, duration: 0.5 });
-    if (isOffBeat) playSample(instruments.brush!, beatStartTime, { vol: 0.2, noReverb: true, duration: 0.2 });
+    if (!isOffBeat) playSample(instruments.ride!, beatStartTime + timingOffset, { vol: dynamicVol(isSectionA ? 0.3 : 0.4), noReverb: true, duration: 0.5 });
+    if (isOffBeat) playSample(instruments.brush!, beatStartTime + timingOffset, { vol: dynamicVol(0.2), noReverb: true, duration: 0.2 });
 
-    // Bass
+    // Bass (ウォーキングベースライン)
     if (currentBeatInMeasure === 0) {
-      playSample(instruments.bass!, beatStartTime, { detune: currentChord.root - 2400, vol: 0.7, duration: beatDuration });
-    } else if (rng() < 0.6) {
-      const bassNote = currentChord.notes[Math.floor(rng() * currentChord.notes.length)]!;
-      playSample(instruments.bass!, beatStartTime, { detune: currentChord.root + bassNote - 2400, vol: 0.6, duration: beatDuration });
+      playSample(instruments.bass!, beatStartTime + timingOffset, { detune: currentChord.root - 2400, vol: dynamicVol(0.7), duration: beatDuration });
+    } else if (currentBeatInMeasure === 3) { // 4拍目は次のコードへ繋ぐ
+      const approachNote = nextChord.root + (rng() < 0.5 ? 100 : -100);
+      playSample(instruments.bass!, beatStartTime + timingOffset, { detune: approachNote - 2400, vol: dynamicVol(0.6), duration: beatDuration });
+    } else if (rng() < 0.7) {
+      const bassNote = currentChord.scale[Math.floor(rng() * currentChord.scale.length)]!;
+      playSample(instruments.bass!, beatStartTime + timingOffset, { detune: currentChord.root + bassNote - 2400, vol: dynamicVol(0.6), duration: beatDuration });
     }
     
-    // Chords
-    if (currentBeatInMeasure === 0 && rng() < (isSectionA ? 0.6 : 0.9)) {
+    // Piano (コンピング)
+    const playChordProb = isSectionA ? 0.7 : 0.4; // ソロ中はピアノを控えめに
+    if (currentBeatInMeasure === 0 && rng() < playChordProb) {
       const chordInst = rng() < 0.7 ? instruments.piano! : instruments.organ!;
-      currentChord.notes.forEach((noteOffset) => {
-        if (rng() < 0.8) playSample(chordInst, beatStartTime + (rng() * 0.05), { detune: currentChord.root + noteOffset - 1200, vol: 0.4, duration: beatDuration * 2 });
-      });
+      const noteCount = isSectionA ? 4 : (rng() < 0.6 ? 2 : 3); // ソロ中は音数を減らす
+      for (let i = 0; i < noteCount; i++) {
+        const noteOffset = currentChord.notes[Math.floor(rng() * currentChord.notes.length)]!;
+        if (rng() < 0.85) playSample(chordInst, beatStartTime + timingOffset + rng() * 0.05, { detune: currentChord.root + noteOffset - 1200, vol: dynamicVol(0.4), duration: beatDuration * (2 + rng()*2) });
+      }
     }
 
-    // Solo
+    // Solo (スケールに基づいたメロディ生成)
     if (!isSectionA) {
-        if (currentBeatInMeasure === 0) {
+        if (beat % 32 === 16) { // Bメロの頭でソロ楽器を決定
             const soloInstruments = [{ inst: instruments.sax!, vol: 0.7, detune: 0 }, { inst: instruments.vibraphone!, vol: 0.5, detune: 0 }, { inst: instruments.trombone!, vol: 0.6, detune: -1200 }];
             currentSoloInstrument = soloInstruments[Math.floor(rng() * soloInstruments.length)]!;
-            soloMotif = Array.from({length: 2 + Math.floor(rng()*2)}, () => currentChord.notes[Math.floor(rng()*currentChord.notes.length)]!);
         }
         
-        if (rng() < 0.7 && currentSoloInstrument) {
+        if (rng() < 0.75 && currentSoloInstrument) { // 呼吸（休符）を入れる
             let note;
-            if (rng() < 0.6 && soloMotif.length > 0) note = soloMotif[Math.floor(rng() * soloMotif.length)]!;
-            else {
-                const scale = rng() < 0.8 ? currentChord.notes : blueNotes;
-                note = scale[Math.floor(rng() * scale.length)]!;
-            }
-            const duration = beatDuration * (1 + rng());
-            playSample(currentSoloInstrument.inst, beatStartTime, { detune: currentChord.root + note + currentSoloInstrument.detune, vol: currentSoloInstrument.vol, duration });
+            // メロディのなめらかな動き
+            const step = Math.floor(rng() * 3) - 1; // -1, 0, 1
+            const currentScale = rng() < 0.1 ? keyOfCBlueNotes : currentChord.scale; // たまにブルーノートを使う
+            let nextNoteIndex = currentScale.indexOf(lastSoloNote) + step;
+            nextNoteIndex = Math.max(0, Math.min(currentScale.length - 1, nextNoteIndex)); // 配列範囲内に収める
+            note = currentScale[nextNoteIndex]!;
+            lastSoloNote = note;
+
+            const duration = beatDuration * (1 + rng() * 1.5);
+            playSample(currentSoloInstrument.inst, beatStartTime + timingOffset, { detune: currentChord.root + note + currentSoloInstrument.detune, vol: dynamicVol(currentSoloInstrument.vol), duration });
         }
     }
     
