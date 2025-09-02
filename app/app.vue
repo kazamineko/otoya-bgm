@@ -41,8 +41,8 @@ onMounted(async () => {
   };
 
   try {
-    // ユーザー操作を待ってオーディオコンテキストを開始
-    await Tone.start();
+    // 【修正】onMountedでのTone.start()呼び出しを削除。
+    // 音声コンテキストの開始はユーザーアクション時に行う。
 
     // エフェクトの準備
     distortion = new Tone.Distortion(0.6).toDestination();
@@ -94,6 +94,7 @@ onUnmounted(() => {
 
 const playMusic = async (menuName: string, seed?: string) => {
   if (isLoading.value) return;
+  // 【重要】ユーザーアクションの起点であるこの場所でAudioContextを開始する
   if (Tone.context.state === 'suspended') await Tone.start();
   if (isPlaying.value) stopMusic();
 
