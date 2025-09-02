@@ -11,8 +11,8 @@ const volume = ref(0.5);
 const isModalVisible = ref(false);
 const currentSeed = ref<string>('');
 const seedInput = ref<string>('');
-const isLoading = ref<boolean>(true);
-const loadingMessage = ref<string>('コーヒー豆を挽いています...');
+const isLoading = ref<boolean>(false); // 【修正】初期ロードは不要なためfalseに
+const loadingMessage = ref<string>('');
 
 // --- Tone.js関連 ---
 let players: Tone.Players | null = null;
@@ -20,29 +20,26 @@ let distortion: Tone.Distortion | null = null;
 let reverb: Tone.Reverb | null = null;
 const scheduledEvents: (Tone.Loop | Tone.Part | Tone.Sequence)[] = [];
 let noise: Tone.Noise | null = null;
+let isAudioInitialized = ref(false); // 【追加】音声初期化が完了したかを追跡するフラグ
 
-onMounted(async () => {
+/**
+ * 【新設】ユーザーの初回アクション時に音声関連のすべてを初期化する関数
+ */
+const initializeAudio = async () => {
+  isLoading.value = true;
+  loadingMessage.value = '喫茶店の準備をしています...';
+
   const samplePaths = {
-    piano: 'piano-c4.wav',
-    bass: 'bass-c1.wav',
-    ride: 'drum-ride.wav',
-    brush: 'drum-brush.wav',
-    epiano: 'epiano-c4.wav',
-    kick: 'drum-kick.wav',
-    snare: 'drum-snare.wav',
-    pad: 'pad-cmaj7.wav',
-    sax: 'sax-c4.wav',
-    trombone: 'trombone-c3.wav',
-    eguitar: 'eguitar-dist-c4.wav',
-    ebass: 'ebass-e1.wav',
-    rockKick: 'rock-kick.wav',
-    rockSnare: 'rock-snare.wav',
-    crash: 'drum-crash.wav',
+    piano: 'piano-c4.wav', bass: 'bass-c1.wav', ride: 'drum-ride.wav', brush: 'drum-brush.wav',
+    epiano: 'epiano-c4.wav', kick: 'drum-kick.wav', snare: 'drum-snare.wav', pad: 'pad-cmaj7.wav',
+    sax: 'sax-c4.wav', trombone: 'trombone-c3.wav',
+    eguitar: 'eguitar-dist-c4.wav', ebass: 'ebass-e1.wav', rockKick: 'rock-kick.wav', rockSnare: 'rock-snare.wav', crash: 'drum-crash.wav',
   };
 
   try {
-    // 【修正】onMountedでのTone.start()呼び出しを削除。
-    // 音声コンテキストの開始はユーザーアクション時に行う。
+    // ユーザー操作に応じてAudioContextを開始
+    await Tone.start();
+    loadingMessage.value = '店内の響きを調整しています...';
 
     // エフェクトの準備
     distortion = new Tone.Distortion(0.6).toDestination();
@@ -51,6 +48,7 @@ onMounted(async () => {
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
 
     // サンプラーの読み込み
+    loadingMessage.value = '楽器を準備しています...';
     players = await new Promise<Tone.Players>((resolve, reject) => {
         const p = new Tone.Players({
             urls: samplePaths,
@@ -62,14 +60,11 @@ onMounted(async () => {
 
     // エフェクトチェインの設定
     if (players && reverb && distortion) {
-        // リバーブに接続
         players.connect(reverb);
-        // 特定の楽器をエフェクトにチェイン
         const eguitarPlayer = players.player('eguitar');
         if (eguitarPlayer) {
             eguitarPlayer.chain(distortion);
         }
-        // ドラム類は直接出力
         const drumInstruments = ['kick', 'snare', 'rockKick', 'rockSnare', 'crash'];
         drumInstruments.forEach(drum => {
             const player = players!.player(drum);
@@ -78,14 +73,19 @@ onMounted(async () => {
             }
         });
     }
-
+    isAudioInitialized.value = true;
     loadingMessage.value = '準備ができました';
-    isLoading.value = false;
 
   } catch (error: any) {
     loadingMessage.value = `エラーが発生しました: ${error.message}`;
     console.error("Error setting up Tone.js:", error);
+  } finally {
+    isLoading.value = false;
   }
+};
+
+onMounted(() => {
+  // onMountedでは音声関連の初期化を行わない
 });
 
 onUnmounted(() => {
@@ -93,9 +93,13 @@ onUnmounted(() => {
 });
 
 const playMusic = async (menuName: string, seed?: string) => {
-  if (isLoading.value) return;
-  // 【重要】ユーザーアクションの起点であるこの場所でAudioContextを開始する
-  if (Tone.context.state === 'suspended') await Tone.start();
+  // 【修正】初回再生時にのみ音声初期化処理を実行
+  if (!isAudioInitialized.value) {
+    await initializeAudio();
+    // 初期化に失敗した場合は再生を中断
+    if (!isAudioInitialized.value) return;
+  }
+
   if (isPlaying.value) stopMusic();
 
   const randomPart = seed || Date.now().toString(36) + Math.random().toString(36).substring(2);
@@ -135,17 +139,17 @@ const stopMusic = () => {
       players.stopAll();
   }
   isPlaying.value = false;
-  selectedMenu.value = null;
+  // selectedMenuは再生が止まっても維持し、再開できるようにする
 };
 
 // --- UIイベントハンドラ ---
-const togglePlayback = () => {
+const togglePlayback = async () => {
   if (isPlaying.value) {
     stopMusic();
   } else {
-    if (selectedMenu.value && currentSeed.value) {
+    if (selectedMenu.value) { // currentSeedのチェックはplayMusicに任せる
       const [menuName, seed] = currentSeed.value.split(':');
-      if (menuName && seed) playMusic(menuName, seed);
+      if (menuName && seed) await playMusic(menuName, seed);
     }
   }
 };
@@ -153,22 +157,25 @@ const togglePlayback = () => {
 const handleVolumeChange = (event: Event) => {
   const newVolume = parseFloat((event.target as HTMLInputElement).value);
   volume.value = newVolume;
-  Tone.Destination.volume.value = Tone.gainToDb(newVolume);
+  // 音声初期化後のみボリュームを操作
+  if (isAudioInitialized.value) {
+    Tone.Destination.volume.value = Tone.gainToDb(newVolume);
+  }
 };
 
 const openModal = () => { isModalVisible.value = true; };
 const closeModal = () => { isModalVisible.value = false; };
 
 const copySeed = () => {
-  navigator.clipboard.writeText(currentSeed.value);
+  if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value);
 };
 
-const playFromSeed = () => {
+const playFromSeed = async () => {
   if (seedInput.value) {
     const [menuName, seed] = seedInput.value.split(':');
     const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート'];
     if (menuName && seed && validMenus.includes(menuName)) {
-      playMusic(menuName, seed);
+      await playMusic(menuName, seed);
     } else {
       alert('レコード番号の形式が正しくないか、存在しないジャンルです。');
     }
@@ -185,7 +192,8 @@ const createConcentrationSound = (rng: () => number) => {
     noise.connect(filter);
 
     const loop = new Tone.Loop((time) => {
-        filter.frequency.rampTo(600 + rng() * 400, 4);
+        // 【修正】スケジューリングされたコールバックのtime引数を使用して正確なタイミングでrampToを呼び出す
+        filter.frequency.rampTo(600 + rng() * 400, 4, time);
     }, "4m").start(0);
     scheduledEvents.push(loop);
 };
@@ -210,31 +218,23 @@ const createLoFiSound = (rng: () => number) => {
 
     const kickSeq = new Tone.Sequence((time, note) => {
         if (note && players) {
-            const kickPlayer = players.player('kick');
-            if (kickPlayer) {
-                kickPlayer.start(time);
-            }
+            players.player('kick').start(time);
         }
     }, kickPattern, "16n").start(0);
 
     const snareSeq = new Tone.Sequence((time, note) => {
         if (note && players) {
-            const snarePlayer = players.player('snare');
-            if (snarePlayer) {
-                snarePlayer.start(time);
-            }
+            players.player('snare').start(time);
         }
     }, snarePattern, "16n").start(0);
 
     const chordLoop = new Tone.Loop((time) => {
         if (!players || !currentChord) return;
         const epianoPlayer = players.player('epiano');
-        if (epianoPlayer) {
-            currentChord.forEach((detune, i) => {
-                epianoPlayer.playbackRate = Math.pow(2, detune / 1200);
-                epianoPlayer.start(time + i * 0.02, 0, "1n");
-            });
-        }
+        currentChord.forEach((detune, i) => {
+            epianoPlayer.playbackRate = Math.pow(2, detune / 1200);
+            epianoPlayer.start(time + i * 0.02, 0, "1n");
+        });
     }, "1n").start(0);
 
     scheduledEvents.push(kickSeq, snareSeq, chordLoop);
@@ -249,30 +249,17 @@ const createRockSound = (rng: () => number) => {
     let isSolo = false;
 
     const drumPattern = [
-        { time: '0:0', kick: true, snare: false, crash: true },
-        { time: '0:1', kick: false, snare: false, crash: false },
-        { time: '0:2', kick: true, snare: false, crash: false },
-        { time: '0:3', kick: false, snare: false, crash: false },
-        { time: '1:0', kick: false, snare: true, crash: false },
-        { time: '1:1', kick: true, snare: false, crash: false },
-        { time: '1:2', kick: false, snare: false, crash: false },
-        { time: '1:3', kick: false, snare: true, crash: false },
+        { time: '0:0', kick: true, snare: false, crash: true }, { time: '0:1', kick: false, snare: false, crash: false },
+        { time: '0:2', kick: true, snare: false, crash: false }, { time: '0:3', kick: false, snare: false, crash: false },
+        { time: '1:0', kick: false, snare: true, crash: false }, { time: '1:1', kick: true, snare: false, crash: false },
+        { time: '1:2', kick: false, snare: false, crash: false }, { time: '1:3', kick: false, snare: true, crash: false },
     ];
 
     const drumPart = new Tone.Part((time, value) => {
         if (!players) return;
-        if (value.kick) {
-            const rockKickPlayer = players.player('rockKick');
-            if (rockKickPlayer) rockKickPlayer.start(time);
-        }
-        if (value.snare) {
-            const rockSnarePlayer = players.player('rockSnare');
-            if (rockSnarePlayer) rockSnarePlayer.start(time);
-        }
-        if (value.crash) {
-            const crashPlayer = players.player('crash');
-            if (crashPlayer) crashPlayer.start(time);
-        }
+        if (value.kick) players.player('rockKick').start(time);
+        if (value.snare) players.player('rockSnare').start(time);
+        if (value.crash) players.player('crash').start(time);
     }, drumPattern).start(0);
     drumPart.loop = true;
     drumPart.loopEnd = '2m';
@@ -304,10 +291,7 @@ const createRockSound = (rng: () => number) => {
     guitarPart.loop = true;
     guitarPart.loopEnd = '1m';
 
-    const soloToggle = new Tone.Loop(() => {
-        isSolo = !isSolo;
-    }, '8m').start('4m');
-
+    const soloToggle = new Tone.Loop(() => { isSolo = !isSolo; }, '8m').start('4m');
     scheduledEvents.push(drumPart, bassPart, guitarPart, soloToggle);
 };
 
@@ -323,18 +307,15 @@ const createJazzSound = (rng: () => number) => {
     const sax = players.player('sax');
     let isSolo = false;
 
-    const chords: { time: string; chord: string[]; }[] = [
-        { time: '0:0', chord: ['E4', 'G4', 'B4', 'D5'] },
-        { time: '1:0', chord: ['C4', 'E4', 'G4', 'B4'] },
-        { time: '2:0', chord: ['F4', 'A4', 'C5', 'E5'] },
-        { time: '3:0', chord: ['F4', 'A4', 'B4', 'E5'] }
+    const chords = [
+        { time: '0:0', chord: ['E4', 'G4', 'B4', 'D5'] }, { time: '1:0', chord: ['C4', 'E4', 'G4', 'B4'] },
+        { time: '2:0', chord: ['F4', 'A4', 'C5', 'E5'] }, { time: '3:0', chord: ['F4', 'A4', 'B4', 'E5'] }
     ];
 
     const pianoPart = new Tone.Part((time, value) => {
         if (!piano) return;
         if (isSolo && rng() < 0.7) return;
         const notesToPlay = rng() < 0.6 ? [value.chord[0], value.chord[2]] : value.chord;
-
         notesToPlay.forEach((note, i) => {
             piano.playbackRate = Tone.Frequency(note).toFrequency() / Tone.Frequency('C4').toFrequency();
             piano.start(time + i * 0.03, 0, "1n");
@@ -350,10 +331,7 @@ const createJazzSound = (rng: () => number) => {
     }, ['C2', 'E2', 'G2', 'A2', 'D2', 'F2', 'A2', 'B2', 'G2', 'B2', 'D3', 'F3'], "4n").start(0);
     bassPart.loop = true;
 
-    const ridePart = new Tone.Loop((time) => {
-        if (!ride) return;
-        ride.start(time);
-    }, "4n").start(0);
+    const ridePart = new Tone.Loop((time) => { if(ride) ride.start(time); }, "4n").start(0);
 
     const saxPart = new Tone.Sequence((time, note) => {
         if (!isSolo || typeof note !== 'string' || !sax) return;
@@ -362,10 +340,7 @@ const createJazzSound = (rng: () => number) => {
     }, ['G4', 'A4', null, 'C5', 'A4', 'G4', null, 'E4'], "8n").start(0);
     saxPart.loop = true;
 
-    const soloToggle = new Tone.Loop(() => {
-        isSolo = !isSolo;
-    }, '8m').start('4m');
-
+    const soloToggle = new Tone.Loop(() => { isSolo = !isSolo; }, '8m').start('4m');
     scheduledEvents.push(pianoPart, bassPart, ridePart, saxPart, soloToggle);
 };
 </script>
@@ -376,7 +351,7 @@ const createJazzSound = (rng: () => number) => {
       <div v-if="isLoading" class="loading-overlay">
         <div class="loading-text">{{ loadingMessage }}</div>
       </div>
-      <div v-else class="content-panel">
+      <div class="content-panel">
         <h1 class="title">AI-BGM 喫茶「おとや」</h1>
         <p class="subtitle">本日のBGMをお選びください</p>
         <div class="menu-container">
@@ -386,7 +361,7 @@ const createJazzSound = (rng: () => number) => {
               <span class="menu-title">集中ブレンド</span>
               <span class="menu-description">思考を妨げない、静かな雨音のような音楽。</span>
             </div>
-            <div v-if="selectedMenu === '集中ブレンド'" class="active-indicator">
+            <div v-if="selectedMenu === '集中ブレンド' && isPlaying" class="active-indicator">
               <svg xmlns="http://www.w3.org/2000/svg" :width="24" :height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" :stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
@@ -396,7 +371,7 @@ const createJazzSound = (rng: () => number) => {
               <span class="menu-title">リラックス・デカフェ</span>
               <span class="menu-description">心のコリをほぐす、優しい陽だまりのような音楽。</span>
             </div>
-            <div v-if="selectedMenu === 'リラックス・デカフェ'" class="active-indicator">
+            <div v-if="selectedMenu === 'リラックス・デカフェ' && isPlaying" class="active-indicator">
               <svg xmlns="http://www.w3.org/2000/svg" :width="24" :height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" :stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
@@ -406,7 +381,7 @@ const createJazzSound = (rng: () => number) => {
               <span class="menu-title">ジャズ・スペシャル</span>
               <span class="menu-description">夜の静寂に寄り添う、マスターこだわりの一杯。</span>
             </div>
-            <div v-if="selectedMenu === 'ジャズ・スペシャル'" class="active-indicator">
+            <div v-if="selectedMenu === 'ジャズ・スペシャル' && isPlaying" class="active-indicator">
               <svg xmlns="http://www.w3.org/2000/svg" :width="24" :height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" :stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
@@ -416,7 +391,7 @@ const createJazzSound = (rng: () => number) => {
               <span class="menu-title">Lo-Fi・ビター</span>
               <span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span>
             </div>
-            <div v-if="selectedMenu === 'Lo-Fi・ビター'" class="active-indicator">
+            <div v-if="selectedMenu === 'Lo-Fi・ビター' && isPlaying" class="active-indicator">
               <svg xmlns="http://www.w3.org/2000/svg" :width="24" :height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" :stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
@@ -426,13 +401,13 @@ const createJazzSound = (rng: () => number) => {
               <span class="menu-title">ロック・ビート</span>
               <span class="menu-description">魂を揺さぶる、力強いリズムと歪んだギターのブレンド。</span>
             </div>
-            <div v-if="selectedMenu === 'ロック・ビート'" class="active-indicator">
+            <div v-if="selectedMenu === 'ロック・ビート' && isPlaying" class="active-indicator">
               <svg xmlns="http://www.w3.org/2000/svg" :width="24" :height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" :stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
             </div>
           </button>
         </div>
         <div class="controls-container">
-          <button @click="togglePlayback" class="control-button" :disabled="!selectedMenu && !isPlaying" :class="{ 'is-disabled': !selectedMenu && !isPlaying }">
+          <button @click="togglePlayback" class="control-button" :disabled="!selectedMenu" :class="{ 'is-disabled': !selectedMenu }">
             {{ isPlaying ? '■' : '▶' }}
           </button>
           <input type="range" min="0" max="1" step="0.01" :value="volume" @input="handleVolumeChange" class="volume-slider"/>
