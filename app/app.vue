@@ -171,6 +171,8 @@ const createRelaxSound = (rng: () => number) => { /* 変更なし */ };
 const createLoFiSound = (rng: () => number) => { /* 変更なし */ };
 const createRockSound = (rng: () => number) => { /* 変更なし */ };
 
+
+// ★★★ ここからが「アンサンブル・エンジン」を搭載した新しいジャズのアルゴリズムです ★★★
 const createJazzSound = (rng: () => number) => {
   const instruments = {
     piano: samples.value.piano, bass: samples.value.bass, ride: samples.value.ride, brush: samples.value.brush,
@@ -181,61 +183,75 @@ const createJazzSound = (rng: () => number) => {
     if (!buffer) { console.warn(`Jazz: ${name} sample is not loaded.`); return; }
   }
 
-  let beat = 0;
-  const tempo = 100 + rng() * 20;
+  // --- 楽曲全体の設計 ---
+  let beat = 0; // 曲の開始からの拍数
+  const tempo = 110 + rng() * 20;
   const intervalTime = 60000 / tempo;
+  const beatsPerMeasure = 4; // 4/4拍子
+  const measuresPerSection = 4; // 1セクション4小節
+  const totalMeasures = measuresPerSection * 2; // A/Bの2セクション構成
   
-  // ★★★ ここからが修正箇所です ★★★
-  
-  // 1. コード名の型を定義
-  type ChordName = 'Dm7' | 'G7' | 'Cmaj7';
-
-  // 2. コード定義オブジェクトに型を適用
+  type ChordName = 'Dm7' | 'G7' | 'Cmaj7' | 'Am7';
   const chordDefs: Record<ChordName, { root: number; notes: number[]; }> = {
     'Dm7': { root: 200, notes: [0, 300, 700, 1000] },
     'G7':  { root: 700, notes: [0, 400, 700, 1000] },
     'Cmaj7':{ root: 0,  notes: [0, 400, 700, 1100] },
+    'Am7': { root: 900, notes: [0, 300, 700, 1000] },
   };
   
-  // 3. コード進行配列にも型を適用
-  const progression: ChordName[] = ['Dm7', 'G7', 'Cmaj7', 'Cmaj7'];
+  // AメロとBメロで異なるコード進行を用意
+  const progressionA: ChordName[] = ['Dm7', 'G7', 'Cmaj7', 'Cmaj7'];
+  const progressionB: ChordName[] = ['Am7', 'Dm7', 'G7', 'Cmaj7'];
   const C_MajorScale = [0, 200, 400, 500, 700, 900, 1100];
   
-  // ★★★ ここまでが修正箇所です ★★★
-
   const sequencer = () => {
     const now = audioContext.currentTime;
-    const measure = Math.floor((beat % 16) / 4);
-    const currentChordName = progression[measure]!;
-    const currentChord = chordDefs[currentChordName]; // これでエラーが起きなくなる
+    const currentMeasure = Math.floor(beat / beatsPerMeasure) % totalMeasures;
+    const currentBeatInMeasure = beat % beatsPerMeasure;
     
-    playSample(instruments.ride!, now, { vol: 0.3, noReverb: true, duration: intervalTime / 1000 });
-    if ((beat % 2) === 1) playSample(instruments.brush!, now + (intervalTime / 2000), { vol: 0.15, noReverb: true, duration: 0.2 });
-    
-    if ((beat % 4) === 0) {
-      playSample(instruments.bass!, now, { detune: currentChord.root - 2400, vol: 0.6, duration: intervalTime / 1000 });
-    } else if ((beat % 4) === 2 && rng() < 0.5) {
-      playSample(instruments.bass!, now, { detune: currentChord.root + 700 - 2400, vol: 0.5, duration: intervalTime / 1000 });
+    // --- セクション判定とエネルギーレベル設定 ---
+    const isSectionA = currentMeasure < measuresPerSection;
+    const progression = isSectionA ? progressionA : progressionB;
+    const currentChordName = progression[currentMeasure % measuresPerSection]!;
+    const currentChord = chordDefs[currentChordName];
+
+    // --- Drums: セクションでパターンを変更 ---
+    playSample(instruments.ride!, now, { vol: isSectionA ? 0.25 : 0.35, noReverb: true, duration: intervalTime / 1000 });
+    if (currentBeatInMeasure === 1 || currentBeatInMeasure === 3) {
+      playSample(instruments.brush!, now + (intervalTime / 2000), { vol: 0.15, noReverb: true, duration: 0.2 });
     }
     
-    if ((beat % 4 === 0) && rng() < 0.9) {
+    // --- Bass: ウォーキングベースライン ---
+    if (currentBeatInMeasure === 0) { // 1拍目: ルート音
+      playSample(instruments.bass!, now, { detune: currentChord.root - 2400, vol: 0.6, duration: intervalTime / 1000 });
+    } else if (isSectionA === false) { // Bメロでウォーキング
+      const walkingNote = currentChord.notes[currentBeatInMeasure] ?? C_MajorScale[currentBeatInMeasure*2 % 7];
+      if (walkingNote) {
+          playSample(instruments.bass!, now, { detune: currentChord.root + walkingNote - 2400, vol: 0.5, duration: intervalTime / 1000 });
+      }
+    }
+    
+    // --- Chords: Aメロは控えめに、Bメロは豊かに ---
+    const chordPlayProbability = isSectionA ? 0.6 : 0.9;
+    if (currentBeatInMeasure === 0 && rng() < chordPlayProbability) {
       const chordInst = rng() < 0.7 ? instruments.piano! : instruments.organ!;
       currentChord.notes.forEach((noteOffset, index) => {
-        if (rng() < 0.8) {
-          playSample(chordInst, now + (rng() * 0.05), { detune: currentChord.root + noteOffset - 1200, vol: 0.4 - (index*0.05), duration: intervalTime * 2 / 1000 });
+        if (rng() < (isSectionA ? 0.6 : 0.9)) {
+          playSample(chordInst, now + (rng() * 0.05), { detune: currentChord.root + noteOffset - 1200, vol: 0.35 - (index*0.05), duration: intervalTime * 2 / 1000 });
         }
       });
     }
 
-    if (rng() < 0.35) {
+    // --- Melody/Solo: Bメロでより情熱的に ---
+    const soloPlayProbability = isSectionA ? 0.15 : 0.4;
+    if (rng() < soloPlayProbability) {
         const soloInstruments = [
-            { inst: instruments.sax!, vol: 0.6, detune: 0 },
-            { inst: instruments.trombone!, vol: 0.5, detune: -1200 },
-            { inst: instruments.flute!, vol: 0.5, detune: 1200 },
-            { inst: instruments.vibraphone!, vol: 0.5, detune: 0 },
+            { inst: instruments.sax!, vol: 0.6, detune: 0 }, { inst: instruments.trombone!, vol: 0.5, detune: -1200 },
+            { inst: instruments.flute!, vol: 0.5, detune: 1200 }, { inst: instruments.vibraphone!, vol: 0.5, detune: 0 },
         ];
         const soloInst = soloInstruments[Math.floor(rng() * soloInstruments.length)]!;
         
+        // コードトーンを6割の確率で、スケール音を4割の確率で選択
         const isChordTone = rng() < 0.6;
         const note = isChordTone 
             ? currentChord.notes[Math.floor(rng() * currentChord.notes.length)]! + currentChord.root 
@@ -243,6 +259,19 @@ const createJazzSound = (rng: () => number) => {
 
         const duration = (intervalTime / 1000) * (0.5 + rng() * 1.5);
         playSample(soloInst.inst, now, { detune: note + soloInst.detune, vol: soloInst.vol, duration: duration });
+    }
+    
+    // --- 曲の終わり際の「キメ」と「止め」 ---
+    if(beat > 0 && (beat % (totalMeasures * beatsPerMeasure)) === (totalMeasures * beatsPerMeasure -1) && rng() < 0.4) {
+       // Bメロの最後の拍で4割の確率で全楽器をキメて止める
+       const lastChord = chordDefs[progression[measuresPerSection - 1]!]!;
+       Object.values(instruments).forEach(inst => {
+           if(inst && inst !== instruments.ride && inst !== instruments.brush) {
+                playSample(inst, now, {detune: lastChord.root - 1200, vol: 0.5, duration: 0.8});
+           }
+       });
+       // 次の１拍を休符にする
+       beat++; 
     }
 
     beat++;
