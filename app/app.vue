@@ -232,8 +232,7 @@ const createLoFiSound = (rng: () => number) => {
       chords = chordPatterns[Math.floor(rng() * chordPatterns.length)]!;
     }
 
-    // --- 音楽性向上: フィルインの導入 ---
-    const isFillInTiming = (beat % 32) >= 28; // 8小節の最後の4拍
+    const isFillInTiming = (beat % 32) >= 28;
     if (isFillInTiming && rng() < 0.5) {
         if(c16 % 2 === 0) playSample(samples.value.snare!, now, { vol: 0.3 + rng()*0.2, noReverb: true, duration: 0.3 });
     } else {
@@ -241,7 +240,6 @@ const createLoFiSound = (rng: () => number) => {
         if (snarePattern[c16]) playSample(samples.value.snare!, now, { vol: 0.4 + rng()*0.1, noReverb: true, duration: 0.5 });
     }
     
-    // --- 音楽性向上: ブレイクの導入 ---
     const isBreakTiming = beat > 0 && beat % 64 === 0;
     if (!isBreakTiming) {
         if (c16 % 8 === 0) {
@@ -263,8 +261,8 @@ const createRockSound = (rng: () => number) => {
   const tempo = 120 + rng() * 20;
   const intervalTime = 60000 / tempo / 4;
 
-  const kickPatterns = [[1,0,0,1,1,0,1,0,1,0,0,1,1,0,1,0], [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0]];
-  const snarePatterns = [[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], [0,0,0,0,1,0,0,0,0,0,0,1,1,0,1,0]];
+  const kickPatterns = [[1,0,0,1,1,0,1,0,1,0,0,1,1,0,1,0], [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], [1,1,0,1,1,1,0,0,1,1,0,1,1,0,1,0]];
+  const snarePatterns = [[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], [0,0,0,0,1,0,0,0,0,0,0,1,1,0,1,0], [0,0,0,0,1,0,0,1,0,0,1,0,1,0,1,0]];
   const bassRiffs = [[-500,-500,0,0,200,200,0,0,-500,-500,0,0,200,200,-200,-200], [0,0,0,0,200,200,-200,-200,0,0,0,0,200,200,-200,-200]];
   
   let kickPattern = kickPatterns[Math.floor(rng() * kickPatterns.length)]!;
@@ -276,34 +274,41 @@ const createRockSound = (rng: () => number) => {
     const now = audioContext.currentTime;
     const c16 = beat % 16;
     
-    if (beat > 0 && beat % 64 === 0) {
+    if (beat > 0 && beat % 32 === 0) {
       kickPattern = kickPatterns[Math.floor(rng() * kickPatterns.length)]!;
       snarePattern = snarePatterns[Math.floor(rng() * snarePatterns.length)]!;
       bassRiff = bassRiffs[Math.floor(rng() * bassRiffs.length)]!;
     }
 
-    // --- 音楽性向上: ゆらぎの導入 ---
-    const timingOffset = (rng() - 0.5) * 0.02; // ±10msのタイミングゆらぎ
-    const dynamicVol = (baseVol: number) => baseVol * (0.9 + rng() * 0.2); // ±10%の音量ゆらぎ
+    const timingOffset = (rng() - 0.5) * 0.02;
+    const dynamicVol = (baseVol: number) => baseVol * (0.9 + rng() * 0.2);
     
-    // --- 音楽性向上: フィルインの導入 ---
-    const isFillInTiming = (beat % 32) >= 30; // 8小節の最後の2拍
-    if (isFillInTiming && rng() < 0.7) {
-        if(c16 % 2 !== 0) playSample(instruments.snare!, now + timingOffset, { vol: dynamicVol(0.6), noReverb: true, duration: 0.3 });
-    } else {
+    const isMajorFill = (beat % 32) >= 30;
+    const isMinorFill = (beat % 16) >= 14;
+
+    if (isMajorFill && rng() < 0.8) {
+        if(c16 % 2 === 0) playSample(instruments.snare!, now + timingOffset, { vol: dynamicVol(0.7), noReverb: true, duration: 0.2 });
+        if(c16 % 2 !== 0) playSample(instruments.kick!, now + timingOffset, { vol: dynamicVol(0.9), noReverb: true, duration: 0.2 });
+    } else if (isMinorFill && !isMajorFill && rng() < 0.6) {
+        if(c16 % 2 !== 0) playSample(instruments.snare!, now + timingOffset, { vol: dynamicVol(0.5), noReverb: true, duration: 0.3 });
+    }
+    else {
         if (kickPattern[c16]) playSample(instruments.kick!, now + timingOffset, { vol: dynamicVol(0.8), noReverb: true, duration: 0.5 });
-        if (snarePattern[c16]) playSample(instruments.snare!, now + timingOffset, { vol: dynamicVol(0.6), noReverb: true, duration: 0.5 });
+        const isBackBeat = (c16 === 4 || c16 === 12);
+        const snareVol = isBackBeat ? dynamicVol(0.7) : dynamicVol(0.5);
+        if (snarePattern[c16]) playSample(instruments.snare!, now + timingOffset, { vol: snareVol, noReverb: true, duration: 0.5 });
     }
 
-    // --- 音楽性向上: ブレイクの導入 ---
     const isBreakTiming = beat > 0 && beat % 32 === 0;
-    if (c16 === 0 && !isBreakTiming) playSample(instruments.crash!, now + timingOffset, { vol: dynamicVol(0.4), duration: intervalTime * 8 / 1000 });
+    if ((c16 === 0 && !isBreakTiming) || (c16 === 8 && rng() < 0.1)) {
+        playSample(instruments.crash!, now + timingOffset, { vol: dynamicVol(0.4), duration: intervalTime * 8 / 1000 });
+    }
     
     if (!isBreakTiming) {
         const bassNote = bassRiff[c16]!;
         playSample(instruments.bass!, now + timingOffset, { detune: bassNote - 1200, vol: dynamicVol(0.7), noReverb: true, duration: intervalTime / 1000 * 1.5 });
 
-        if (c16 === 0 || (c16 === 8 && rng() < 0.7)) {
+        if ((c16 === 0 || c16 === 8) && rng() < 0.6) {
             const detune = [-500, 0, 200][Math.floor(rng() * 3)]!;
             playSample(instruments.guitar!, now + timingOffset, { detune: detune, vol: dynamicVol(0.5), duration: intervalTime * 8 / 1000 });
         }
@@ -319,27 +324,26 @@ const createJazzSound = (rng: () => number) => {
   for(const [name, buffer] of Object.entries(instruments)) { if (!buffer) { return; } }
 
   let beat = 0;
-  let dynamicTempo = 110 + rng() * 20;
+  let dynamicTempo = 100 + rng() * 15;
   const beatsPerMeasure = 4;
   
   type ChordName = 'Dm7' | 'G7' | 'Cmaj7' | 'Am7';
   const chordDefs: Record<ChordName, { root: number; notes: number[]; scale: number[] }> = {
-    'Cmaj7': { root: 0,   notes: [0, 400, 700, 1100], scale: [0, 200, 400, 500, 700, 900, 1100] }, // C Ionian
-    'Am7':   { root: 900, notes: [0, 300, 700, 1000], scale: [0, 200, 300, 500, 700, 800, 1000] }, // A Aeolian
-    'Dm7':   { root: 200, notes: [0, 300, 700, 1000], scale: [0, 200, 300, 500, 700, 900, 1000] }, // D Dorian
-    'G7':    { root: 700, notes: [0, 400, 700, 1000], scale: [0, 200, 400, 500, 700, 900, 1000] }, // G Mixolydian
+    'Cmaj7': { root: 0,   notes: [0, 400, 700, 1100], scale: [0, 200, 400, 500, 700, 900, 1100] },
+    'Am7':   { root: 900, notes: [0, 300, 700, 1000], scale: [0, 200, 300, 500, 700, 800, 1000] },
+    'Dm7':   { root: 200, notes: [0, 300, 700, 1000], scale: [0, 200, 300, 500, 700, 900, 1000] },
+    'G7':    { root: 700, notes: [0, 400, 700, 1000], scale: [0, 200, 400, 500, 700, 900, 1000] },
   };
   const progressionA: ChordName[] = ['Cmaj7', 'Am7', 'Dm7', 'G7'];
   const progressionB: ChordName[] = ['Am7', 'Dm7', 'G7', 'Cmaj7'];
-  const keyOfCBlueNotes = [300, 500, 600, 1000]; // Cキーに対するブルーノート (ミ♭, ファ, ファ#, シ♭)
+  const keyOfCBlueNotes = [300, 500, 600, 1000];
 
-  let soloMotif: number[] = [];
   let currentSoloInstrument: any = null;
-  let lastSoloNote = 700; // 初期値をソ(G)にしておく
+  let lastSoloNote = 700;
 
   const scheduleNextBeat = () => {
     if (!isPlaying.value) return;
-    if (rng() < 0.01) dynamicTempo += (rng() - 0.5) * 4; // たまにテンポが揺れる
+    if (rng() < 0.01) dynamicTempo += (rng() - 0.5) * 2;
     const beatDuration = 60 / dynamicTempo;
     const swingRatio = 0.65;
     const isOffBeat = beat % 2 !== 0;
@@ -356,18 +360,16 @@ const createJazzSound = (rng: () => number) => {
     const nextChordName = progression[(currentMeasure + 1) % 4]!;
     const nextChord = chordDefs[nextChordName];
 
-    // --- 音楽性向上: ゆらぎの導入 ---
-    const timingOffset = (rng() - 0.5) * 0.03; // ±15msのタイミングゆらぎ
-    const dynamicVol = (baseVol: number) => baseVol * (0.8 + rng() * 0.4); // ±20%の音量ゆらぎ
+    const timingOffset = (rng() - 0.5) * 0.03;
+    const dynamicVol = (baseVol: number) => baseVol * (0.8 + rng() * 0.4);
 
-    // Drums
-    if (!isOffBeat) playSample(instruments.ride!, beatStartTime + timingOffset, { vol: dynamicVol(isSectionA ? 0.3 : 0.4), noReverb: true, duration: 0.5 });
-    if (isOffBeat) playSample(instruments.brush!, beatStartTime + timingOffset, { vol: dynamicVol(0.2), noReverb: true, duration: 0.2 });
+    if (!isOffBeat) playSample(instruments.ride!, beatStartTime + timingOffset, { vol: dynamicVol(0.25), noReverb: true, duration: 0.5 });
+    if (isOffBeat) playSample(instruments.brush!, beatStartTime + timingOffset, { vol: dynamicVol(0.25), noReverb: true, duration: 0.2 });
 
-    // Bass (ウォーキングベースライン)
+    // Bass
     if (currentBeatInMeasure === 0) {
       playSample(instruments.bass!, beatStartTime + timingOffset, { detune: currentChord.root - 2400, vol: dynamicVol(0.7), duration: beatDuration });
-    } else if (currentBeatInMeasure === 3) { // 4拍目は次のコードへ繋ぐ
+    } else if (currentBeatInMeasure === 3) {
       const approachNote = nextChord.root + (rng() < 0.5 ? 100 : -100);
       playSample(instruments.bass!, beatStartTime + timingOffset, { detune: approachNote - 2400, vol: dynamicVol(0.6), duration: beatDuration });
     } else if (rng() < 0.7) {
@@ -375,31 +377,29 @@ const createJazzSound = (rng: () => number) => {
       playSample(instruments.bass!, beatStartTime + timingOffset, { detune: currentChord.root + bassNote - 2400, vol: dynamicVol(0.6), duration: beatDuration });
     }
     
-    // Piano (コンピング)
-    const playChordProb = isSectionA ? 0.7 : 0.4; // ソロ中はピアノを控えめに
+    const playChordProb = isSectionA ? 0.6 : 0.35; 
     if (currentBeatInMeasure === 0 && rng() < playChordProb) {
       const chordInst = rng() < 0.7 ? instruments.piano! : instruments.organ!;
-      const noteCount = isSectionA ? 4 : (rng() < 0.6 ? 2 : 3); // ソロ中は音数を減らす
+      const noteCount = isSectionA ? 3 : 2;
       for (let i = 0; i < noteCount; i++) {
         const noteOffset = currentChord.notes[Math.floor(rng() * currentChord.notes.length)]!;
-        if (rng() < 0.85) playSample(chordInst, beatStartTime + timingOffset + rng() * 0.05, { detune: currentChord.root + noteOffset - 1200, vol: dynamicVol(0.4), duration: beatDuration * (2 + rng()*2) });
+        if (rng() < 0.85) playSample(chordInst, beatStartTime + timingOffset + rng() * 0.05, { detune: currentChord.root + noteOffset - 2400, vol: dynamicVol(0.35), duration: beatDuration * (3 + rng()*2) });
       }
     }
 
-    // Solo (スケールに基づいたメロディ生成)
+    // Solo
     if (!isSectionA) {
-        if (beat % 32 === 16) { // Bメロの頭でソロ楽器を決定
-            const soloInstruments = [{ inst: instruments.sax!, vol: 0.7, detune: 0 }, { inst: instruments.vibraphone!, vol: 0.5, detune: 0 }, { inst: instruments.trombone!, vol: 0.6, detune: -1200 }];
+        if (beat % 32 === 16) {
+            const soloInstruments = [{ inst: instruments.sax!, vol: 0.6, detune: 0 }, { inst: instruments.vibraphone!, vol: 0.4, detune: 0 }, { inst: instruments.trombone!, vol: 0.5, detune: -1200 }];
             currentSoloInstrument = soloInstruments[Math.floor(rng() * soloInstruments.length)]!;
         }
         
-        if (rng() < 0.75 && currentSoloInstrument) { // 呼吸（休符）を入れる
+        if (rng() < 0.65 && currentSoloInstrument) {
             let note;
-            // メロディのなめらかな動き
-            const step = Math.floor(rng() * 3) - 1; // -1, 0, 1
-            const currentScale = rng() < 0.1 ? keyOfCBlueNotes : currentChord.scale; // たまにブルーノートを使う
+            const step = Math.floor(rng() * 3) - 1;
+            const currentScale = rng() < 0.1 ? keyOfCBlueNotes : currentChord.scale;
             let nextNoteIndex = currentScale.indexOf(lastSoloNote) + step;
-            nextNoteIndex = Math.max(0, Math.min(currentScale.length - 1, nextNoteIndex)); // 配列範囲内に収める
+            nextNoteIndex = Math.max(0, Math.min(currentScale.length - 1, nextNoteIndex));
             note = currentScale[nextNoteIndex]!;
             lastSoloNote = note;
 
@@ -415,35 +415,38 @@ const createJazzSound = (rng: () => number) => {
 };
 </script>
 
+<!-- ★★★ 修正箇所: template全体をdivで囲む ★★★ -->
 <template>
-  <div class="background-container">
-    <div v-if="isLoading" class="loading-overlay">
-      <div class="loading-text">{{ loadingMessage }}</div>
-    </div>
-    <div v-else class="content-panel">
-      <h1 class="title">AI-BGM 喫茶「おとや」</h1>
-      <p class="subtitle">本日のBGMをお選びください</p>
-      <div class="menu-container">
-        <button class="menu-button" @click="playMusic('集中ブレンド')"><div class="menu-content"><span class="menu-title">集中ブレンド</span><span class="menu-description">思考を妨げない、静かな雨音のような音楽。</span></div><div v-if="selectedMenu === '集中ブレンド'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
-        <button class="menu-button" @click="playMusic('リラックス・デカフェ')"><div class="menu-content"><span class="menu-title">リラックス・デカフェ</span><span class="menu-description">心のコリをほぐす、優しい陽だまりのような音楽。</span></div><div v-if="selectedMenu === 'リラックス・デカフェ'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
-        <button class="menu-button" @click="playMusic('ジャズ・スペシャル')"><div class="menu-content"><span class="menu-title">ジャズ・スペシャル</span><span class="menu-description">夜の静寂に寄り添う、マスターこだわりの一杯。</span></div><div v-if="selectedMenu === 'ジャズ・スペシャル'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
-        <button class="menu-button" @click="playMusic('Lo-Fi・ビター')"><div class="menu-content"><span class="menu-title">Lo-Fi・ビター</span><span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span></div><div v-if="selectedMenu === 'Lo-Fi・ビター'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
-        <button class="menu-button" @click="playMusic('ロック・ビート')">
-          <div class="menu-content">
-            <span class="menu-title">ロック・ビート</span>
-            <span class="menu-description">魂を揺さぶる、力強いリズムと歪んだギターのブレンド。</span>
-          </div>
-          <div v-if="selectedMenu === 'ロック・ビート'" class="active-indicator">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-          </div>
-        </button>
+  <div>
+    <div class="background-container">
+      <div v-if="isLoading" class="loading-overlay">
+        <div class="loading-text">{{ loadingMessage }}</div>
       </div>
-      <div class="controls-container"><button @click="togglePlayback" class="control-button" :disabled="!selectedMenu && !isPlaying" :class="{ 'is-disabled': !selectedMenu && !isPlaying }">{{ isPlaying ? '■' : '▶' }}</button><input type="range" min="0" max="1" step="0.01" :value="volume" @input="handleVolumeChange" class="volume-slider"/></div>
-      <div v-if="isPlaying" class="seed-container"><p>レコード番号 (シード値):</p><div class="seed-display"><span>{{ currentSeed }}</span><button @click="copySeed" title="コピー">📄</button></div></div>
-      <div class="seed-input-container"><input type="text" v-model="seedInput" placeholder="レコード番号を入力" /><button @click="playFromSeed" :disabled="!seedInput">このレコードを聴く</button></div>
+      <div v-else class="content-panel">
+        <h1 class="title">AI-BGM 喫茶「おとや」</h1>
+        <p class="subtitle">本日のBGMをお選びください</p>
+        <div class="menu-container">
+          <button class="menu-button" @click="playMusic('集中ブレンド')"><div class="menu-content"><span class="menu-title">集中ブレンド</span><span class="menu-description">思考を妨げない、静かな雨音のような音楽。</span></div><div v-if="selectedMenu === '集中ブレンド'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
+          <button class="menu-button" @click="playMusic('リラックス・デカフェ')"><div class="menu-content"><span class="menu-title">リラックス・デカフェ</span><span class="menu-description">心のコリをほぐす、優しい陽だまりのような音楽。</span></div><div v-if="selectedMenu === 'リラックス・デカフェ'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
+          <button class="menu-button" @click="playMusic('ジャズ・スペシャル')"><div class="menu-content"><span class="menu-title">ジャズ・スペシャル</span><span class="menu-description">夜の静寂に寄り添う、マスターこだわりの一杯。</span></div><div v-if="selectedMenu === 'ジャズ・スペシャル'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
+          <button class="menu-button" @click="playMusic('Lo-Fi・ビター')"><div class="menu-content"><span class="menu-title">Lo-Fi・ビター</span><span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span></div><div v-if="selectedMenu === 'Lo-Fi・ビター'" class="active-indicator"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></div></button>
+          <button class="menu-button" @click="playMusic('ロック・ビート')">
+            <div class="menu-content">
+              <span class="menu-title">ロック・ビート</span>
+              <span class="menu-description">魂を揺さぶる、力強いリズムと歪んだギターのブレンド。</span>
+            </div>
+            <div v-if="selectedMenu === 'ロック・ビート'" class="active-indicator">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+          </button>
+        </div>
+        <div class="controls-container"><button @click="togglePlayback" class="control-button" :disabled="!selectedMenu && !isPlaying" :class="{ 'is-disabled': !selectedMenu && !isPlaying }">{{ isPlaying ? '■' : '▶' }}</button><input type="range" min="0" max="1" step="0.01" :value="volume" @input="handleVolumeChange" class="volume-slider"/></div>
+        <div v-if="isPlaying" class="seed-container"><p>レコード番号 (シード値):</p><div class="seed-display"><span>{{ currentSeed }}</span><button @click="copySeed" title="コピー">📄</button></div></div>
+        <div class="seed-input-container"><input type="text" v-model="seedInput" placeholder="レコード番号を入力" /><button @click="playFromSeed" :disabled="!seedInput">このレコードを聴く</button></div>
+      </div>
     </div>
+    <AboutModal :isVisible="isModalVisible" @close="closeModal" />
   </div>
-  <AboutModal :isVisible="isModalVisible" @close="closeModal" />
 </template>
 
 <style>
