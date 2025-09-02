@@ -26,6 +26,7 @@ let reverb: ToneType.Reverb | null = null;
 let chorus: ToneType.Chorus | null = null;
 let delay: ToneType.PingPongDelay | null = null;
 let masterComp: ToneType.Compressor | null = null;
+let limiter: ToneType.Limiter | null = null; // 【追加】最終段のリミッター
 let guitarPitchShift: ToneType.PitchShift | null = null;
 const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [];
 let noise: ToneType.Noise | null = null;
@@ -92,7 +93,9 @@ const initializeAudio = async () => {
     await Tone.start();
     loadingMessage.value = '店内の響きを調整しています...';
     
-    masterComp = new Tone.Compressor({ threshold: -6, ratio: 2 }).toDestination();
+    // 【音割れ対策】最終段にリミッターを配置
+    limiter = new Tone.Limiter(-0.1).toDestination();
+    masterComp = new Tone.Compressor({ threshold: -6, ratio: 2 }).connect(limiter);
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
 
     distortion = new Tone.Distortion(0.6).connect(masterComp);
@@ -195,9 +198,8 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw') 
   }
 
   if (type === 'sampler' && samplers[instrumentName]) {
-    // 【修正】eguitarのテスト再生時もピッチシフト（原音程）を必ず通す
     if (instrumentName === 'eguitar' && guitarPitchShift) {
-      guitarPitchShift.pitch = 0; // C4の音を鳴らすのでピッチは0
+      guitarPitchShift.pitch = 0;
     }
     samplers[instrumentName]!.triggerAttackRelease('C4', '1n');
   } else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) {
@@ -285,6 +287,13 @@ const createRockSound = (rng: () => number) => {
     const crash = samplers.crash;
     const pitchShift = guitarPitchShift;
 
+    // 【音割れ対策】各楽器の音量を下げてヘッドルームを確保
+    guitar.volume.value = -9;
+    bass.volume.value = -6;
+    kick.volume.value = -3;
+    snare.volume.value = -6;
+    crash.volume.value = -12;
+
     Tone.Transport.bpm.value = 125 + rng() * 20;
     let isSolo = false;
     
@@ -307,10 +316,9 @@ const createRockSound = (rng: () => number) => {
         if(note) bass.triggerAttackRelease(note, '8n', time, 0.9);
     }, ['G1', 'G1', 'C2', 'C2', 'D#1', 'D#1', 'F1', 'F1'], "8n").start(0);
 
-    // 【修正】多様なリフのパターンを用意
     const guitarRiffPatterns = [
-        [ { time: '0:0', pitch: 0 }, { time: '0:2', pitch: 3 }, { time: '0:3', pitch: 5 } ],
-        [ { time: '0:0', pitch: 7 }, { time: '0:2', pitch: 5 }, { time: '0:3', pitch: 3 } ],
+      [ { time: '0:0', pitch: 0 }, { time: '0:2', pitch: 3 }, { time: '0:3', pitch: 5 } ],
+      [ { time: '0:0', pitch: 7 }, { time: '0:2', pitch: 5 }, { time: '0:3', pitch: 3 } ],
     ];
     const guitarRiff = guitarRiffPatterns[Math.floor(rng() * guitarRiffPatterns.length)]!;
 
@@ -323,7 +331,7 @@ const createRockSound = (rng: () => number) => {
             guitar.triggerAttackRelease('C4', '16n', time, vel);
         } else {
             pitchShift.pitch = value.pitch;
-            guitar.triggerAttackRelease('C4', '4n', time, vel); // 8nから4nに伸ばしてサステインを強調
+            guitar.triggerAttackRelease('C4', '4n', time, vel);
         }
     }, guitarRiff).start(0);
     guitarPart.loop = true; guitarPart.loopEnd = '1m';
