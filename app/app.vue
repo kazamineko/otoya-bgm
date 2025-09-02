@@ -98,6 +98,13 @@ const playMusic = (menuName: string, seed?: string) => {
   masterGainNode.gain.setValueAtTime(volume.value, audioContext.currentTime);
   masterGainNode.connect(audioContext.destination);
 
+  // ★★★ ここが最重要修正箇所です ★★★
+  // 切り離されていたリバーブの出口を、スピーカー(destination)に正しく接続します
+  const reverbGain = audioContext.createGain();
+  reverbGain.gain.value = 0.4; // リバーブの音量を少し調整
+  reverbNode.connect(reverbGain);
+  reverbGain.connect(audioContext.destination);
+
   switch (menuName) {
     case '集中ブレンド': createConcentrationSound(rng); break;
     case 'リラックス・デカフェ': createRelaxSound(rng); break;
@@ -115,7 +122,11 @@ const stopMusic = () => {
     clearTimeout(soundScheduler);
     soundScheduler = null;
   }
+  // Immediately stop all scheduled sources to prevent lingering sounds
   activeNodes.forEach(node => {
+    if (node instanceof AudioBufferSourceNode) {
+        try { node.stop(0); } catch (e) { /* ignore if already stopped */ }
+    }
     try { node.disconnect(); } catch(e) {/* ignore */}
   });
   activeNodes = [];
@@ -143,7 +154,9 @@ const playSample = (buffer: AudioBuffer, startTime: number, options: { detune?: 
     gain.gain.linearRampToValueAtTime(options.vol ?? 1, startTime + 0.01);
     
     source.connect(gain);
+    // Dry signal to master
     gain.connect(masterGainNode);
+    // Wet signal to reverb
     if (!options.noReverb) {
       gain.connect(reverbNode);
     }
@@ -171,18 +184,10 @@ const createConcentrationSound = (rng: () => number) => {
   const pinkFilter = audioContext.createBiquadFilter();
   pinkFilter.type = 'lowpass';
   pinkFilter.frequency.value = 1000 + rng() * 500;
-  const lfo = audioContext.createOscillator();
-  lfo.type = 'sine';
-  lfo.frequency.value = 0.1 + rng() * 0.3;
-  const lfoGain = audioContext.createGain();
-  lfoGain.gain.value = 0.03 + rng() * 0.05;
   whiteNoise.connect(pinkFilter);
   pinkFilter.connect(masterGainNode);
-  lfo.connect(lfoGain);
-  lfoGain.connect(masterGainNode.gain);
   whiteNoise.start();
-  lfo.start();
-  activeNodes.push(whiteNoise, pinkFilter, lfo, lfoGain);
+  activeNodes.push(whiteNoise, pinkFilter);
 };
 
 const createRelaxSound = (rng: () => number) => {
@@ -223,19 +228,19 @@ const createLoFiSound = (rng: () => number) => {
     const now = audioContext.currentTime;
     const c16 = beat % 16;
     
-    if (beat > 0 && beat % 64 === 0) { // 4小節ごとにパターンを切り替える
+    if (beat > 0 && beat % 64 === 0) {
       kickPattern = kickPatterns[Math.floor(rng() * kickPatterns.length)]!;
       snarePattern = snarePatterns[Math.floor(rng() * snarePatterns.length)]!;
     }
-    if (beat > 0 && beat % 32 === 0) { // 2小節ごとにコードを切り替える
+    if (beat > 0 && beat % 32 === 0) {
       chords = chordPatterns[Math.floor(rng() * chordPatterns.length)]!;
     }
 
-    if (kickPattern[c16]) playSample(samples.value.kick!, now, { vol: 0.6, noReverb: true, duration: 0.5 });
-    if (snarePattern[c16]) playSample(samples.value.snare!, now, { vol: 0.4, noReverb: true, duration: 0.5 });
+    if (kickPattern[c16]) playSample(samples.value.kick!, now, { vol: 0.7, noReverb: true, duration: 0.5 });
+    if (snarePattern[c16]) playSample(samples.value.snare!, now, { vol: 0.5, noReverb: true, duration: 0.5 });
     
-    if (c16 % 8 === 0) { // 2拍に1回コード
-      chords.forEach(detune => playSample(samples.value.epiano!, now, { detune, vol: 0.2, duration: intervalTime * 4 / 1000 }));
+    if (c16 % 8 === 0) {
+      chords.forEach(detune => playSample(samples.value.epiano!, now, { detune, vol: 0.3, duration: intervalTime * 4 / 1000 }));
     }
     
     beat++;
@@ -305,7 +310,6 @@ const createJazzSound = (rng: () => number) => {
   };
   const progressionA: ChordName[] = ['Cmaj7', 'Am7', 'Dm7', 'G7'];
   const progressionB: ChordName[] = ['Am7', 'Dm7', 'G7', 'Cmaj7'];
-  const C_MajorScale = [0, 200, 400, 500, 700, 900, 1100];
   const blueNotes = [300, 600, 1000];
 
   let soloMotif: number[] = [];
@@ -327,27 +331,27 @@ const createJazzSound = (rng: () => number) => {
     const currentChordName = progression[currentMeasure % 4]!;
     const currentChord = chordDefs[currentChordName];
 
-    // Drums with Swing
-    if (!isOffBeat) playSample(instruments.ride!, beatStartTime, { vol: isSectionA ? 0.25 : 0.35, noReverb: true, duration: 0.5 });
-    if (isOffBeat) playSample(instruments.brush!, beatStartTime, { vol: 0.15, noReverb: true, duration: 0.2 });
+    // Drums
+    if (!isOffBeat) playSample(instruments.ride!, beatStartTime, { vol: isSectionA ? 0.3 : 0.4, noReverb: true, duration: 0.5 });
+    if (isOffBeat) playSample(instruments.brush!, beatStartTime, { vol: 0.2, noReverb: true, duration: 0.2 });
 
-    // Intelligent Bass
+    // Bass
     if (currentBeatInMeasure === 0) {
-      playSample(instruments.bass!, beatStartTime, { detune: currentChord.root - 2400, vol: 0.6, duration: beatDuration });
+      playSample(instruments.bass!, beatStartTime, { detune: currentChord.root - 2400, vol: 0.7, duration: beatDuration });
     } else if (rng() < 0.6) {
       const bassNote = currentChord.notes[Math.floor(rng() * currentChord.notes.length)]!;
-      playSample(instruments.bass!, beatStartTime, { detune: currentChord.root + bassNote - 2400, vol: 0.5, duration: beatDuration });
+      playSample(instruments.bass!, beatStartTime, { detune: currentChord.root + bassNote - 2400, vol: 0.6, duration: beatDuration });
     }
     
     // Chords
     if (currentBeatInMeasure === 0 && rng() < (isSectionA ? 0.6 : 0.9)) {
       const chordInst = rng() < 0.7 ? instruments.piano! : instruments.organ!;
       currentChord.notes.forEach((noteOffset) => {
-        if (rng() < 0.8) playSample(chordInst, beatStartTime + (rng() * 0.05), { detune: currentChord.root + noteOffset - 1200, vol: 0.3, duration: beatDuration * 2 });
+        if (rng() < 0.8) playSample(chordInst, beatStartTime + (rng() * 0.05), { detune: currentChord.root + noteOffset - 1200, vol: 0.4, duration: beatDuration * 2 });
       });
     }
 
-    // Improviser AI Solo
+    // Solo
     if (!isSectionA) {
         if (currentBeatInMeasure === 0) {
             const soloInstruments = [{ inst: instruments.sax!, vol: 0.7, detune: 0 }, { inst: instruments.vibraphone!, vol: 0.5, detune: 0 }, { inst: instruments.trombone!, vol: 0.6, detune: -1200 }];
