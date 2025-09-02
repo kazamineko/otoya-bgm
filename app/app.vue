@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue';
 import seedrandom from 'seedrandom';
-// 【修正】Tone.jsの型情報のみを静的にインポートする
+// Tone.jsの型情報のみを静的にインポートする
 import type * as ToneType from 'tone';
 import AboutModal from '../components/AboutModal.vue';
 
@@ -16,12 +16,15 @@ const isLoading = ref<boolean>(false);
 const loadingMessage = ref<string>('');
 
 // --- Tone.js関連 ---
-// 【修正】実際のTone.jsモジュールを保持する変数を準備
 let Tone: typeof ToneType | null = null;
 let players: ToneType.Players | null = null;
 let distortion: ToneType.Distortion | null = null;
 let reverb: ToneType.Reverb | null = null;
-const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [];
+let chorus: ToneType.Chorus | null = null;
+let delay: ToneType.PingPongDelay | null = null;
+let masterComp: ToneType.Compressor | null = null;
+let panners: { [key: string]: ToneType.Panner } = {};
+const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence | ToneType.LFO)[] = [];
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
@@ -29,7 +32,6 @@ let isAudioInitialized = ref(false);
  * ユーザーの初回アクション時に音声関連のすべてを初期化する関数
  */
 const initializeAudio = async () => {
-  // isAudioInitialized.value = true; // 先にフラグを立てて二重実行を防止
   isLoading.value = true;
   loadingMessage.value = '喫茶店の準備をしています...';
 
@@ -41,15 +43,18 @@ const initializeAudio = async () => {
   };
 
   try {
-    // 【修正】ここで初めてTone.jsモジュールを動的に読み込む
     Tone = await import('tone');
     await Tone.start();
     loadingMessage.value = '店内の響きを調整しています...';
-
-    distortion = new Tone.Distortion(0.6).toDestination();
-    reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.01 }).toDestination();
-    await reverb.generate();
+    
+    masterComp = new Tone.Compressor(-12, 3).toDestination();
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
+
+    distortion = new Tone.Distortion(0.6).connect(masterComp);
+    reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.01, wet: 0.3 }).connect(masterComp);
+    await reverb.generate();
+    chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
+    delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
 
     loadingMessage.value = '楽器を準備しています...';
     players = await new Promise<ToneType.Players>((resolve, reject) => {
@@ -58,30 +63,30 @@ const initializeAudio = async () => {
             baseUrl: "/",
             onload: () => resolve(p),
             onerror: (error: Error) => reject(error),
-        }).toDestination();
+        });
     });
 
-    if (players && reverb && distortion) {
-        players.connect(reverb);
-        const eguitarPlayer = players.player('eguitar');
-        if (eguitarPlayer) {
-            eguitarPlayer.chain(distortion);
+    const instrumentsToPan = ['piano', 'epiano', 'sax', 'trombone', 'eguitar', 'ebass'];
+    instrumentsToPan.forEach(inst => {
+      if (players!.has(inst)) {
+        panners[inst] = new Tone!.Panner(0).connect(masterComp!);
+        players!.player(inst).connect(panners[inst]!);
+      }
+    });
+    const drumInstruments = ['kick', 'snare', 'rockKick', 'rockSnare', 'crash', 'ride', 'brush', 'pad', 'bass'];
+    drumInstruments.forEach(drum => {
+        if(players!.has(drum)) {
+            players!.player(drum).connect(masterComp!);
         }
-        const drumInstruments = ['kick', 'snare', 'rockKick', 'rockSnare', 'crash'];
-        drumInstruments.forEach(drum => {
-            const player = players!.player(drum);
-            if (player) {
-                player.toDestination();
-            }
-        });
-    }
+    });
+
     isAudioInitialized.value = true;
     loadingMessage.value = '準備ができました';
 
   } catch (error: any) {
     loadingMessage.value = `エラーが発生しました: ${error.message}`;
     console.error("Error setting up Tone.js:", error);
-    isAudioInitialized.value = false; // 失敗した場合はフラグを戻す
+    isAudioInitialized.value = false;
   } finally {
     isLoading.value = false;
   }
@@ -96,13 +101,10 @@ const playMusic = async (menuName: string, seed?: string) => {
     await initializeAudio();
     if (!isAudioInitialized.value) return;
   }
-
   if (isPlaying.value) stopMusic();
-
   const randomPart = seed || Date.now().toString(36) + Math.random().toString(36).substring(2);
   currentSeed.value = `${menuName}:${randomPart}`;
   const rng = seedrandom(randomPart);
-
   switch (menuName) {
     case '集中ブレンド': createConcentrationSound(rng); break;
     case 'リラックス・デカフェ': createRelaxSound(rng); break;
@@ -110,7 +112,6 @@ const playMusic = async (menuName: string, seed?: string) => {
     case 'Lo-Fi・ビター': createLoFiSound(rng); break;
     case 'ロック・ビート': createRockSound(rng); break;
   }
-
   Tone!.Transport.start();
   isPlaying.value = true;
   selectedMenu.value = menuName;
@@ -120,115 +121,72 @@ const stopMusic = () => {
   if (!isPlaying.value || !Tone) return;
   Tone.Transport.stop();
   Tone.Transport.cancel(0);
-
-  scheduledEvents.forEach(event => {
-    event.stop(0);
-    event.dispose();
-  });
+  scheduledEvents.forEach(event => { event.stop(0); event.dispose(); });
   scheduledEvents.length = 0;
-
-  if (noise) {
-      noise.stop(0);
-      noise.dispose();
-      noise = null;
-  }
-  if (players) {
-      players.stopAll();
-  }
+  if (noise) { noise.stop(0); noise.dispose(); noise = null; }
+  if (players) { players.stopAll(); }
   isPlaying.value = false;
 };
 
-// --- UIイベントハンドラ ---
-const togglePlayback = async () => {
-  if (isPlaying.value) {
-    stopMusic();
-  } else {
-    if (selectedMenu.value) {
-      const [menuName, seed] = currentSeed.value.split(':');
-      if (menuName && seed) await playMusic(menuName, seed);
-    }
-  }
-};
-
-const handleVolumeChange = (event: Event) => {
-  const newVolume = parseFloat((event.target as HTMLInputElement).value);
-  volume.value = newVolume;
-  if (isAudioInitialized.value) {
-    Tone!.Destination.volume.value = Tone!.gainToDb(newVolume);
-  }
-};
-
+const togglePlayback = async () => { if (isPlaying.value) { stopMusic(); } else { if (selectedMenu.value) { const [menuName, seed] = currentSeed.value.split(':'); if (menuName && seed) await playMusic(menuName, seed); } } };
+const handleVolumeChange = (event: Event) => { const newVolume = parseFloat((event.target as HTMLInputElement).value); volume.value = newVolume; if (isAudioInitialized.value) { Tone!.Destination.volume.value = Tone!.gainToDb(newVolume); } };
 const openModal = () => { isModalVisible.value = true; };
 const closeModal = () => { isModalVisible.value = false; };
-
-const copySeed = () => {
-  if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value);
-};
-
-const playFromSeed = async () => {
-  if (seedInput.value) {
-    const [menuName, seed] = seedInput.value.split(':');
-    const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート'];
-    if (menuName && seed && validMenus.includes(menuName)) {
-      await playMusic(menuName, seed);
-    } else {
-      alert('レコード番号の形式が正しくないか、存在しないジャンルです。');
-    }
-  }
-};
+const copySeed = () => { if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value); };
+const playFromSeed = async () => { if (seedInput.value) { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート']; if (menuName && seed && validMenus.includes(menuName)) { await playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } } };
 
 // --- 音楽生成関数 ---
 
 const createConcentrationSound = (rng: () => number) => {
-    if (!Tone) return;
-    if (!noise) {
-        noise = new Tone.Noise("pink").start();
-    }
-    const filter = new Tone.Filter(800, "lowpass").toDestination();
+    if (!Tone || !masterComp) return;
+    if (!noise) noise = new Tone.Noise("pink").start();
+    const filter = new Tone.Filter(800, "lowpass").connect(masterComp);
     noise.connect(filter);
-
-    const loop = new Tone.Loop((time) => {
-        filter.frequency.rampTo(600 + rng() * 400, 4, time);
-    }, "4m").start(0);
+    const loop = new Tone.Loop((time) => { filter.frequency.rampTo(600 + rng() * 400, 4, time); }, "4m").start(0);
     scheduledEvents.push(loop);
 };
 
 const createRelaxSound = (rng: () => number) => {
-    if (!players) return;
+    if (!players || !reverb) return;
     const padPlayer = players.player('pad');
-    if (padPlayer) {
-        padPlayer.loop = true;
-        padPlayer.start();
-    }
+    padPlayer.loop = true;
+    padPlayer.connect(reverb);
+    padPlayer.start();
 };
 
 const createLoFiSound = (rng: () => number) => {
-    if (!players || !Tone) return;
+    if (!players || !Tone || !chorus) return;
     Tone.Transport.bpm.value = 80 + rng() * 15;
+    
+    const epiano = players.player('epiano');
+    epiano.chain(panners['epiano']!, chorus);
+    panners['epiano']!.pan.value = -0.2;
 
-    const kickPattern = [[1,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0], [1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0]][Math.floor(rng()*2)];
-    const snarePattern = [[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], [0,0,0,0,1,0,0,0,0,0,1,0,1,0,0,0]][Math.floor(rng()*2)];
     const chords = [[-1200, -700, -400], [-1700, -1200, -900]];
-    let currentChord = chords[Math.floor(rng()*2)];
+    let currentChord = chords[Math.floor(rng()*2)]!;
 
-    const kickSeq = new Tone.Sequence((time, note) => {
-        if (note && players) {
-            players.player('kick').start(time);
+    const kickPlayer = players.player('kick');
+    const snarePlayer = players.player('snare');
+
+    const kickSeq = new Tone.Sequence((time, note) => { 
+        if (note) {
+            kickPlayer.volume.value = Tone!.gainToDb(0.7 + rng() * 0.3);
+            kickPlayer.start(time, 0, "8n");
         }
-    }, kickPattern, "16n").start(0);
+    }, [1,0,1,0,1,0,1,0], "8n").start(0);
 
-    const snareSeq = new Tone.Sequence((time, note) => {
-        if (note && players) {
-            players.player('snare').start(time);
+    const snareSeq = new Tone.Sequence((time, note) => { 
+        if (note) {
+            snarePlayer.volume.value = Tone!.gainToDb(0.6 + rng() * 0.2);
+            snarePlayer.start(time, 0, "8n");
         }
-    }, snarePattern, "16n").start(0);
-
+    }, [0,1,0,1], "4n").start(0);
+    
     const chordLoop = new Tone.Loop((time) => {
-        if (!players || !currentChord) return;
-        const epianoPlayer = players.player('epiano');
         currentChord.forEach((detune, i) => {
-            epianoPlayer.playbackRate = Math.pow(2, detune / 1200);
-            epianoPlayer.start(time + i * 0.02, 0, "1n");
+            epiano.volume.value = Tone!.gainToDb(0.5 + rng() * 0.2);
+            epiano.playbackRate = Math.pow(2, detune / 1200);
+            epiano.start(time + i * 0.05, 0, "2n");
         });
     }, "1n").start(0);
 
@@ -236,106 +194,115 @@ const createLoFiSound = (rng: () => number) => {
 };
 
 const createRockSound = (rng: () => number) => {
-    if (!players || !Tone) return;
+    if (!players || !Tone || !distortion) return;
     Tone.Transport.bpm.value = 125 + rng() * 20;
 
     const guitar = players.player('eguitar');
+    guitar.chain(panners['eguitar']!, distortion);
     const bass = players.player('ebass');
+    panners['eguitar']!.pan.value = 0.3;
+    panners['ebass']!.pan.value = -0.3;
     let isSolo = false;
 
-    const drumPattern = [
-        { time: '0:0', kick: true, snare: false, crash: true }, { time: '0:1', kick: false, snare: false, crash: false },
-        { time: '0:2', kick: true, snare: false, crash: false }, { time: '0:3', kick: false, snare: false, crash: false },
-        { time: '1:0', kick: false, snare: true, crash: false }, { time: '1:1', kick: true, snare: false, crash: false },
-        { time: '1:2', kick: false, snare: false, crash: false }, { time: '1:3', kick: false, snare: true, crash: false },
-    ];
-
+    const rockKickPlayer = players.player('rockKick');
+    const rockSnarePlayer = players.player('rockSnare');
+    const crashPlayer = players.player('crash');
+    
     const drumPart = new Tone.Part((time, value) => {
-        if (!players) return;
-        if (value.kick) players.player('rockKick').start(time);
-        if (value.snare) players.player('rockSnare').start(time);
-        if (value.crash) players.player('crash').start(time);
-    }, drumPattern).start(0);
-    drumPart.loop = true;
-    drumPart.loopEnd = '2m';
-
-    const bassPart = new Tone.Sequence((time, note) => {
-        if (typeof note === 'number' && bass) {
-            bass.playbackRate = Math.pow(2, note / 1200);
-            bass.start(time, 0, "8n");
+        if (value.kick) {
+            rockKickPlayer.volume.value = Tone!.gainToDb(0.9 + rng() * 0.1);
+            rockKickPlayer.start(time, 0, "8n");
         }
-    }, [-1200, -1200, -500, null, 0, 0, null, -200], "8n").start(0);
-    bassPart.loop = true;
+        if (value.snare) {
+            rockSnarePlayer.volume.value = Tone!.gainToDb(value.accent ? 0.9 : 0.7);
+            rockSnarePlayer.start(time, 0, "8n");
+        }
+        if (value.crash) {
+            crashPlayer.volume.value = Tone!.gainToDb(0.6);
+            crashPlayer.start(time, 0, "2n");
+        }
+    }, [ { time: '0:0', kick: true, crash: true }, { time: '0:1', kick: true }, { time: '0:2', snare: true, accent: true }, { time: '0:3', kick: true }, { time: '1:0', kick: true }, { time: '1:1', snare: true }, { time: '1:2', kick: true }, { time: '1:3', snare: true, accent: true } ]).start(0);
+    drumPart.loop = true; drumPart.loopEnd = '2m';
+
+    const bassPart = new Tone.Sequence((time, note) => { 
+        if (note !== null) {
+            bass.volume.value = Tone!.gainToDb(0.8 + rng() * 0.2);
+            bass.playbackRate = Math.pow(2, note/1200);
+            bass.start(time, 0, "8n"); 
+        }
+    }, [-12, null, -5, -5, 0, null, -2, -2], "8n").start(0);
 
     const guitarPart = new Tone.Part((time, value) => {
-        if (!guitar) return;
         if (isSolo) {
-            if (rng() < 0.8) {
-                const note = [-1200, -900, -700, -500, 0][Math.floor(rng()*5)];
-                if (note !== undefined) {
-                    const duration = ['8n', '16n'][Math.floor(rng()*2)];
-                    guitar.playbackRate = Math.pow(2, note / 1200);
-                    guitar.start(time, 0, duration);
-                }
-            }
+            const note = [-12, -9, -7, -5, 0][Math.floor(rng()*5)]!;
+            guitar.volume.value = Tone!.gainToDb(0.8);
+            guitar.playbackRate = Math.pow(2, note / 1200);
+            guitar.start(time, 0, "16n");
         } else {
+            // 【修正】パワーコード奏法のロジックを削除し、単音の再生に修正
+            guitar.volume.value = Tone!.gainToDb(0.7);
             guitar.playbackRate = Math.pow(2, value.detune / 1200);
             guitar.start(time, 0, value.dur);
         }
-    }, [{time: '0', dur: '2n', detune: -1200}, {time: '0:2', dur: '4n', detune: -500}]).start(0);
-    guitarPart.loop = true;
-    guitarPart.loopEnd = '1m';
-
+    }, [{time: '0', dur: '2n', detune: -12}, {time: '1', dur: '2n', detune: -5}]).start(0);
+    guitarPart.loop = true; guitarPart.loopEnd = '2m';
+    
     const soloToggle = new Tone.Loop(() => { isSolo = !isSolo; }, '8m').start('4m');
     scheduledEvents.push(drumPart, bassPart, guitarPart, soloToggle);
 };
 
 const createJazzSound = (rng: () => number) => {
-    if (!players || !Tone) return;
+    if (!players || !Tone || !reverb || !delay) return;
     Tone.Transport.bpm.value = 100 + rng() * 20;
-    Tone.Transport.swingSubdivision = "8n";
     Tone.Transport.swing = 0.05;
 
     const piano = players.player('piano');
     const bass = players.player('bass');
     const ride = players.player('ride');
     const sax = players.player('sax');
+    
+    panners['piano']!.pan.rampTo(-0.4, 0.1);
+    panners['sax']!.pan.rampTo(0.4, 0.1);
+    piano.connect(reverb);
+    sax.connect(delay);
     let isSolo = false;
 
     const chords = [
-        { time: '0:0', chord: ['E4', 'G4', 'B4', 'D5'] }, { time: '1:0', chord: ['C4', 'E4', 'G4', 'B4'] },
-        { time: '2:0', chord: ['F4', 'A4', 'C5', 'E5'] }, { time: '3:0', chord: ['F4', 'A4', 'B4', 'E5'] }
+        { time: '0:0', chord: ['D3', 'F4', 'A4', 'C5'] }, { time: '2:0', chord: ['G3', 'F4', 'B4', 'D5'] },
+        { time: '4:0', chord: ['C3', 'E4', 'G4', 'B4'] }, { time: '6:0', chord: ['A3', 'G4', 'C5', 'E5'] }, 
     ];
-
     const pianoPart = new Tone.Part((time, value) => {
-        if (!piano) return;
-        if (isSolo && rng() < 0.7) return;
-        const notesToPlay = rng() < 0.6 ? [value.chord[0], value.chord[2]] : value.chord;
-        notesToPlay.forEach((note, i) => {
+        if (isSolo && rng() < 0.6) return;
+        value.chord.forEach((note) => {
+            const vel = isSolo ? 0.3 + rng() * 0.2 : 0.4 + rng() * 0.2;
+            piano.volume.value = Tone!.gainToDb(vel);
             piano.playbackRate = Tone!.Frequency(note).toFrequency() / Tone!.Frequency('C4').toFrequency();
-            piano.start(time + i * 0.03, 0, "1n");
+            piano.start(time + rng() * 0.05, 0, "2n");
         });
     }, chords).start(0);
-    pianoPart.loop = true;
-    pianoPart.loopEnd = '4m';
+    pianoPart.loop = true; pianoPart.loopEnd = '8m';
 
     const bassPart = new Tone.Sequence((time, note) => {
-        if (!bass) return;
+        bass.volume.value = Tone!.gainToDb(0.7 + rng() * 0.2);
         bass.playbackRate = Tone!.Frequency(note).toFrequency() / Tone!.Frequency('C1').toFrequency();
         bass.start(time, 0, "4n");
-    }, ['C2', 'E2', 'G2', 'A2', 'D2', 'F2', 'A2', 'B2', 'G2', 'B2', 'D3', 'F3'], "4n").start(0);
+    }, ['D1', 'A1', 'G1', 'D2', 'C1', 'G1', 'A1', 'E2'], "2n").start(0);
     bassPart.loop = true;
 
-    const ridePart = new Tone.Loop((time) => { if(ride) ride.start(time); }, "4n").start(0);
+    const ridePart = new Tone.Loop((time) => { 
+        ride.volume.value = Tone!.gainToDb(0.4 + rng() * 0.2);
+        ride.start(time, 0, "4n");
+    }, "4n").start(0);
 
     const saxPart = new Tone.Sequence((time, note) => {
-        if (!isSolo || typeof note !== 'string' || !sax) return;
+        if (!isSolo || !note) return;
+        sax.volume.value = Tone!.gainToDb(0.6 + rng() * 0.2);
         sax.playbackRate = Tone!.Frequency(note).toFrequency() / Tone!.Frequency('C4').toFrequency();
         sax.start(time, 0, "8n");
-    }, ['G4', 'A4', null, 'C5', 'A4', 'G4', null, 'E4'], "8n").start(0);
+    }, ['C5', 'A4', 'G4', null, 'E4', 'D4', null, 'G4'], "8n").start(0);
     saxPart.loop = true;
-
-    const soloToggle = new Tone.Loop(() => { isSolo = !isSolo; }, '8m').start('4m');
+    
+    const soloToggle = new Tone.Loop(() => { isSolo = !isSolo; }, '8m').start('8m');
     scheduledEvents.push(pianoPart, bassPart, ridePart, saxPart, soloToggle);
 };
 </script>
