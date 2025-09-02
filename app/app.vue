@@ -123,6 +123,11 @@ const playMusic = (menuName: string, seed?: string) => {
   reverbGain.connect(audioContext.destination);
   console.log('[playMusic] Reverb node connected to destination via reverbGain.');
 
+  // ★★★ 修正箇所 ★★★
+  // isPlayingフラグを、スケジューラーを開始する各種関数の呼び出しよりも前に設定する
+  isPlaying.value = true;
+  selectedMenu.value = menuName;
+
   switch (menuName) {
     case '集中ブレンド':
       console.log('[playMusic] Routing to createConcentrationSound.');
@@ -145,8 +150,8 @@ const playMusic = (menuName: string, seed?: string) => {
       createRockSound(rng);
       break;
   }
-  isPlaying.value = true;
-  selectedMenu.value = menuName;
+  // isPlaying.value = true; // ← この行を上記switch文の前に移動
+  // selectedMenu.value = menuName; // ← この行を上記switch文の前に移動
   console.log(`[playMusic] Playback started for ${menuName}.`);
 };
 
