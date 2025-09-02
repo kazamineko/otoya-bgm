@@ -138,10 +138,16 @@ const closeModal = () => { isModalVisible.value = false; };
 const copySeed = () => { navigator.clipboard.writeText(currentSeed.value); };
 const playFromSeed = () => { if (seedInput.value) { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート']; if (menuName && seed && validMenus.includes(menuName)) { playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } } };
 
-const playSample = (buffer: AudioBuffer, startTime: number, options: { detune?: number, duration?: number, vol?: number, loop?: boolean, noReverb?: boolean, loopStart?: number, loopEnd?: number }) => {
+const playSample = (buffer: AudioBuffer, startTime: number, options: { detune?: number, duration?: number, vol?: number, loop?: boolean, noReverb?: boolean, loopStart?: number, loopEnd?: number, bend?: { amount: number, time: number } }) => {
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
-    source.detune.value = options.detune || 0;
+    source.detune.setValueAtTime(options.detune || 0, startTime);
+
+    // ★★★ 音楽性向上: ベンド奏法のロジック ★★★
+    if (options.bend) {
+      source.detune.linearRampToValueAtTime((options.detune || 0) + options.bend.amount, startTime + options.bend.time);
+    }
+    
     if (options.loop) {
       source.loop = true;
       source.loopStart = options.loopStart ?? 0.1;
@@ -264,16 +270,15 @@ const createRockSound = (rng: () => number) => {
   const kickPatterns = [[1,0,0,1,1,0,1,0,1,0,0,1,1,0,1,0], [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], [1,1,0,1,1,1,0,0,1,1,0,1,1,0,1,0]];
   const snarePatterns = [[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], [0,0,0,0,1,0,0,0,0,0,0,1,1,0,1,0], [0,0,0,0,1,0,0,1,0,0,1,0,1,0,1,0]];
   const bassRiffs = [[-500,-500,0,0,200,200,0,0,-500,-500,0,0,200,200,-200,-200], [0,0,0,0,200,200,-200,-200,0,0,0,0,200,200,-200,-200], [0,200,0,200,-500,0,-500,0,0,200,0,200,-500,0,-200,0]];
-  const guitarRiffs = [[0,null,700,null,500,null,700,null,0,null,700,null,500,null,200,null], [0,null,0,null,500,500,200,null,0,null,0,null,500,500,200,null]];
   
   let kickPattern = kickPatterns[Math.floor(rng() * kickPatterns.length)]!;
   let snarePattern = snarePatterns[Math.floor(rng() * snarePatterns.length)]!;
   let bassRiff = bassRiffs[Math.floor(rng() * bassRiffs.length)]!;
-  let guitarRiff = guitarRiffs[Math.floor(rng() * guitarRiffs.length)]!;
   
   let soloState = { isSoloing: false, soloEndBeat: 0 };
-  let lastGuitarNote = 0;
-  const pentatonicScale = [0, 200, 500, 700, 1000];
+  let lastGuitarNote = -500;
+  // ★★★ 音楽性向上: ブルースケール（低音域）の導入 ★★★
+  const bluesScale = [-1200, -900, -700, -600, -500, -200]; 
 
   const scheduleNext = () => {
     if (!isPlaying.value) return;
@@ -285,7 +290,6 @@ const createRockSound = (rng: () => number) => {
       kickPattern = kickPatterns[Math.floor(rng() * kickPatterns.length)]!;
       snarePattern = snarePatterns[Math.floor(rng() * snarePatterns.length)]!;
       bassRiff = bassRiffs[Math.floor(rng() * bassRiffs.length)]!;
-      guitarRiff = guitarRiffs[Math.floor(rng() * guitarRiffs.length)]!;
     }
 
     if (!soloState.isSoloing && currentMeasure > 1 && beat % 64 === 0 && rng() < 0.4) {
@@ -313,18 +317,21 @@ const createRockSound = (rng: () => number) => {
     playSample(instruments.bass!, now + timingOffset, { detune: bassRiff[c16]! - 1200, vol: dynamicVol(0.7), noReverb: true, duration: intervalTime / 1000 * 1.5 });
 
     if(soloState.isSoloing) {
-        if (rng() < 0.8) {
-            const step = Math.floor(rng() * 4) - 2;
-            let nextNoteIndex = pentatonicScale.indexOf(lastGuitarNote) + step;
-            nextNoteIndex = Math.max(0, Math.min(pentatonicScale.length - 1, nextNoteIndex));
-            const note = pentatonicScale[nextNoteIndex]!;
+        if (rng() < 0.7) {
+            const step = Math.floor(rng() * 3) - 1;
+            let nextNoteIndex = bluesScale.indexOf(lastGuitarNote) + step;
+            nextNoteIndex = Math.max(0, Math.min(bluesScale.length - 1, nextNoteIndex));
+            const note = bluesScale[nextNoteIndex]!;
             lastGuitarNote = note;
-            playSample(instruments.guitar!, now + timingOffset, { detune: note, vol: dynamicVol(0.6), duration: intervalTime / 1000 * (1 + rng() * 2) });
+            // ★★★ 音楽性向上: ベンド奏法の適用 ★★★
+            const bendOptions = { amount: 200, time: intervalTime / 1000 * (0.5 + rng() * 0.5) };
+            playSample(instruments.guitar!, now + timingOffset, { detune: note, vol: dynamicVol(0.6), duration: intervalTime / 1000 * (1 + rng()), bend: bendOptions });
         }
     } else {
-        const guitarNote = guitarRiff[c16];
-        if (guitarNote !== null) {
-            playSample(instruments.guitar!, now + timingOffset, { detune: guitarNote, vol: dynamicVol(0.5), duration: intervalTime * 2 / 1000 });
+        // ★★★ 音楽性向上: パワーコードリフ ★★★
+        if(c16 % 4 === 0) {
+            const detune = [-500, 0, 200][Math.floor(rng()*3)]!;
+            playSample(instruments.guitar!, now + timingOffset, { detune, vol: dynamicVol(0.5), duration: intervalTime * 4 / 1000 });
         }
     }
     
@@ -335,7 +342,6 @@ const createRockSound = (rng: () => number) => {
 };
 
 const createJazzSound = (rng: () => number) => {
-  // ★★★ 修正箇所: ドラムソロで使うsnareを追加 ★★★
   const instruments = { piano: samples.value.piano, bass: samples.value.bass, ride: samples.value.ride, brush: samples.value.brush, sax: samples.value.sax, trombone: samples.value.trombone, flute: samples.value.flute, vibraphone: samples.value.vibraphone, organ: samples.value.organ, snare: samples.value.snare };
   for(const [name, buffer] of Object.entries(instruments)) { if (!buffer) { return; } }
 
@@ -348,7 +354,7 @@ const createJazzSound = (rng: () => number) => {
     'Cmaj7': { root: 0,   notes: [0, 400, 700, 1100], scale: [0, 200, 400, 500, 700, 900, 1100], pianoVoicing: [400, 700, 1100, 1400] },
     'Am7':   { root: 900, notes: [0, 300, 700, 1000], scale: [0, 200, 300, 500, 700, 800, 1000], pianoVoicing: [300, 700, 1000, 1400] },
     'Dm7':   { root: 200, notes: [0, 300, 700, 1000], scale: [0, 200, 300, 500, 700, 900, 1000], pianoVoicing: [300, 700, 1000, 1400] },
-    'G7':    { root: 700, notes: [0, 400, 700, 1000], scale: [0, 200, 400, 500, 700, 900, 1000], pianoVoicing: [400, 700, 1000, 1300] },
+    'G7':    { root: 700, notes: [0, 400, 700, 1000], scale: [0, 200, 400, 500, 700, 900, 1000], pianoVoicing: [400, 1000, 1300, 1800] }, // b9, #11
   };
   const progressionA: ChordName[] = ['Cmaj7', 'Am7', 'Dm7', 'G7'];
   const progressionB: ChordName[] = ['Am7', 'Dm7', 'G7', 'Cmaj7'];
@@ -413,7 +419,7 @@ const createJazzSound = (rng: () => number) => {
         if (currentBeatInMeasure === 0 && rng() < playChordProb) {
           const chordInst = rng() < 0.7 ? instruments.piano! : instruments.organ!;
           currentChord.pianoVoicing.forEach(noteOffset => {
-              if (rng() < 0.8) playSample(chordInst, beatStartTime + timingOffset + rng()*0.05, { detune: currentChord.root + noteOffset - 1200, vol: dynamicVol(0.4), duration: beatDuration * (3 + rng()*2) });
+              if (rng() < 0.8) playSample(chordInst, beatStartTime + timingOffset + rng()*0.05, { detune: currentChord.root + noteOffset, vol: dynamicVol(0.4), duration: beatDuration * (3 + rng()*2) });
           });
         }
 
@@ -471,6 +477,10 @@ const createJazzSound = (rng: () => number) => {
         <div v-if="isPlaying" class="seed-container"><p>レコード番号 (シード値):</p><div class="seed-display"><span>{{ currentSeed }}</span><button @click="copySeed" title="コピー">📄</button></div></div>
         <div class="seed-input-container"><input type="text" v-model="seedInput" placeholder="レコード番号を入力" /><button @click="playFromSeed" :disabled="!seedInput">このレコードを聴く</button></div>
       </div>
+    </div>
+    <!-- ★★★ UI修正: Aboutモーダルへのリンクを復元 ★★★ -->
+    <div class="footer-link-container">
+      <a href="#" @click.prevent="openModal" class="footer-link">このBGMについて</a>
     </div>
     <AboutModal :isVisible="isModalVisible" @close="closeModal" />
   </div>
