@@ -29,6 +29,7 @@ let activeNodes: AudioNode[] = [];
 let soundScheduler: any = null;
 
 onMounted(async () => {
+  console.log('[onMounted] Component mounted. Starting audio setup.');
   const samplePaths: Record<string, string> = {
     piano: '/piano-c4.wav', bass: '/bass-c1.wav', ride: '/drum-ride.wav', brush: '/drum-brush.wav',
     epiano: '/epiano-c4.wav', kick: '/drum-kick.wav', snare: '/drum-snare.wav', pad: '/pad-cmaj7.wav',
@@ -39,6 +40,7 @@ onMounted(async () => {
   
   try {
     audioContext = new AudioContext();
+    console.log('[onMounted] AudioContext created successfully.');
     
     const loadSample = async (path: string): Promise<AudioBuffer> => {
       const response = await fetch(path);
@@ -64,6 +66,7 @@ onMounted(async () => {
         updateProgress();
       }
     }
+    console.log('[onMounted] All samples loaded successfully.');
 
     loadingMessage.value = '店内の響きを調整しています...';
     const sampleRate = audioContext.sampleRate;
@@ -79,58 +82,96 @@ onMounted(async () => {
     }
     reverbNode = audioContext.createConvolver();
     reverbNode.buffer = impulse;
+    console.log('[onMounted] Reverb node created.');
 
     loadingMessage.value = '準備ができました';
     isLoading.value = false;
   } catch (error: any) {
     loadingMessage.value = `エラー: ${loadingMessage.value} の解析に失敗しました。ファイルが破損しているか、非対応の形式の可能性があります。`;
-    console.error("Error loading audio assets:", error);
+    console.error("[onMounted] Error loading audio assets:", error);
   }
 });
 
 const playMusic = (menuName: string, seed?: string) => {
-  if (isLoading.value || (audioContext && audioContext.state === 'suspended')) { audioContext.resume(); }
-  if (isPlaying.value) stopMusic();
+  console.log(`[playMusic] Called with menu: ${menuName}, seed: ${seed}`);
+  if (isLoading.value) {
+      console.warn('[playMusic] Cancelled: still loading.');
+      return;
+  }
+  if (audioContext && audioContext.state === 'suspended') {
+      console.log('[playMusic] Resuming AudioContext.');
+      audioContext.resume();
+  }
+  if (isPlaying.value) {
+      console.log('[playMusic] Music is already playing. Stopping current music first.');
+      stopMusic();
+  }
+
   const randomPart = seed || Date.now().toString(36) + Math.random().toString(36).substring(2);
   currentSeed.value = `${menuName}:${randomPart}`;
+  console.log(`[playMusic] Generated new seed: ${currentSeed.value}`);
   const rng = seedrandom(randomPart);
+  
   masterGainNode = audioContext.createGain();
   masterGainNode.gain.setValueAtTime(volume.value, audioContext.currentTime);
   masterGainNode.connect(audioContext.destination);
+  console.log('[playMusic] Master gain node created and connected to destination.');
 
-  // ★★★ ここが最重要修正箇所です ★★★
-  // 切り離されていたリバーブの出口を、スピーカー(destination)に正しく接続します
   const reverbGain = audioContext.createGain();
-  reverbGain.gain.value = 0.4; // リバーブの音量を少し調整
+  reverbGain.gain.value = 0.4;
   reverbNode.connect(reverbGain);
   reverbGain.connect(audioContext.destination);
+  console.log('[playMusic] Reverb node connected to destination via reverbGain.');
 
   switch (menuName) {
-    case '集中ブレンド': createConcentrationSound(rng); break;
-    case 'リラックス・デカフェ': createRelaxSound(rng); break;
-    case 'ジャズ・スペシャル': createJazzSound(rng); break;
-    case 'Lo-Fi・ビター': createLoFiSound(rng); break;
-    case 'ロック・ビート': createRockSound(rng); break;
+    case '集中ブレンド':
+      console.log('[playMusic] Routing to createConcentrationSound.');
+      createConcentrationSound(rng);
+      break;
+    case 'リラックス・デカフェ':
+      console.log('[playMusic] Routing to createRelaxSound.');
+      createRelaxSound(rng);
+      break;
+    case 'ジャズ・スペシャル':
+      console.log('[playMusic] Routing to createJazzSound.');
+      createJazzSound(rng);
+      break;
+    case 'Lo-Fi・ビター':
+      console.log('[playMusic] Routing to createLoFiSound.');
+      createLoFiSound(rng);
+      break;
+    case 'ロック・ビート':
+      console.log('[playMusic] Routing to createRockSound.');
+      createRockSound(rng);
+      break;
   }
   isPlaying.value = true;
   selectedMenu.value = menuName;
+  console.log(`[playMusic] Playback started for ${menuName}.`);
 };
 
 const stopMusic = () => {
-  if (!isPlaying.value) return;
+  console.log('[stopMusic] Called.');
+  if (!isPlaying.value) {
+      console.log('[stopMusic] Cancelled: not playing.');
+      return;
+  }
   if (soundScheduler) {
     clearTimeout(soundScheduler);
     soundScheduler = null;
+    console.log('[stopMusic] Sound scheduler cleared.');
   }
-  // Immediately stop all scheduled sources to prevent lingering sounds
-  activeNodes.forEach(node => {
+  
+  activeNodes.forEach((node, index) => {
     if (node instanceof AudioBufferSourceNode) {
-        try { node.stop(0); } catch (e) { /* ignore if already stopped */ }
+        try { node.stop(0); } catch (e) { /* ignore */ }
     }
     try { node.disconnect(); } catch(e) {/* ignore */}
   });
+  console.log(`[stopMusic] Stopped and disconnected ${activeNodes.length} active audio nodes.`);
   activeNodes = [];
   isPlaying.value = false;
+  console.log('[stopMusic] Playback stopped.');
 };
 
 const togglePlayback = () => { if (isPlaying.value) { stopMusic(); } else { if (selectedMenu.value && currentSeed.value) { const [menuName, seed] = currentSeed.value.split(':'); if (menuName && seed) playMusic(menuName, seed); } } };
@@ -140,7 +181,12 @@ const closeModal = () => { isModalVisible.value = false; };
 const copySeed = () => { navigator.clipboard.writeText(currentSeed.value); };
 const playFromSeed = () => { if (seedInput.value) { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート']; if (menuName && seed && validMenus.includes(menuName)) { playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } } };
 
-const playSample = (buffer: AudioBuffer, startTime: number, options: { detune?: number, duration?: number, vol?: number, loop?: boolean, noReverb?: boolean, loopStart?: number, loopEnd?: number }) => {
+const playSample = (sampleName: string, buffer: AudioBuffer | null, startTime: number, options: { detune?: number, duration?: number, vol?: number, loop?: boolean, noReverb?: boolean, loopStart?: number, loopEnd?: number }) => {
+    if (!buffer) {
+        console.error(`[playSample] Attempted to play "${sampleName}" but its buffer is null.`);
+        return;
+    }
+
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
     source.detune.value = options.detune || 0;
@@ -154,11 +200,9 @@ const playSample = (buffer: AudioBuffer, startTime: number, options: { detune?: 
     gain.gain.linearRampToValueAtTime(options.vol ?? 1, startTime + 0.01);
     
     source.connect(gain);
-    // Dry signal to master
-    gain.connect(masterGainNode);
-    // Wet signal to reverb
+    gain.connect(masterGainNode); // Dry signal
     if (!options.noReverb) {
-      gain.connect(reverbNode);
+      gain.connect(reverbNode); // Wet signal
     }
 
     source.start(startTime);
@@ -174,6 +218,7 @@ const playSample = (buffer: AudioBuffer, startTime: number, options: { detune?: 
 };
 
 const createConcentrationSound = (rng: () => number) => {
+  console.log('[createConcentrationSound] Initializing noise generation.');
   const bufferSize = 2 * audioContext.sampleRate;
   const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
   const output = noiseBuffer.getChannelData(0);
@@ -188,10 +233,15 @@ const createConcentrationSound = (rng: () => number) => {
   pinkFilter.connect(masterGainNode);
   whiteNoise.start();
   activeNodes.push(whiteNoise, pinkFilter);
+  console.log('[createConcentrationSound] Noise playback started.');
 };
 
 const createRelaxSound = (rng: () => number) => {
-  if (!samples.value.pad) return;
+  console.log('[createRelaxSound] Initializing pad sound.');
+  if (!samples.value.pad) {
+      console.error('[createRelaxSound] Pad sample is not loaded.');
+      return;
+  }
   const source = audioContext.createBufferSource();
   source.buffer = samples.value.pad;
   source.loop = true;
@@ -207,13 +257,19 @@ const createRelaxSound = (rng: () => number) => {
   source.start();
   detuneLfo.start();
   activeNodes.push(source, detuneLfo, detuneGain);
+  console.log('[createRelaxSound] Pad playback started.');
 };
 
 const createLoFiSound = (rng: () => number) => {
-  if (!samples.value.epiano || !samples.value.kick || !samples.value.snare) return;
+  console.log('[Lo-Fi] Initializing Lo-Fi sound generation.');
+  if (!samples.value.epiano || !samples.value.kick || !samples.value.snare) {
+      console.error('[Lo-Fi] Required samples (epiano, kick, snare) are not loaded.');
+      return;
+  }
   let beat = 0;
   const tempo = 80 + rng() * 15;
   const intervalTime = 60000 / tempo / 4;
+  console.log(`[Lo-Fi] Tempo set to ${tempo.toFixed(2)} BPM, interval: ${intervalTime.toFixed(2)}ms`);
   
   const kickPatterns = [[1,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0], [1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0], [1,0,1,0,1,0,0,0,1,0,0,1,0,0,1,0]];
   const snarePatterns = [[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], [0,0,0,0,1,0,0,0,0,0,1,0,1,0,0,0], [0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0]];
@@ -222,40 +278,55 @@ const createLoFiSound = (rng: () => number) => {
   let kickPattern = kickPatterns[Math.floor(rng() * kickPatterns.length)]!;
   let snarePattern = snarePatterns[Math.floor(rng() * snarePatterns.length)]!;
   let chords = chordPatterns[Math.floor(rng() * chordPatterns.length)]!;
+  console.log('[Lo-Fi] Initial patterns selected.');
 
   const scheduleNext = () => {
-    if (!isPlaying.value) return;
+    if (!isPlaying.value) {
+        console.log('[Lo-Fi] Stop signal received. Halting scheduler.');
+        return;
+    }
     const now = audioContext.currentTime;
     const c16 = beat % 16;
     
     if (beat > 0 && beat % 64 === 0) {
       kickPattern = kickPatterns[Math.floor(rng() * kickPatterns.length)]!;
       snarePattern = snarePatterns[Math.floor(rng() * snarePatterns.length)]!;
+      console.log(`[Lo-Fi] Beat ${beat}: Drum patterns changed.`);
     }
     if (beat > 0 && beat % 32 === 0) {
       chords = chordPatterns[Math.floor(rng() * chordPatterns.length)]!;
+      console.log(`[Lo-Fi] Beat ${beat}: Chord pattern changed.`);
     }
 
-    if (kickPattern[c16]) playSample(samples.value.kick!, now, { vol: 0.7, noReverb: true, duration: 0.5 });
-    if (snarePattern[c16]) playSample(samples.value.snare!, now, { vol: 0.5, noReverb: true, duration: 0.5 });
+    if (kickPattern[c16]) playSample('kick', samples.value.kick!, now, { vol: 0.7, noReverb: true, duration: 0.5 });
+    if (snarePattern[c16]) playSample('snare', samples.value.snare!, now, { vol: 0.5, noReverb: true, duration: 0.5 });
     
     if (c16 % 8 === 0) {
-      chords.forEach(detune => playSample(samples.value.epiano!, now, { detune, vol: 0.3, duration: intervalTime * 4 / 1000 }));
+      console.log(`[Lo-Fi] Beat ${beat}: Playing chord.`);
+      chords.forEach(detune => playSample('epiano', samples.value.epiano!, now, { detune, vol: 0.3, duration: intervalTime * 4 / 1000 }));
     }
     
     beat++;
     soundScheduler = setTimeout(scheduleNext, intervalTime);
   };
+  console.log('[Lo-Fi] Starting scheduler.');
   scheduleNext();
 };
 
 const createRockSound = (rng: () => number) => {
+  console.log('[Rock] Initializing Rock sound generation.');
   const instruments = { guitar: samples.value.eguitar, bass: samples.value.ebass, kick: samples.value.rockKick, snare: samples.value.rockSnare, crash: samples.value.crash, };
-  for(const [name, buffer] of Object.entries(instruments)) { if (!buffer) return; }
+  for(const [name, buffer] of Object.entries(instruments)) {
+      if (!buffer) {
+          console.error(`[Rock] Required sample "${name}" is not loaded.`);
+          return;
+      }
+  }
 
   let beat = 0;
   const tempo = 120 + rng() * 20;
   const intervalTime = 60000 / tempo / 4;
+  console.log(`[Rock] Tempo set to ${tempo.toFixed(2)} BPM, interval: ${intervalTime.toFixed(2)}ms`);
 
   const kickPatterns = [[1,0,0,1,1,0,1,0,1,0,0,1,1,0,1,0], [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0]];
   const snarePatterns = [[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], [0,0,0,0,1,0,0,0,0,0,0,1,1,0,1,0]];
@@ -264,9 +335,13 @@ const createRockSound = (rng: () => number) => {
   let kickPattern = kickPatterns[Math.floor(rng() * kickPatterns.length)]!;
   let snarePattern = snarePatterns[Math.floor(rng() * snarePatterns.length)]!;
   let bassRiff = bassRiffs[Math.floor(rng() * bassRiffs.length)]!;
+  console.log('[Rock] Initial patterns selected.');
 
   const scheduleNext = () => {
-    if (!isPlaying.value) return;
+    if (!isPlaying.value) {
+        console.log('[Rock] Stop signal received. Halting scheduler.');
+        return;
+    }
     const now = audioContext.currentTime;
     const c16 = beat % 16;
     
@@ -274,32 +349,41 @@ const createRockSound = (rng: () => number) => {
       kickPattern = kickPatterns[Math.floor(rng() * kickPatterns.length)]!;
       snarePattern = snarePatterns[Math.floor(rng() * snarePatterns.length)]!;
       bassRiff = bassRiffs[Math.floor(rng() * bassRiffs.length)]!;
+      console.log(`[Rock] Beat ${beat}: Patterns changed.`);
     }
     
-    if (kickPattern[c16]) playSample(instruments.kick!, now, { vol: 0.8, noReverb: true, duration: 0.5 });
-    if (snarePattern[c16]) playSample(instruments.snare!, now, { vol: 0.6, noReverb: true, duration: 0.5 });
-    if (c16 === 0) playSample(instruments.crash!, now, { vol: 0.4, duration: intervalTime * 8 / 1000 });
+    if (kickPattern[c16]) playSample('rockKick', instruments.kick!, now, { vol: 0.8, noReverb: true, duration: 0.5 });
+    if (snarePattern[c16]) playSample('rockSnare', instruments.snare!, now, { vol: 0.6, noReverb: true, duration: 0.5 });
+    if (c16 === 0) playSample('crash', instruments.crash!, now, { vol: 0.4, duration: intervalTime * 8 / 1000 });
     
     const bassNote = bassRiff[c16]!;
-    playSample(instruments.bass!, now, { detune: bassNote - 1200, vol: 0.7, noReverb: true, duration: intervalTime / 1000 * 1.5 });
+    playSample('ebass', instruments.bass!, now, { detune: bassNote - 1200, vol: 0.7, noReverb: true, duration: intervalTime / 1000 * 1.5 });
 
     if (c16 === 0 || (c16 === 8 && rng() < 0.7)) {
         const detune = [-500, 0, 200][Math.floor(rng() * 3)]!;
-        playSample(instruments.guitar!, now, { detune: detune, vol: 0.5, duration: intervalTime * 8 / 1000 });
+        playSample('eguitar', instruments.guitar!, now, { detune: detune, vol: 0.5, duration: intervalTime * 8 / 1000 });
     }
     beat++;
     soundScheduler = setTimeout(scheduleNext, intervalTime);
   };
+  console.log('[Rock] Starting scheduler.');
   scheduleNext();
 };
 
 const createJazzSound = (rng: () => number) => {
+  console.log('[Jazz] Initializing Jazz sound generation.');
   const instruments = { piano: samples.value.piano, bass: samples.value.bass, ride: samples.value.ride, brush: samples.value.brush, sax: samples.value.sax, trombone: samples.value.trombone, flute: samples.value.flute, vibraphone: samples.value.vibraphone, organ: samples.value.organ };
-  for(const [name, buffer] of Object.entries(instruments)) { if (!buffer) { return; } }
+  for(const [name, buffer] of Object.entries(instruments)) {
+      if (!buffer) {
+          console.error(`[Jazz] Required sample "${name}" is not loaded.`);
+          return;
+      }
+  }
 
   let beat = 0;
   const tempo = 110 + rng() * 20;
   const beatsPerMeasure = 4;
+  console.log(`[Jazz] Tempo set to ${tempo.toFixed(2)} BPM.`);
   
   type ChordName = 'Dm7' | 'G7' | 'Cmaj7' | 'Am7';
   const chordDefs: Record<ChordName, { root: number; notes: number[]; }> = {
@@ -316,7 +400,10 @@ const createJazzSound = (rng: () => number) => {
   let currentSoloInstrument: any = null;
 
   const scheduleNextBeat = () => {
-    if (!isPlaying.value) return;
+    if (!isPlaying.value) {
+      console.log('[Jazz] Stop signal received. Halting scheduler.');
+      return;
+    }
     const beatStartTime = audioContext.currentTime;
     const beatDuration = 60 / tempo;
     const swingRatio = 0.65;
@@ -331,32 +418,43 @@ const createJazzSound = (rng: () => number) => {
     const currentChordName = progression[currentMeasure % 4]!;
     const currentChord = chordDefs[currentChordName];
 
+    if (currentBeatInMeasure === 0) {
+        console.log(`[Jazz] Beat ${beat}: Measure ${currentMeasure+1}, Chord ${currentChordName}, Section ${isSectionA ? 'A' : 'B'}`);
+    }
+
     // Drums
-    if (!isOffBeat) playSample(instruments.ride!, beatStartTime, { vol: isSectionA ? 0.3 : 0.4, noReverb: true, duration: 0.5 });
-    if (isOffBeat) playSample(instruments.brush!, beatStartTime, { vol: 0.2, noReverb: true, duration: 0.2 });
+    if (!isOffBeat) playSample('ride', instruments.ride!, beatStartTime, { vol: isSectionA ? 0.3 : 0.4, noReverb: true, duration: 0.5 });
+    if (isOffBeat) playSample('brush', instruments.brush!, beatStartTime, { vol: 0.2, noReverb: true, duration: 0.2 });
 
     // Bass
     if (currentBeatInMeasure === 0) {
-      playSample(instruments.bass!, beatStartTime, { detune: currentChord.root - 2400, vol: 0.7, duration: beatDuration });
+      playSample('bass', instruments.bass!, beatStartTime, { detune: currentChord.root - 2400, vol: 0.7, duration: beatDuration });
     } else if (rng() < 0.6) {
       const bassNote = currentChord.notes[Math.floor(rng() * currentChord.notes.length)]!;
-      playSample(instruments.bass!, beatStartTime, { detune: currentChord.root + bassNote - 2400, vol: 0.6, duration: beatDuration });
+      playSample('bass', instruments.bass!, beatStartTime, { detune: currentChord.root + bassNote - 2400, vol: 0.6, duration: beatDuration });
     }
     
     // Chords
     if (currentBeatInMeasure === 0 && rng() < (isSectionA ? 0.6 : 0.9)) {
-      const chordInst = rng() < 0.7 ? instruments.piano! : instruments.organ!;
+      const isPiano = rng() < 0.7;
+      const chordInst = isPiano ? instruments.piano : instruments.organ;
+      const instName = isPiano ? 'piano' : 'organ';
       currentChord.notes.forEach((noteOffset) => {
-        if (rng() < 0.8) playSample(chordInst, beatStartTime + (rng() * 0.05), { detune: currentChord.root + noteOffset - 1200, vol: 0.4, duration: beatDuration * 2 });
+        if (rng() < 0.8) playSample(instName, chordInst!, beatStartTime + (rng() * 0.05), { detune: currentChord.root + noteOffset - 1200, vol: 0.4, duration: beatDuration * 2 });
       });
     }
 
     // Solo
     if (!isSectionA) {
         if (currentBeatInMeasure === 0) {
-            const soloInstruments = [{ inst: instruments.sax!, vol: 0.7, detune: 0 }, { inst: instruments.vibraphone!, vol: 0.5, detune: 0 }, { inst: instruments.trombone!, vol: 0.6, detune: -1200 }];
+            const soloInstruments = [
+                { name: 'sax', inst: instruments.sax!, vol: 0.7, detune: 0 },
+                { name: 'vibraphone', inst: instruments.vibraphone!, vol: 0.5, detune: 0 },
+                { name: 'trombone', inst: instruments.trombone!, vol: 0.6, detune: -1200 }
+            ];
             currentSoloInstrument = soloInstruments[Math.floor(rng() * soloInstruments.length)]!;
             soloMotif = Array.from({length: 2 + Math.floor(rng()*2)}, () => currentChord.notes[Math.floor(rng()*currentChord.notes.length)]!);
+            console.log(`[Jazz] Beat ${beat}: Solo instrument changed to ${currentSoloInstrument.name}.`);
         }
         
         if (rng() < 0.7 && currentSoloInstrument) {
@@ -367,13 +465,14 @@ const createJazzSound = (rng: () => number) => {
                 note = scale[Math.floor(rng() * scale.length)]!;
             }
             const duration = beatDuration * (1 + rng());
-            playSample(currentSoloInstrument.inst, beatStartTime, { detune: currentChord.root + note + currentSoloInstrument.detune, vol: currentSoloInstrument.vol, duration });
+            playSample(currentSoloInstrument.name, currentSoloInstrument.inst, beatStartTime, { detune: currentChord.root + note + currentSoloInstrument.detune, vol: currentSoloInstrument.vol, duration });
         }
     }
     
     beat++;
     soundScheduler = setTimeout(scheduleNextBeat, delay * 1000);
   };
+  console.log('[Jazz] Starting scheduler.');
   scheduleNextBeat();
 };
 </script>
