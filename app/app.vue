@@ -26,16 +26,17 @@ let reverb: ToneType.Reverb | null = null;
 let chorus: ToneType.Chorus | null = null;
 let delay: ToneType.PingPongDelay | null = null;
 let masterComp: ToneType.Compressor | null = null;
-let limiter: ToneType.Limiter | null = null; // 【追加】最終段のリミッター
+let limiter: ToneType.Limiter | null = null;
 let guitarPitchShift: ToneType.PitchShift | null = null;
+let eguitarPreGain: ToneType.Volume | null = null;
 const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [];
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
-type TuningParams = Record<string, { volume: number; attack: number; release: number }>;
+type TuningParams = Record<string, { volume: number; attack: number; release: number; preGain?: number }>;
 
 const tuningParams = ref<TuningParams>({});
-const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v3';
+const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v4';
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value) return;
@@ -46,6 +47,10 @@ watch(tuningParams, (newParams) => {
       sampler.volume.value = params.volume;
       sampler.attack = params.attack;
       sampler.release = params.release;
+
+      if (instrumentName === 'eguitar' && eguitarPreGain && params.preGain !== undefined) {
+        eguitarPreGain.volume.value = params.preGain;
+      }
     }
   }
 }, { deep: true });
@@ -63,37 +68,34 @@ const initializeAudio = async () => {
   instrumentList.value = Object.keys(allSamplePaths);
 
   const masterTunedParams: TuningParams = {
-    "piano": { "volume": 0.1, "attack": 0, "release": 0 },
-    "bass": { "volume": 0, "attack": 2, "release": 5 },
-    "ride": { "volume": 0, "attack": 0, "release": 0 },
-    "brush": { "volume": 0, "attack": 0.01, "release": 0.2 },
-    "epiano": { "volume": 0, "attack": 0.01, "release": 1 },
-    "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
-    "snare": { "volume": 0, "attack": 0.01, "release": 0.2 },
-    "pad": { "volume": 0, "attack": 0.01, "release": 1 },
-    "sax": { "volume": 0, "attack": 0.01, "release": 1 },
-    "trombone": { "volume": 0, "attack": 0.01, "release": 1 },
-    "eguitar": { "volume": 0, "attack": 0.01, "release": 1 },
-    "ebass": { "volume": 0, "attack": 0.01, "release": 1 },
-    "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 },
-    "rockSnare": { "volume": 0, "attack": 0.01, "release": 0.2 },
-    "crash": { "volume": 0, "attack": 0.01, "release": 0.2 }
+    "piano": { "volume": 0.1, "attack": 0, "release": 0 }, "bass": { "volume": 0, "attack": 2, "release": 5 },
+    "ride": { "volume": 0, "attack": 0, "release": 0 }, "brush": { "volume": 0, "attack": 0.01, "release": 0.2 },
+    "epiano": { "volume": 0, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
+    "snare": { "volume": 0, "attack": 0.01, "release": 0.2 }, "pad": { "volume": 0, "attack": 0.01, "release": 1 },
+    "sax": { "volume": 0, "attack": 0.01, "release": 1 }, "trombone": { "volume": 0, "attack": 0.01, "release": 1 },
+    "eguitar": { "volume": -9, "attack": 0.01, "release": 1, "preGain": -6 },
+    "ebass": { "volume": 0, "attack": 0.01, "release": 1 }, "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 },
+    "rockSnare": { "volume": 0, "attack": 0.01, "release": 0.2 }, "crash": { "volume": 0, "attack": 0.01, "release": 0.2 }
   };
-  tuningParams.value = masterTunedParams;
   
   try {
     const savedParams = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (savedParams) {
-      tuningParams.value = { ...masterTunedParams, ...JSON.parse(savedParams) };
+      const parsed = JSON.parse(savedParams);
+      Object.keys(masterTunedParams).forEach(key => {
+        if (parsed[key]) {
+          masterTunedParams[key] = { ...masterTunedParams[key], ...parsed[key] };
+        }
+      });
     }
   } catch (e) { console.error("Failed to load tuning params", e); }
+  tuningParams.value = masterTunedParams;
 
   try {
     Tone = await import('tone');
     await Tone.start();
     loadingMessage.value = '店内の響きを調整しています...';
     
-    // 【音割れ対策】最終段にリミッターを配置
     limiter = new Tone.Limiter(-0.1).toDestination();
     masterComp = new Tone.Compressor({ threshold: -6, ratio: 2 }).connect(limiter);
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
@@ -103,7 +105,9 @@ const initializeAudio = async () => {
     await reverb.generate();
     chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
     delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
-    guitarPitchShift = new Tone.PitchShift({ pitch: 0 }).connect(distortion);
+    
+    eguitarPreGain = new Tone.Volume(tuningParams.value.eguitar?.preGain ?? -6).connect(distortion);
+    guitarPitchShift = new Tone.PitchShift({ pitch: 0 }).connect(eguitarPreGain);
 
     loadingMessage.value = '楽器を準備しています...';
     
@@ -287,12 +291,10 @@ const createRockSound = (rng: () => number) => {
     const crash = samplers.crash;
     const pitchShift = guitarPitchShift;
 
-    // 【音割れ対策】各楽器の音量を下げてヘッドルームを確保
-    guitar.volume.value = -9;
-    bass.volume.value = -6;
-    kick.volume.value = -3;
-    snare.volume.value = -6;
-    crash.volume.value = -12;
+    bass.volume.value = -3;
+    kick.volume.value = 0;
+    snare.volume.value = -3;
+    crash.volume.value = -9;
 
     Tone.Transport.bpm.value = 125 + rng() * 20;
     let isSolo = false;

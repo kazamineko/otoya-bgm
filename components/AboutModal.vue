@@ -1,5 +1,4 @@
 <template>
-  <!-- isVisibleがtrueの時だけ表示 -->
   <div v-if="isVisible" class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <button class="close-button" @click="close">×</button>
