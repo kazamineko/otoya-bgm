@@ -263,56 +263,71 @@ const createRockSound = (rng: () => number) => {
 
   const kickPatterns = [[1,0,0,1,1,0,1,0,1,0,0,1,1,0,1,0], [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], [1,1,0,1,1,1,0,0,1,1,0,1,1,0,1,0]];
   const snarePatterns = [[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], [0,0,0,0,1,0,0,0,0,0,0,1,1,0,1,0], [0,0,0,0,1,0,0,1,0,0,1,0,1,0,1,0]];
-  const bassRiffs = [[-500,-500,0,0,200,200,0,0,-500,-500,0,0,200,200,-200,-200], [0,0,0,0,200,200,-200,-200,0,0,0,0,200,200,-200,-200]];
+  const bassRiffs = [[-500,-500,0,0,200,200,0,0,-500,-500,0,0,200,200,-200,-200], [0,0,0,0,200,200,-200,-200,0,0,0,0,200,200,-200,-200], [0,200,0,200,-500,0,-500,0,0,200,0,200,-500,0,-200,0]];
+  const guitarRiffs = [[0,null,700,null,500,null,700,null,0,null,700,null,500,null,200,null], [0,null,0,null,500,500,200,null,0,null,0,null,500,500,200,null]];
   
   let kickPattern = kickPatterns[Math.floor(rng() * kickPatterns.length)]!;
   let snarePattern = snarePatterns[Math.floor(rng() * snarePatterns.length)]!;
   let bassRiff = bassRiffs[Math.floor(rng() * bassRiffs.length)]!;
+  let guitarRiff = guitarRiffs[Math.floor(rng() * guitarRiffs.length)]!;
+  
+  let soloState = { isSoloing: false, soloEndBeat: 0 };
+  let lastGuitarNote = 0;
+  const pentatonicScale = [0, 200, 500, 700, 1000];
 
   const scheduleNext = () => {
     if (!isPlaying.value) return;
     const now = audioContext.currentTime;
+    const currentMeasure = Math.floor(beat / 16);
     const c16 = beat % 16;
     
-    if (beat > 0 && beat % 32 === 0) {
+    if (c16 === 0 && currentMeasure > 0) {
       kickPattern = kickPatterns[Math.floor(rng() * kickPatterns.length)]!;
       snarePattern = snarePatterns[Math.floor(rng() * snarePatterns.length)]!;
       bassRiff = bassRiffs[Math.floor(rng() * bassRiffs.length)]!;
+      guitarRiff = guitarRiffs[Math.floor(rng() * guitarRiffs.length)]!;
+    }
+
+    if (!soloState.isSoloing && currentMeasure > 1 && beat % 64 === 0 && rng() < 0.4) {
+        soloState.isSoloing = true;
+        soloState.soloEndBeat = beat + 64;
+    }
+    if (soloState.isSoloing && beat >= soloState.soloEndBeat) {
+        soloState.isSoloing = false;
     }
 
     const timingOffset = (rng() - 0.5) * 0.02;
     const dynamicVol = (baseVol: number) => baseVol * (0.9 + rng() * 0.2);
-    
-    const isMajorFill = (beat % 32) >= 30;
-    const isMinorFill = (beat % 16) >= 14;
 
-    if (isMajorFill && rng() < 0.8) {
+    const isFill = (beat % 32) >= 30;
+    if (isFill && rng() < 0.8) {
         if(c16 % 2 === 0) playSample(instruments.snare!, now + timingOffset, { vol: dynamicVol(0.7), noReverb: true, duration: 0.2 });
         if(c16 % 2 !== 0) playSample(instruments.kick!, now + timingOffset, { vol: dynamicVol(0.9), noReverb: true, duration: 0.2 });
-    } else if (isMinorFill && !isMajorFill && rng() < 0.6) {
-        if(c16 % 2 !== 0) playSample(instruments.snare!, now + timingOffset, { vol: dynamicVol(0.5), noReverb: true, duration: 0.3 });
-    }
-    else {
+    } else {
         if (kickPattern[c16]) playSample(instruments.kick!, now + timingOffset, { vol: dynamicVol(0.8), noReverb: true, duration: 0.5 });
         const isBackBeat = (c16 === 4 || c16 === 12);
-        const snareVol = isBackBeat ? dynamicVol(0.7) : dynamicVol(0.5);
-        if (snarePattern[c16]) playSample(instruments.snare!, now + timingOffset, { vol: snareVol, noReverb: true, duration: 0.5 });
+        if (snarePattern[c16]) playSample(instruments.snare!, now + timingOffset, { vol: dynamicVol(isBackBeat ? 0.7 : 0.5), noReverb: true, duration: 0.5 });
     }
+    if (c16 === 0) playSample(instruments.crash!, now + timingOffset, { vol: dynamicVol(0.5), duration: intervalTime * 8 / 1000 });
 
-    const isBreakTiming = beat > 0 && beat % 32 === 0;
-    if ((c16 === 0 && !isBreakTiming) || (c16 === 8 && rng() < 0.1)) {
-        playSample(instruments.crash!, now + timingOffset, { vol: dynamicVol(0.4), duration: intervalTime * 8 / 1000 });
-    }
-    
-    if (!isBreakTiming) {
-        const bassNote = bassRiff[c16]!;
-        playSample(instruments.bass!, now + timingOffset, { detune: bassNote - 1200, vol: dynamicVol(0.7), noReverb: true, duration: intervalTime / 1000 * 1.5 });
+    playSample(instruments.bass!, now + timingOffset, { detune: bassRiff[c16]! - 1200, vol: dynamicVol(0.7), noReverb: true, duration: intervalTime / 1000 * 1.5 });
 
-        if ((c16 === 0 || c16 === 8) && rng() < 0.6) {
-            const detune = [-500, 0, 200][Math.floor(rng() * 3)]!;
-            playSample(instruments.guitar!, now + timingOffset, { detune: detune, vol: dynamicVol(0.5), duration: intervalTime * 8 / 1000 });
+    if(soloState.isSoloing) {
+        if (rng() < 0.8) {
+            const step = Math.floor(rng() * 4) - 2;
+            let nextNoteIndex = pentatonicScale.indexOf(lastGuitarNote) + step;
+            nextNoteIndex = Math.max(0, Math.min(pentatonicScale.length - 1, nextNoteIndex));
+            const note = pentatonicScale[nextNoteIndex]!;
+            lastGuitarNote = note;
+            playSample(instruments.guitar!, now + timingOffset, { detune: note, vol: dynamicVol(0.6), duration: intervalTime / 1000 * (1 + rng() * 2) });
+        }
+    } else {
+        const guitarNote = guitarRiff[c16];
+        if (guitarNote !== null) {
+            playSample(instruments.guitar!, now + timingOffset, { detune: guitarNote, vol: dynamicVol(0.5), duration: intervalTime * 2 / 1000 });
         }
     }
+    
     beat++;
     soundScheduler = setTimeout(scheduleNext, intervalTime);
   };
@@ -320,7 +335,8 @@ const createRockSound = (rng: () => number) => {
 };
 
 const createJazzSound = (rng: () => number) => {
-  const instruments = { piano: samples.value.piano, bass: samples.value.bass, ride: samples.value.ride, brush: samples.value.brush, sax: samples.value.sax, trombone: samples.value.trombone, flute: samples.value.flute, vibraphone: samples.value.vibraphone, organ: samples.value.organ };
+  // ★★★ 修正箇所: ドラムソロで使うsnareを追加 ★★★
+  const instruments = { piano: samples.value.piano, bass: samples.value.bass, ride: samples.value.ride, brush: samples.value.brush, sax: samples.value.sax, trombone: samples.value.trombone, flute: samples.value.flute, vibraphone: samples.value.vibraphone, organ: samples.value.organ, snare: samples.value.snare };
   for(const [name, buffer] of Object.entries(instruments)) { if (!buffer) { return; } }
 
   let beat = 0;
@@ -328,11 +344,11 @@ const createJazzSound = (rng: () => number) => {
   const beatsPerMeasure = 4;
   
   type ChordName = 'Dm7' | 'G7' | 'Cmaj7' | 'Am7';
-  const chordDefs: Record<ChordName, { root: number; notes: number[]; scale: number[] }> = {
-    'Cmaj7': { root: 0,   notes: [0, 400, 700, 1100], scale: [0, 200, 400, 500, 700, 900, 1100] },
-    'Am7':   { root: 900, notes: [0, 300, 700, 1000], scale: [0, 200, 300, 500, 700, 800, 1000] },
-    'Dm7':   { root: 200, notes: [0, 300, 700, 1000], scale: [0, 200, 300, 500, 700, 900, 1000] },
-    'G7':    { root: 700, notes: [0, 400, 700, 1000], scale: [0, 200, 400, 500, 700, 900, 1000] },
+  const chordDefs: Record<ChordName, { root: number; notes: number[]; scale: number[], pianoVoicing: number[] }> = {
+    'Cmaj7': { root: 0,   notes: [0, 400, 700, 1100], scale: [0, 200, 400, 500, 700, 900, 1100], pianoVoicing: [400, 700, 1100, 1400] },
+    'Am7':   { root: 900, notes: [0, 300, 700, 1000], scale: [0, 200, 300, 500, 700, 800, 1000], pianoVoicing: [300, 700, 1000, 1400] },
+    'Dm7':   { root: 200, notes: [0, 300, 700, 1000], scale: [0, 200, 300, 500, 700, 900, 1000], pianoVoicing: [300, 700, 1000, 1400] },
+    'G7':    { root: 700, notes: [0, 400, 700, 1000], scale: [0, 200, 400, 500, 700, 900, 1000], pianoVoicing: [400, 700, 1000, 1300] },
   };
   const progressionA: ChordName[] = ['Cmaj7', 'Am7', 'Dm7', 'G7'];
   const progressionB: ChordName[] = ['Am7', 'Dm7', 'G7', 'Cmaj7'];
@@ -340,6 +356,7 @@ const createJazzSound = (rng: () => number) => {
 
   let currentSoloInstrument: any = null;
   let lastSoloNote = 700;
+  let soloState = { isSoloing: false, soloEndBeat: 0, currentSoloist: 'sax' as 'sax' | 'drums' };
 
   const scheduleNextBeat = () => {
     if (!isPlaying.value) return;
@@ -353,58 +370,69 @@ const createJazzSound = (rng: () => number) => {
     const currentMeasure = Math.floor(beat / beatsPerMeasure);
     const currentBeatInMeasure = beat % beatsPerMeasure;
     
-    const isSectionA = (currentMeasure % 8) < 4;
-    const progression = isSectionA ? progressionA : progressionB;
+    const isThematicSection = (currentMeasure % 8) < 4;
+    if (currentBeatInMeasure === 0 && currentMeasure > 0 && currentMeasure % 8 === 0) {
+        if (rng() < 0.3) {
+            soloState.currentSoloist = 'drums';
+            soloState.isSoloing = true;
+            soloState.soloEndBeat = beat + 16;
+        } else {
+            soloState.currentSoloist = 'sax';
+            soloState.isSoloing = false;
+        }
+    }
+    if (soloState.currentSoloist === 'drums' && beat >= soloState.soloEndBeat) {
+        soloState.isSoloing = false;
+        soloState.currentSoloist = 'sax';
+    }
+
+    const progression = isThematicSection ? progressionA : progressionB;
     const currentChordName = progression[currentMeasure % 4]!;
     const currentChord = chordDefs[currentChordName];
-    const nextChordName = progression[(currentMeasure + 1) % 4]!;
-    const nextChord = chordDefs[nextChordName];
 
     const timingOffset = (rng() - 0.5) * 0.03;
     const dynamicVol = (baseVol: number) => baseVol * (0.8 + rng() * 0.4);
 
-    if (!isOffBeat) playSample(instruments.ride!, beatStartTime + timingOffset, { vol: dynamicVol(0.25), noReverb: true, duration: 0.5 });
-    if (isOffBeat) playSample(instruments.brush!, beatStartTime + timingOffset, { vol: dynamicVol(0.25), noReverb: true, duration: 0.2 });
-
-    // Bass
-    if (currentBeatInMeasure === 0) {
-      playSample(instruments.bass!, beatStartTime + timingOffset, { detune: currentChord.root - 2400, vol: dynamicVol(0.7), duration: beatDuration });
-    } else if (currentBeatInMeasure === 3) {
-      const approachNote = nextChord.root + (rng() < 0.5 ? 100 : -100);
-      playSample(instruments.bass!, beatStartTime + timingOffset, { detune: approachNote - 2400, vol: dynamicVol(0.6), duration: beatDuration });
-    } else if (rng() < 0.7) {
-      const bassNote = currentChord.scale[Math.floor(rng() * currentChord.scale.length)]!;
-      playSample(instruments.bass!, beatStartTime + timingOffset, { detune: currentChord.root + bassNote - 2400, vol: dynamicVol(0.6), duration: beatDuration });
-    }
-    
-    const playChordProb = isSectionA ? 0.6 : 0.35; 
-    if (currentBeatInMeasure === 0 && rng() < playChordProb) {
-      const chordInst = rng() < 0.7 ? instruments.piano! : instruments.organ!;
-      const noteCount = isSectionA ? 3 : 2;
-      for (let i = 0; i < noteCount; i++) {
-        const noteOffset = currentChord.notes[Math.floor(rng() * currentChord.notes.length)]!;
-        if (rng() < 0.85) playSample(chordInst, beatStartTime + timingOffset + rng() * 0.05, { detune: currentChord.root + noteOffset - 2400, vol: dynamicVol(0.35), duration: beatDuration * (3 + rng()*2) });
-      }
+    if (soloState.currentSoloist === 'drums') {
+        if(rng() < 0.8) playSample(instruments.snare!, beatStartTime, {vol: dynamicVol(0.4), noReverb: true, duration: beatDuration * (0.5 + rng())});
+        if(rng() < 0.3) playSample(instruments.ride!, beatStartTime, {vol: dynamicVol(0.3), noReverb: true, duration: beatDuration});
+    } else {
+        if (!isOffBeat) playSample(instruments.ride!, beatStartTime + timingOffset, { vol: dynamicVol(0.25), noReverb: true, duration: 0.5 });
+        if (isOffBeat) playSample(instruments.brush!, beatStartTime + timingOffset, { vol: dynamicVol(0.25), noReverb: true, duration: 0.2 });
     }
 
-    // Solo
-    if (!isSectionA) {
-        if (beat % 32 === 16) {
-            const soloInstruments = [{ inst: instruments.sax!, vol: 0.6, detune: 0 }, { inst: instruments.vibraphone!, vol: 0.4, detune: 0 }, { inst: instruments.trombone!, vol: 0.5, detune: -1200 }];
-            currentSoloInstrument = soloInstruments[Math.floor(rng() * soloInstruments.length)]!;
+    if (soloState.currentSoloist !== 'drums') {
+        if (currentBeatInMeasure === 0) {
+          playSample(instruments.bass!, beatStartTime + timingOffset, { detune: currentChord.root - 2400, vol: dynamicVol(0.7), duration: beatDuration });
+        } else if (rng() < 0.7) {
+          const bassNote = currentChord.scale[Math.floor(rng() * currentChord.scale.length)]!;
+          playSample(instruments.bass!, beatStartTime + timingOffset, { detune: currentChord.root + bassNote - 2400, vol: dynamicVol(0.6), duration: beatDuration });
         }
         
-        if (rng() < 0.65 && currentSoloInstrument) {
-            let note;
-            const step = Math.floor(rng() * 3) - 1;
-            const currentScale = rng() < 0.1 ? keyOfCBlueNotes : currentChord.scale;
-            let nextNoteIndex = currentScale.indexOf(lastSoloNote) + step;
-            nextNoteIndex = Math.max(0, Math.min(currentScale.length - 1, nextNoteIndex));
-            note = currentScale[nextNoteIndex]!;
-            lastSoloNote = note;
+        const playChordProb = isThematicSection ? 0.6 : 0.35; 
+        if (currentBeatInMeasure === 0 && rng() < playChordProb) {
+          const chordInst = rng() < 0.7 ? instruments.piano! : instruments.organ!;
+          currentChord.pianoVoicing.forEach(noteOffset => {
+              if (rng() < 0.8) playSample(chordInst, beatStartTime + timingOffset + rng()*0.05, { detune: currentChord.root + noteOffset - 1200, vol: dynamicVol(0.4), duration: beatDuration * (3 + rng()*2) });
+          });
+        }
 
-            const duration = beatDuration * (1 + rng() * 1.5);
-            playSample(currentSoloInstrument.inst, beatStartTime + timingOffset, { detune: currentChord.root + note + currentSoloInstrument.detune, vol: dynamicVol(currentSoloInstrument.vol), duration });
+        if (!isThematicSection) {
+            if (beat % 32 === 16) {
+                const soloInstruments = [{ inst: instruments.sax!, vol: 0.6, detune: 0 }, { inst: instruments.vibraphone!, vol: 0.4, detune: 0 }, { inst: instruments.trombone!, vol: 0.5, detune: -1200 }];
+                currentSoloInstrument = soloInstruments[Math.floor(rng() * soloInstruments.length)]!;
+            }
+            if (rng() < 0.65 && currentSoloInstrument) {
+                const step = Math.floor(rng() * 3) - 1;
+                const currentScale = rng() < 0.1 ? keyOfCBlueNotes : currentChord.scale;
+                let nextNoteIndex = currentScale.indexOf(lastSoloNote) + step;
+                nextNoteIndex = Math.max(0, Math.min(currentScale.length - 1, nextNoteIndex));
+                const note = currentScale[nextNoteIndex]!;
+                lastSoloNote = note;
+
+                const duration = beatDuration * (1 + rng() * 1.5);
+                playSample(currentSoloInstrument.inst, beatStartTime + timingOffset, { detune: currentChord.root + note + currentSoloInstrument.detune, vol: dynamicVol(currentSoloInstrument.vol), duration });
+            }
         }
     }
     
@@ -415,7 +443,6 @@ const createJazzSound = (rng: () => number) => {
 };
 </script>
 
-<!-- ★★★ 修正箇所: template全体をdivで囲む ★★★ -->
 <template>
   <div>
     <div class="background-container">
