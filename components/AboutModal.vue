@@ -19,15 +19,12 @@
 </template>
 
 <script setup lang="ts">
-// このコンポーネントが受け取るプロパティを定義
 defineProps<{
   isVisible: boolean;
 }>();
 
-// 親コンポーネントにイベントを伝えるための`emit`を定義
 const emit = defineEmits(['close']);
 
-// closeイベントを発行する関数
 const close = () => {
   emit('close');
 };

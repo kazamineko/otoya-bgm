@@ -56,6 +56,7 @@
 </template>
 
 <script setup lang="ts">
+// 【修正】Decay/Sustainを削除した正しい型定義
 type TuningParams = Record<string, { volume: number; attack: number; release: number }>;
 
 defineProps<{

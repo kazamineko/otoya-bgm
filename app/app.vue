@@ -195,6 +195,10 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw') 
   }
 
   if (type === 'sampler' && samplers[instrumentName]) {
+    // 【修正】eguitarのテスト再生時もピッチシフト（原音程）を必ず通す
+    if (instrumentName === 'eguitar' && guitarPitchShift) {
+      guitarPitchShift.pitch = 0; // C4の音を鳴らすのでピッチは0
+    }
     samplers[instrumentName]!.triggerAttackRelease('C4', '1n');
   } else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) {
     const player = rawSamplePlayers.player(instrumentName);
@@ -284,18 +288,12 @@ const createRockSound = (rng: () => number) => {
     Tone.Transport.bpm.value = 125 + rng() * 20;
     let isSolo = false;
     
-    const bluesScale = [0, 3, 5, 6, 7, 10]; // Cマイナー・ブルーススケール (半音)
+    const bluesScale = [0, 3, 5, 6, 7, 10]; 
 
-    // 【修正】ドラムパターンを復元
     const drumPattern = [
         { time: '0:0', note: 'kick' }, { time: '0:0', note: 'crash' }, 
-        { time: '0:1', note: 'kick' },
-        { time: '0:2', note: 'snare', accent: true },
-        { time: '0:3', note: 'kick' },
-        { time: '1:0', note: 'kick' },
-        { time: '1:1', note: 'snare' },
-        { time: '1:2', note: 'kick' },
-        { time: '1:3', note: 'snare', accent: true },
+        { time: '0:1', note: 'kick' }, { time: '0:2', note: 'snare', accent: true }, { time: '0:3', note: 'kick' },
+        { time: '1:0', note: 'kick' }, { time: '1:1', note: 'snare' }, { time: '1:2', note: 'kick' }, { time: '1:3', note: 'snare', accent: true },
     ];
     const drumPart = new Tone.Part<{ time: string, note: string, accent?: boolean }>((time, value) => {
         const vel = value.accent ? 1.0 : 0.8;
@@ -309,7 +307,13 @@ const createRockSound = (rng: () => number) => {
         if(note) bass.triggerAttackRelease(note, '8n', time, 0.9);
     }, ['G1', 'G1', 'C2', 'C2', 'D#1', 'D#1', 'F1', 'F1'], "8n").start(0);
 
-    // 【修正】サステインとピッキングニュアンスをtriggerAttackReleaseで正しく実装
+    // 【修正】多様なリフのパターンを用意
+    const guitarRiffPatterns = [
+        [ { time: '0:0', pitch: 0 }, { time: '0:2', pitch: 3 }, { time: '0:3', pitch: 5 } ],
+        [ { time: '0:0', pitch: 7 }, { time: '0:2', pitch: 5 }, { time: '0:3', pitch: 3 } ],
+    ];
+    const guitarRiff = guitarRiffPatterns[Math.floor(rng() * guitarRiffPatterns.length)]!;
+
     const guitarPart = new Tone.Part<{ time: string, pitch: number, isUpBeat?: boolean }>((time, value) => {
         const vel = value.isUpBeat ? 0.7 + rng() * 0.1 : 0.9 + rng() * 0.1;
 
@@ -319,19 +323,10 @@ const createRockSound = (rng: () => number) => {
             guitar.triggerAttackRelease('C4', '16n', time, vel);
         } else {
             pitchShift.pitch = value.pitch;
-            guitar.triggerAttackRelease('C4', '8n', time, vel);
+            guitar.triggerAttackRelease('C4', '4n', time, vel); // 8nから4nに伸ばしてサステインを強調
         }
-    }, [
-        { time: '0:0:0', pitch: 0 }, { time: '0:0:2', pitch: 0 },
-        { time: '0:1:0', pitch: 7, isUpBeat: true }, { time: '0:1:2', pitch: 7 },
-        { time: '0:2:0', pitch: 0 }, { time: '0:2:2', pitch: 0 },
-        { time: '0:3:0', pitch: 7, isUpBeat: true }, { time: '0:3:2', pitch: 7 },
-        { time: '1:0:0', pitch: 3 }, { time: '1:0:2', pitch: 3 },
-        { time: '1:1:0', pitch: 10, isUpBeat: true }, { time: '1:1:2', pitch: 10 },
-        { time: '1:2:0', pitch: 3 }, { time: '1:2:2', pitch: 3 },
-        { time: '1:3:0', pitch: 10, isUpBeat: true }, { time: '1:3:2', pitch: 10 },
-    ]).start(0);
-    guitarPart.loop = true; guitarPart.loopEnd = '2m';
+    }, guitarRiff).start(0);
+    guitarPart.loop = true; guitarPart.loopEnd = '1m';
     
     const soloToggle = new Tone.Loop(() => { isSolo = !isSolo; }, '4m').start('2m');
     scheduledEvents.push(drumPart, bassPart, guitarPart, soloToggle);
