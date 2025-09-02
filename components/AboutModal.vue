@@ -1,88 +1,74 @@
 <template>
-  <!-- isVisibleがtrueの時だけ表示 -->
-  <div v-if="isVisible" class="modal-overlay" @click.self="close">
+  <div v-if="isVisible" class="modal-backdrop">
     <div class="modal-content">
-      <button class="close-button" @click="close">×</button>
-      <h2>当店のBGMについて</h2>
-      <p>
-        当店のBGMは、マスター（AI）がお客様のためだけにその場で生み出す、世界に一つのオリジナル曲です。
-      </p>
-      <p>
-        そのため、いかなる著作権も発生いたしません。
-        店舗でのご利用も、個人でのご利用も、申請や料金支払いなしに、ご自由にお楽しみいただけます。
-      </p>
-      <p class="signature">
-        喫茶「おとや」マスター敬白
-      </p>
+      <header class="modal-header">
+        <h2>このBGMについて</h2>
+        <button class="close-button" @click="$emit('close')" aria-label="閉じる">×</button>
+      </header>
+
+      <section class="modal-body">
+        <p>「AI-BGM 喫茶 おとや」は、Tone.js を用いてブラウザ内でBGMを自動生成するアプリです。生成された音源は著作権フリーです。</p>
+        <ul>
+          <li>処理はすべてお使いの端末上で完結します（サーバー送信なし）。</li>
+          <li>音量にはご注意ください。初回は中程度に設定しています。</li>
+          <li>生成は確率的に行われるため、同じメニューでも表情が変化します。</li>
+        </ul>
+        <p class="small">Powered by Tone.js</p>
+      </section>
+
+      <footer class="modal-footer">
+        <button class="primary" @click="$emit('close')">閉じる</button>
+      </footer>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// このコンポーネントが受け取るプロパティを定義
-defineProps<{
-  isVisible: boolean;
-}>();
+const props = defineProps<{
+  isVisible: boolean
+}>()
 
-// 親コンポーネントにイベントを伝えるための`emit`を定義
-const emit = defineEmits(['close']);
-
-// closeイベントを発行する関数
-const close = () => {
-  emit('close');
-};
+const emit = defineEmits<{
+  (e: 'close'): void
+}>()
 </script>
 
 <style scoped>
-.modal-overlay {
+.modal-backdrop {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: grid;
+  place-items: center;
   z-index: 1000;
 }
 
 .modal-content {
-  background-color: #fff;
-  padding: 30px 40px;
-  border-radius: 8px;
-  box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-  max-width: 500px;
-  width: 90%;
-  position: relative;
-  font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif;
-  color: #333;
+  width: min(640px, 92vw);
+  background: #3d2e29;
+  color: #f3e6d0;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  box-shadow: 0 6px 28px rgba(0,0,0,0.4);
 }
 
-.modal-content h2 {
-  text-align: center;
-  margin-top: 0;
-  margin-bottom: 25px;
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 
-.modal-content p {
-  line-height: 1.8;
-  text-align: justify;
+.modal-body { padding: 16px; }
+.modal-body .small { opacity: 0.8; font-size: 0.9rem; }
+
+.modal-footer {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.08);
 }
 
+button.primary {
+  background: #5b4236; color: #f3e6d0; border: none; padding: 8px 12px; border-radius: 12px;
+}
 .close-button {
-  position: absolute;
-  top: 10px;
-  right: 15px;
-  background: none;
-  border: none;
-  font-size: 28px;
-  cursor: pointer;
-  color: #888;
-}
-
-.signature {
-  text-align: right;
-  margin-top: 30px;
+  background: transparent; border: none; color: #f3e6d0; font-size: 20px; cursor: pointer;
 }
 </style>
