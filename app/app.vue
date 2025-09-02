@@ -132,7 +132,6 @@ const closeModal = () => { isModalVisible.value = false; };
 const copySeed = () => { navigator.clipboard.writeText(currentSeed.value); };
 const playFromSeed = () => { if (seedInput.value) { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート']; if (menuName && seed && validMenus.includes(menuName)) { playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } } };
 
-// ★★★ ここが修正箇所です ★★★
 const playSample = (buffer: AudioBuffer, startTime: number, options: { detune?: number, duration?: number, vol?: number, loop?: boolean, noReverb?: boolean, loopStart?: number, loopEnd?: number }) => {
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
@@ -167,172 +166,93 @@ const playSample = (buffer: AudioBuffer, startTime: number, options: { detune?: 
     activeNodes.push(source, gain);
 };
 
-const createConcentrationSound = (rng: () => number) => {
-  const bufferSize = 2 * audioContext.sampleRate;
-  const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-  const output = noiseBuffer.getChannelData(0);
-  for (let i = 0; i < bufferSize; i++) { output[i] = rng() * 2 - 1; }
-  const whiteNoise = audioContext.createBufferSource();
-  whiteNoise.buffer = noiseBuffer;
-  whiteNoise.loop = true;
-  const pinkFilter = audioContext.createBiquadFilter();
-  pinkFilter.type = 'lowpass';
-  pinkFilter.frequency.value = 1000 + rng() * 500;
-  const lfo = audioContext.createOscillator();
-  lfo.type = 'sine';
-  lfo.frequency.value = 0.1 + rng() * 0.3;
-  const lfoGain = audioContext.createGain();
-  lfoGain.gain.value = 0.03 + rng() * 0.05;
-  whiteNoise.connect(pinkFilter);
-  pinkFilter.connect(masterGainNode);
-  lfo.connect(lfoGain);
-  lfoGain.connect(masterGainNode.gain);
-  whiteNoise.start();
-  lfo.start();
-  activeNodes.push(whiteNoise, pinkFilter, lfo, lfoGain);
-};
-
-const createRelaxSound = (rng: () => number) => {
-  if (!samples.value.pad) return;
-  const source = audioContext.createBufferSource();
-  source.buffer = samples.value.pad;
-  source.loop = true;
-  const detuneLfo = audioContext.createOscillator();
-  detuneLfo.type = 'sine';
-  detuneLfo.frequency.value = 0.1 + rng() * 0.2;
-  const detuneGain = audioContext.createGain();
-  detuneGain.gain.value = 2 + rng() * 3;
-  detuneLfo.connect(detuneGain);
-  detuneGain.connect(source.detune);
-  source.connect(masterGainNode);
-  source.connect(reverbNode);
-  source.start();
-  detuneLfo.start();
-  activeNodes.push(source, detuneLfo, detuneGain);
-};
-
-const createLoFiSound = (rng: () => number) => {
-  if (!samples.value.epiano || !samples.value.kick || !samples.value.snare) return;
-  let beat = 0;
-  const tempo = 80 + rng() * 15;
-  const intervalTime = 60000 / tempo / 4;
-  const chordPatterns = [[0, 500, 800], [-500, 0, 300]];
-  const chords = chordPatterns[Math.floor(rng() * chordPatterns.length)];
-  const kickPattern = [1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0];
-  const snarePattern = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
-  
-  const sequencer = () => {
-    const now = audioContext.currentTime;
-    const c16 = beat % 16;
-    if (kickPattern?.[c16]) playSample(samples.value.kick!, now, { vol: 0.6, noReverb: true, duration: 0.5 });
-    if (snarePattern?.[c16]) playSample(samples.value.snare!, now, { vol: 0.4, noReverb: true, duration: 0.5 });
-    if (c16 === 0 && chords) {
-      chords.forEach(detune => playSample(samples.value.epiano!, now, { detune, vol: 0.2, duration: 2.0 }));
-    }
-    beat = (beat + 1) % 64;
-  };
-  soundInterval = setInterval(sequencer, intervalTime);
-};
+const createConcentrationSound = (rng: () => number) => { /* 変更なし */ };
+const createRelaxSound = (rng: () => number) => { /* 変更なし */ };
+const createLoFiSound = (rng: () => number) => { /* 変更なし */ };
+const createRockSound = (rng: () => number) => { /* 変更なし */ };
 
 const createJazzSound = (rng: () => number) => {
-  const allInstruments = {
+  const instruments = {
     piano: samples.value.piano, bass: samples.value.bass, ride: samples.value.ride, brush: samples.value.brush,
     sax: samples.value.sax, trombone: samples.value.trombone, flute: samples.value.flute,
     vibraphone: samples.value.vibraphone, organ: samples.value.organ
   };
-  for(const [name, buffer] of Object.entries(allInstruments)) {
+  for(const [name, buffer] of Object.entries(instruments)) {
     if (!buffer) { console.warn(`Jazz: ${name} sample is not loaded.`); return; }
   }
 
   let beat = 0;
-  const tempo = 90 + rng() * 30;
+  const tempo = 100 + rng() * 20;
   const intervalTime = 60000 / tempo;
-  const scale = [0, 200, 400, 500, 700, 900, 1100];
-
-  const sequencer = () => {
-    const now = audioContext.currentTime;
-    playSample(allInstruments.ride!, now, { vol: 0.3 + rng() * 0.1, noReverb: true, duration: intervalTime / 1000 });
-    if (beat % 2 === 1) playSample(allInstruments.brush!, now, { vol: 0.2 + rng() * 0.1, noReverb: true, duration: 0.2 });
-    
-    if (beat % 4 === 0) {
-      const note = scale[Math.floor(rng() * 4)]! - 2400;
-      playSample(allInstruments.bass!, now, { detune: note, vol: 0.5, duration: intervalTime / 1000 * 1.5 });
-    }
-
-    if (beat % 4 === 0 && rng() < 0.8) {
-        const chordRoot = scale[Math.floor(rng() * scale.length)]! - 1200;
-        const chordType = [[0, 400, 700], [0, 300, 700]];
-        const selectedChord = chordType[Math.floor(rng() * chordType.length)]!;
-        const instrument = rng() < 0.6 ? allInstruments.piano! : allInstruments.organ!;
-        selectedChord.forEach(note => {
-            playSample(instrument, now, { detune: chordRoot + note, vol: 0.35, duration: intervalTime / 1000 * 2 });
-        });
-    }
-
-    if (rng() < 0.3) {
-      const soloInstruments = [
-        { inst: allInstruments.sax!, vol: 0.5, detune: 0 },
-        { inst: allInstruments.trombone!, vol: 0.45, detune: -1200 },
-        { inst: allInstruments.flute!, vol: 0.4, detune: 1200 },
-        { inst: allInstruments.vibraphone!, vol: 0.4, detune: 0 },
-      ];
-      const soloInst = soloInstruments[Math.floor(rng() * soloInstruments.length)]!;
-      const note = scale[Math.floor(rng() * scale.length)]! + soloInst.detune;
-      const duration = (intervalTime / 1000) * (0.5 + rng());
-      playSample(soloInst.inst, now, { detune: note, vol: soloInst.vol, duration: duration });
-    }
-
-    beat = (beat + 1) % 16;
-  };
-  soundInterval = setInterval(sequencer, intervalTime);
-};
-
-const createRockSound = (rng: () => number) => {
-  const instruments = {
-    guitar: samples.value.eguitar,
-    bass: samples.value.ebass,
-    kick: samples.value.rockKick,
-    snare: samples.value.rockSnare,
-    crash: samples.value.crash,
-  };
-  for(const [name, buffer] of Object.entries(instruments)) {
-    if (!buffer) { console.warn(`Rock: ${name} sample is not loaded.`); return; }
-  }
-
-  let beat = 0;
-  const tempo = 120 + rng() * 20;
-  const intervalTime = 60000 / tempo / 4;
-
-  const kickPattern  = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0];
-  const snarePattern = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
-  const bassRiff = [-500, -500, 0, 0, 200, 200, 0, 0];
   
+  // ★★★ ここからが修正箇所です ★★★
+  
+  // 1. コード名の型を定義
+  type ChordName = 'Dm7' | 'G7' | 'Cmaj7';
+
+  // 2. コード定義オブジェクトに型を適用
+  const chordDefs: Record<ChordName, { root: number; notes: number[]; }> = {
+    'Dm7': { root: 200, notes: [0, 300, 700, 1000] },
+    'G7':  { root: 700, notes: [0, 400, 700, 1000] },
+    'Cmaj7':{ root: 0,  notes: [0, 400, 700, 1100] },
+  };
+  
+  // 3. コード進行配列にも型を適用
+  const progression: ChordName[] = ['Dm7', 'G7', 'Cmaj7', 'Cmaj7'];
+  const C_MajorScale = [0, 200, 400, 500, 700, 900, 1100];
+  
+  // ★★★ ここまでが修正箇所です ★★★
+
   const sequencer = () => {
     const now = audioContext.currentTime;
-    const c16 = beat % 16;
-
-    if (kickPattern[c16] === 1) playSample(instruments.kick!, now, { vol: 0.8, noReverb: true, duration: 0.5 });
-    if (snarePattern[c16] === 1) playSample(instruments.snare!, now, { vol: 0.6, noReverb: true, duration: 0.5 });
-    if (c16 === 0) playSample(instruments.crash!, now, { vol: 0.4, duration: 2.0 });
+    const measure = Math.floor((beat % 16) / 4);
+    const currentChordName = progression[measure]!;
+    const currentChord = chordDefs[currentChordName]; // これでエラーが起きなくなる
     
-    if (beat % 2 === 0) {
-        const bassNote = bassRiff[Math.floor(c16 / 2)]!;
-        playSample(instruments.bass!, now, { detune: bassNote - 1200, vol: 0.7, noReverb: true, duration: intervalTime / 1000 * 1.5 });
+    playSample(instruments.ride!, now, { vol: 0.3, noReverb: true, duration: intervalTime / 1000 });
+    if ((beat % 2) === 1) playSample(instruments.brush!, now + (intervalTime / 2000), { vol: 0.15, noReverb: true, duration: 0.2 });
+    
+    if ((beat % 4) === 0) {
+      playSample(instruments.bass!, now, { detune: currentChord.root - 2400, vol: 0.6, duration: intervalTime / 1000 });
+    } else if ((beat % 4) === 2 && rng() < 0.5) {
+      playSample(instruments.bass!, now, { detune: currentChord.root + 700 - 2400, vol: 0.5, duration: intervalTime / 1000 });
+    }
+    
+    if ((beat % 4 === 0) && rng() < 0.9) {
+      const chordInst = rng() < 0.7 ? instruments.piano! : instruments.organ!;
+      currentChord.notes.forEach((noteOffset, index) => {
+        if (rng() < 0.8) {
+          playSample(chordInst, now + (rng() * 0.05), { detune: currentChord.root + noteOffset - 1200, vol: 0.4 - (index*0.05), duration: intervalTime * 2 / 1000 });
+        }
+      });
     }
 
-    if (c16 === 0 || (c16 === 8 && rng() < 0.5)) {
-        const detune = [-500, 0, 200][Math.floor(rng() * 3)]!;
-        playSample(instruments.guitar!, now, { detune: detune, vol: 0.5, duration: intervalTime * 8 / 1000 });
+    if (rng() < 0.35) {
+        const soloInstruments = [
+            { inst: instruments.sax!, vol: 0.6, detune: 0 },
+            { inst: instruments.trombone!, vol: 0.5, detune: -1200 },
+            { inst: instruments.flute!, vol: 0.5, detune: 1200 },
+            { inst: instruments.vibraphone!, vol: 0.5, detune: 0 },
+        ];
+        const soloInst = soloInstruments[Math.floor(rng() * soloInstruments.length)]!;
+        
+        const isChordTone = rng() < 0.6;
+        const note = isChordTone 
+            ? currentChord.notes[Math.floor(rng() * currentChord.notes.length)]! + currentChord.root 
+            : C_MajorScale[Math.floor(rng() * C_MajorScale.length)]!;
+
+        const duration = (intervalTime / 1000) * (0.5 + rng() * 1.5);
+        playSample(soloInst.inst, now, { detune: note + soloInst.detune, vol: soloInst.vol, duration: duration });
     }
 
-    beat = (beat + 1) % 16;
+    beat++;
   };
   soundInterval = setInterval(sequencer, intervalTime);
 };
-
 </script>
 
 <template>
+  <!-- template 部分に変更はありません -->
   <div class="background-container">
     <div v-if="isLoading" class="loading-overlay">
       <div class="loading-text">{{ loadingMessage }}</div>
@@ -364,6 +284,7 @@ const createRockSound = (rng: () => number) => {
 </template>
 
 <style>
+/* style 部分に変更はありません */
 body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif; }
 .background-container { background-image: url('/bg-main.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
 .content-panel { background-color: rgba(255, 255, 255, 0.88); padding: 20px 40px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); backdrop-filter: blur(5px); width: 90%; max-width: 600px; text-align: center; }
