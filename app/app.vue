@@ -4,12 +4,15 @@ import seedrandom from 'seedrandom';
 // Tone.jsの型情報のみを静的にインポートする
 import type * as ToneType from 'tone';
 import AboutModal from '../components/AboutModal.vue';
+import SoundCheckModal from '../components/SoundCheckModal.vue';
 
 // --- 状態変数 ---
 const selectedMenu = ref<string | null>(null);
 const isPlaying = ref(false);
 const volume = ref(0.5);
 const isModalVisible = ref(false);
+const isSoundCheckModalVisible = ref(false);
+const instrumentList = ref<string[]>([]);
 const currentSeed = ref<string>('');
 const seedInput = ref<string>('');
 const isLoading = ref<boolean>(false);
@@ -65,6 +68,8 @@ const initializeAudio = async () => {
             onerror: (error: Error) => reject(error),
         });
     });
+
+    instrumentList.value = Object.keys(samplePaths); // 【修正】samplePathsのキーから楽器リストを生成
 
     const instrumentsToPan = ['piano', 'epiano', 'sax', 'trombone', 'eguitar', 'ebass'];
     instrumentsToPan.forEach(inst => {
@@ -132,10 +137,27 @@ const togglePlayback = async () => { if (isPlaying.value) { stopMusic(); } else 
 const handleVolumeChange = (event: Event) => { const newVolume = parseFloat((event.target as HTMLInputElement).value); volume.value = newVolume; if (isAudioInitialized.value) { Tone!.Destination.volume.value = Tone!.gainToDb(newVolume); } };
 const openModal = () => { isModalVisible.value = true; };
 const closeModal = () => { isModalVisible.value = false; };
+
+const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; };
+const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
+const handlePlaySoundCheck = async (instrumentName: string) => {
+  if (!isAudioInitialized.value) {
+    await initializeAudio();
+    if (!isAudioInitialized.value) {
+        alert('音源の初期化に失敗しました。ページをリロードしてください。');
+        return;
+    }
+  }
+
+  if (players && players.has(instrumentName)) {
+    players.player(instrumentName).start();
+  }
+};
+
 const copySeed = () => { if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value); };
 const playFromSeed = async () => { if (seedInput.value) { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート']; if (menuName && seed && validMenus.includes(menuName)) { await playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } } };
 
-// --- 音楽生成関数 ---
+// --- 音楽生成関数 --- (変更なし)
 
 const createConcentrationSound = (rng: () => number) => {
     if (!Tone || !masterComp) return;
@@ -239,7 +261,6 @@ const createRockSound = (rng: () => number) => {
             guitar.playbackRate = Math.pow(2, note / 1200);
             guitar.start(time, 0, "16n");
         } else {
-            // 【修正】パワーコード奏法のロジックを削除し、単音の再生に修正
             guitar.volume.value = Tone!.gainToDb(0.7);
             guitar.playbackRate = Math.pow(2, value.detune / 1200);
             guitar.start(time, 0, value.dur);
@@ -317,7 +338,6 @@ const createJazzSound = (rng: () => number) => {
         <h1 class="title">AI-BGM 喫茶「おとや」</h1>
         <p class="subtitle">本日のBGMをお選びください</p>
         <div class="menu-container">
-          <!-- 集中ブレンド -->
           <button class="menu-button" @click="playMusic('集中ブレンド')" :class="{ 'is-active': selectedMenu === '集中ブレンド' }">
             <div class="menu-content">
               <span class="menu-title">集中ブレンド</span>
@@ -327,7 +347,6 @@ const createJazzSound = (rng: () => number) => {
               <svg xmlns="http://www.w3.org/2000/svg" :width="24" :height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" :stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
-          <!-- リラックス・デカフェ -->
           <button class="menu-button" @click="playMusic('リラックス・デカフェ')" :class="{ 'is-active': selectedMenu === 'リラックス・デカフェ' }">
             <div class="menu-content">
               <span class="menu-title">リラックス・デカフェ</span>
@@ -337,7 +356,6 @@ const createJazzSound = (rng: () => number) => {
               <svg xmlns="http://www.w3.org/2000/svg" :width="24" :height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" :stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
-          <!-- ジャズ・スペシャル -->
           <button class="menu-button" @click="playMusic('ジャズ・スペシャル')" :class="{ 'is-active': selectedMenu === 'ジャズ・スペシャル' }">
             <div class="menu-content">
               <span class="menu-title">ジャズ・スペシャル</span>
@@ -347,7 +365,6 @@ const createJazzSound = (rng: () => number) => {
               <svg xmlns="http://www.w3.org/2000/svg" :width="24" :height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" :stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
-          <!-- Lo-Fi・ビター -->
           <button class="menu-button" @click="playMusic('Lo-Fi・ビター')" :class="{ 'is-active': selectedMenu === 'Lo-Fi・ビター' }">
             <div class="menu-content">
               <span class="menu-title">Lo-Fi・ビター</span>
@@ -357,7 +374,6 @@ const createJazzSound = (rng: () => number) => {
               <svg xmlns="http://www.w3.org/2000/svg" :width="24" :height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" :stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
-          <!-- ロック・ビート -->
           <button class="menu-button" @click="playMusic('ロック・ビート')" :class="{ 'is-active': selectedMenu === 'ロック・ビート' }">
             <div class="menu-content">
               <span class="menu-title">ロック・ビート</span>
@@ -389,8 +405,15 @@ const createJazzSound = (rng: () => number) => {
     </div>
     <div class="footer-link-container">
       <a href="#" @click.prevent="openModal" class="footer-link">このBGMについて</a>
+      <a href="#" @click.prevent="openSoundCheckModal" class="footer-link">サウンドチェック</a>
     </div>
     <AboutModal :isVisible="isModalVisible" @close="closeModal" />
+    <SoundCheckModal 
+      :isVisible="isSoundCheckModalVisible" 
+      :instruments="instrumentList"
+      @close="closeSoundCheckModal"
+      @playSound="handlePlaySoundCheck" 
+    />
   </div>
 </template>
 
@@ -415,7 +438,7 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hir
 .control-button:hover { background-color: #555; }
 .control-button.is-disabled { background-color: #c5c5c5; cursor: not-allowed; }
 .volume-slider { width: 150px; cursor: pointer; }
-.footer-link-container { position: fixed; bottom: 15px; right: 20px; z-index: 10; }
+.footer-link-container { position: fixed; bottom: 15px; right: 20px; z-index: 10; display: flex; gap: 20px; }
 .footer-link { font-size: 14px; color: rgba(255, 255, 255, 0.7); text-decoration: none; transition: color 0.2s ease; }
 .footer-link:hover { color: rgba(255, 255, 255, 1); }
 .seed-container, .seed-input-container { margin-top: 20px; font-size: 14px; color: #555; }
