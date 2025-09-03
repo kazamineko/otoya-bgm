@@ -77,8 +77,8 @@ const initializeAudio = async () => {
     "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    "eguitar": { "volume": -9, "attack": 0.01, "release": 0.5, "distortion": 0.8 }, 
-    "ebass": { "volume": -6, "attack": 0.01, "release": 0.5 }, 
+    "eguitar": { "volume": -9, "attack": 0.01, "release": 0.5, "distortion": 0.8 },
+    "ebass": { "volume": -6, "attack": 0.01, "release": 0.5 },
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
     "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
@@ -101,14 +101,17 @@ const initializeAudio = async () => {
     await Tone.start();
     loadingMessage.value = '店内の響きを調整しています...';
     
+    // --- Master Output Chain ---
     limiter = new Tone.Limiter(-0.1).toDestination();
     masterComp = new Tone.Compressor({ threshold: -12, ratio: 3 }).connect(limiter);
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
 
-    reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.01, wet: 0.3 });
-    chorus = new Tone.Chorus(4, 2.5, 0.7);
-    delay = new Tone.PingPongDelay("8n", 0.2);
+    // --- Global Effects (Sends) ---
+    reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.01, wet: 0.3 }).connect(masterComp);
+    chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
+    delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
     
+    // --- Instrument Specific Effects ---
     guitarAmp = new Tone.EQ3({ low: -4, mid: 2, high: 4 });
     guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.8);
     guitarPitchShift = new Tone.PitchShift({ pitch: 0 });
@@ -124,23 +127,46 @@ const initializeAudio = async () => {
       const filePath = allSamplePaths[name]!;
       let baseNote = '';
       
-      if (filePath.includes('-c3')) {
-        baseNote = 'C3';
-      } else if (filePath.includes('-e1')) {
-        baseNote = 'E1';
-      } else {
-        baseNote = 'C4';
-      }
+      if (filePath.includes('-c3')) { baseNote = 'C3'; }
+      else if (filePath.includes('-e1')) { baseNote = 'E1'; }
+      else { baseNote = 'C4'; }
       urls[baseNote] = filePath;
 
       const sampler = new Tone.Sampler({
-        urls,
-        baseUrl: "/",
-        volume: params.volume,
-        attack: params.attack,
-        release: params.release,
+        urls, baseUrl: "/", volume: params.volume,
+        attack: params.attack, release: params.release,
       });
 
+      // --- Audio Routing ---
+      switch(name) {
+        case 'eguitar':
+          sampler.chain(guitarPitchShift, guitarDistortion, guitarAmp);
+          guitarAmp.fan(masterComp, reverb, delay); // Send to master and effects
+          break;
+        case 'ebass':
+          sampler.chain(bassEQ, bassComp, masterComp);
+          break;
+        case 'kick':
+        case 'rockKick':
+        case 'tomHigh':
+        case 'tomMid':
+        case 'tomFloor':
+          sampler.connect(masterComp); // Dry and punchy
+          break;
+        case 'snare':
+        case 'rockSnare':
+        case 'crash':
+        case 'ride':
+        case 'brush':
+           sampler.fan(masterComp, reverb); // A bit of reverb
+          break;
+        case 'pad':
+          sampler.chain(reverb, masterComp); // Lush reverb
+          break;
+        default: // For piano, epiano, sax, trombone etc.
+          sampler.fan(masterComp, reverb, chorus, delay); // Send to all effects
+          break;
+      }
       samplers[name] = { sampler, baseNote };
     }
     
@@ -148,6 +174,7 @@ const initializeAudio = async () => {
         const p = new Tone!.Players({ urls: allSamplePaths, baseUrl: "/", onload: () => resolve(p) }).toDestination();
     });
 
+    await Tone.loaded();
     isAudioInitialized.value = true;
     loadingMessage.value = '準備ができました';
 
@@ -267,19 +294,16 @@ const createConcentrationSound = (rng: () => number) => {
 };
 
 const createRelaxSound = (rng: () => number) => {
-    if (!samplers.pad || !reverb || !masterComp) return;
+    if (!samplers.pad) return;
     const padSampler = samplers.pad.sampler;
-    padSampler.chain(reverb, masterComp);
     padSampler.triggerAttack('C4');
 };
 
 const createLoFiSound = (rng: () => number) => {
-    if (!Tone || !samplers.epiano || !samplers.kick || !samplers.snare || !chorus || !masterComp) return;
+    if (!Tone || !samplers.epiano || !samplers.kick || !samplers.snare) return;
     const epiano = samplers.epiano.sampler;
     const kick = samplers.kick.sampler;
     const snare = samplers.snare.sampler;
-
-    epiano.chain(chorus, masterComp);
 
     Tone.Transport.bpm.value = 80 + rng() * 15;
     const chords = [['C2', 'Eb2', 'G2'], ['A1', 'C2', 'E2']];
@@ -371,14 +395,11 @@ const createRockSound = (rng: () => number) => {
 };
 
 const createJazzSound = (rng: () => number) => {
-    if (!Tone || !samplers.piano || !samplers.bass || !samplers.ride || !samplers.sax || !reverb || !delay || !masterComp) return;
+    if (!Tone || !samplers.piano || !samplers.bass || !samplers.ride || !samplers.sax) return;
     const piano = samplers.piano.sampler;
     const bass = samplers.bass.sampler;
     const ride = samplers.ride.sampler;
     const sax = samplers.sax.sampler;
-
-    piano.chain(reverb, masterComp);
-    sax.chain(delay, masterComp);
 
     Tone.Transport.bpm.value = 100 + rng() * 20;
     Tone.Transport.swing = 0.05;
