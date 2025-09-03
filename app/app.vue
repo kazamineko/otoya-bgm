@@ -27,7 +27,7 @@ let delay: ToneType.PingPongDelay | null = null;
 let masterComp: ToneType.Compressor | null = null;
 let limiter: ToneType.Limiter | null = null;
 let guitarPitchShift: ToneType.PitchShift | null = null;
-let guitarDistortion: ToneType.Distortion | null = null; // 【追加】ギター専用のDistortion
+let guitarDistortion: ToneType.Distortion | null = null;
 let guitarAmp: ToneType.EQ3 | null = null;
 let bassComp: ToneType.Compressor | null = null;
 let bassEQ: ToneType.EQ3 | null = null;
@@ -35,7 +35,6 @@ const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
-// 【修正】eguitarにdistortionを追加
 type TuningParams = Record<string, { volume: number; attack: number; release: number; distortion?: number }>;
 
 const tuningParams = ref<TuningParams>({});
@@ -106,18 +105,16 @@ const initializeAudio = async () => {
     masterComp = new Tone.Compressor({ threshold: -12, ratio: 3 }).connect(limiter);
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
 
-    reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.01, wet: 0.3 }).connect(masterComp);
-    await reverb.generate();
-    chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
-    delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
+    reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.01, wet: 0.3 });
+    chorus = new Tone.Chorus(4, 2.5, 0.7);
+    delay = new Tone.PingPongDelay("8n", 0.2);
     
-    // 【修正】ギターのシグナルチェーンを再構築
-    guitarAmp = new Tone.EQ3({ low: -4, mid: 2, high: 4 }).connect(masterComp);
-    guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.8).connect(guitarAmp);
-    guitarPitchShift = new Tone.PitchShift({ pitch: 0 }).connect(guitarDistortion);
+    guitarAmp = new Tone.EQ3({ low: -4, mid: 2, high: 4 });
+    guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.8);
+    guitarPitchShift = new Tone.PitchShift({ pitch: 0 });
 
-    bassEQ = new Tone.EQ3({ low: 2, mid: -4, high: -2 }).connect(masterComp);
-    bassComp = new Tone.Compressor(-20, 4).connect(bassEQ);
+    bassEQ = new Tone.EQ3({ low: 2, mid: -4, high: -2 });
+    bassComp = new Tone.Compressor(-20, 4);
 
     loadingMessage.value = '楽器を準備しています...';
     
@@ -144,13 +141,6 @@ const initializeAudio = async () => {
         release: params.release,
       });
 
-      if (name === 'eguitar') {
-        sampler.connect(guitarPitchShift);
-      } else if (name === 'ebass') {
-        sampler.connect(bassComp);
-      } else {
-        sampler.connect(masterComp);
-      }
       samplers[name] = { sampler, baseNote };
     }
     
@@ -265,6 +255,7 @@ const handleExportParams = () => {
   alert('現在の設定を開発者コンソールに出力しました。(F12で確認)');
 };
 
+
 // --- 音楽生成関数 ---
 const createConcentrationSound = (rng: () => number) => {
     if (!Tone || !masterComp) return;
@@ -276,19 +267,19 @@ const createConcentrationSound = (rng: () => number) => {
 };
 
 const createRelaxSound = (rng: () => number) => {
-    if (!samplers.pad || !reverb) return;
-    const padSampler = samplers.pad!.sampler;
-    padSampler.connect(reverb);
+    if (!samplers.pad || !reverb || !masterComp) return;
+    const padSampler = samplers.pad.sampler;
+    padSampler.chain(reverb, masterComp);
     padSampler.triggerAttack('C4');
 };
 
 const createLoFiSound = (rng: () => number) => {
-    if (!Tone || !samplers.epiano || !samplers.kick || !samplers.snare) return;
-    const epiano = samplers.epiano!.sampler;
-    const kick = samplers.kick!.sampler;
-    const snare = samplers.snare!.sampler;
+    if (!Tone || !samplers.epiano || !samplers.kick || !samplers.snare || !chorus || !masterComp) return;
+    const epiano = samplers.epiano.sampler;
+    const kick = samplers.kick.sampler;
+    const snare = samplers.snare.sampler;
 
-    epiano.connect(chorus!);
+    epiano.chain(chorus, masterComp);
 
     Tone.Transport.bpm.value = 80 + rng() * 15;
     const chords = [['C2', 'Eb2', 'G2'], ['A1', 'C2', 'E2']];
@@ -310,15 +301,15 @@ const createLoFiSound = (rng: () => number) => {
 
 const createRockSound = (rng: () => number) => {
     if (!Tone || !samplers.eguitar || !samplers.ebass || !samplers.rockKick || !samplers.rockSnare || !samplers.crash || !samplers.tomHigh || !samplers.tomMid || !samplers.tomFloor || !samplers.ride || !guitarPitchShift) return;
-    const guitar = samplers.eguitar!.sampler;
-    const bass = samplers.ebass!.sampler;
-    const kick = samplers.rockKick!.sampler;
-    const snare = samplers.rockSnare!.sampler;
-    const crash = samplers.crash!.sampler;
-    const tomHigh = samplers.tomHigh!.sampler;
-    const tomMid = samplers.tomMid!.sampler;
-    const tomFloor = samplers.tomFloor!.sampler;
-    const ride = samplers.ride!.sampler;
+    const guitar = samplers.eguitar.sampler;
+    const bass = samplers.ebass.sampler;
+    const kick = samplers.rockKick.sampler;
+    const snare = samplers.rockSnare.sampler;
+    const crash = samplers.crash.sampler;
+    const tomHigh = samplers.tomHigh.sampler;
+    const tomMid = samplers.tomMid.sampler;
+    const tomFloor = samplers.tomFloor.sampler;
+    const ride = samplers.ride.sampler;
     const pitchShift = guitarPitchShift;
 
     Tone.Transport.bpm.value = 125 + rng() * 20;
@@ -380,14 +371,14 @@ const createRockSound = (rng: () => number) => {
 };
 
 const createJazzSound = (rng: () => number) => {
-    if (!Tone || !samplers.piano || !samplers.bass || !samplers.ride || !samplers.sax) return;
-    const piano = samplers.piano!.sampler;
-    const bass = samplers.bass!.sampler;
-    const ride = samplers.ride!.sampler;
-    const sax = samplers.sax!.sampler;
+    if (!Tone || !samplers.piano || !samplers.bass || !samplers.ride || !samplers.sax || !reverb || !delay || !masterComp) return;
+    const piano = samplers.piano.sampler;
+    const bass = samplers.bass.sampler;
+    const ride = samplers.ride.sampler;
+    const sax = samplers.sax.sampler;
 
-    piano.connect(reverb!);
-    sax.connect(delay!);
+    piano.chain(reverb, masterComp);
+    sax.chain(delay, masterComp);
 
     Tone.Transport.bpm.value = 100 + rng() * 20;
     Tone.Transport.swing = 0.05;
