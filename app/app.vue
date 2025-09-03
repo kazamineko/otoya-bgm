@@ -19,7 +19,7 @@ const loadingMessage = ref<string>('');
 
 // --- 音声関連 ---
 let Tone: typeof ToneType | null = null;
-let samplers: { [key: string]: ToneType.Sampler } = {};
+let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {}; // 【修正】Samplerと基準音をペアで管理
 let rawSamplePlayers: ToneType.Players | null = null;
 let reverb: ToneType.Reverb | null = null;
 let chorus: ToneType.Chorus | null = null;
@@ -43,7 +43,7 @@ watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value) return;
   for (const instrumentName in newParams) {
     if (samplers[instrumentName]) {
-      const sampler = samplers[instrumentName]!;
+      const sampler = samplers[instrumentName]!.sampler;
       const params = newParams[instrumentName]!;
       sampler.volume.value = params.volume;
       sampler.attack = params.attack;
@@ -116,13 +116,16 @@ const initializeAudio = async () => {
       const params = tuningParams.value[name]!;
       const urls: Record<string, string> = {};
       const filePath = allSamplePaths[name]!;
+      let baseNote = '';
+      
       if (filePath.includes('-c3')) {
-        urls['C3'] = filePath;
+        baseNote = 'C3';
       } else if (filePath.includes('-e1')) {
-        urls['E1'] = filePath;
+        baseNote = 'E1';
       } else {
-        urls['C4'] = filePath;
+        baseNote = 'C4';
       }
+      urls[baseNote] = filePath;
 
       const sampler = new Tone.Sampler({
         urls,
@@ -139,7 +142,7 @@ const initializeAudio = async () => {
       } else {
         sampler.connect(masterComp);
       }
-      samplers[name] = sampler;
+      samplers[name] = { sampler, baseNote };
     }
     
     rawSamplePlayers = await new Promise<ToneType.Players>((resolve, reject) => {
@@ -191,7 +194,7 @@ const stopMusic = () => {
   scheduledEvents.length = 0;
   if (noise) { noise.stop(0); noise.dispose(); noise = null; }
   if (samplers) {
-    Object.values(samplers).forEach(s => s.releaseAll());
+    Object.values(samplers).forEach(s => s.sampler.releaseAll());
   }
   isPlaying.value = false;
 };
@@ -214,15 +217,12 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw') 
     if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; }
   }
 
-  const sampler = samplers[instrumentName];
-  if (type === 'sampler' && sampler) {
-    const baseNote = Object.keys(sampler.get())[0]; 
-    if (baseNote) {
-      if (instrumentName === 'eguitar' && guitarPitchShift) {
-        guitarPitchShift.pitch = 0;
-      }
-      sampler.triggerAttackRelease(baseNote, '1n');
+  const samplerData = samplers[instrumentName];
+  if (type === 'sampler' && samplerData) {
+    if (instrumentName === 'eguitar' && guitarPitchShift) {
+      guitarPitchShift.pitch = 0;
     }
+    samplerData.sampler.triggerAttackRelease(samplerData.baseNote, '1n');
   } else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) {
     const player = rawSamplePlayers.player(instrumentName);
     player.loop = false;
@@ -256,7 +256,6 @@ const handleExportParams = () => {
   alert('現在の設定を開発者コンソールに出力しました。(F12で確認)');
 };
 
-
 // --- 音楽生成関数 ---
 const createConcentrationSound = (rng: () => number) => {
     if (!Tone || !masterComp) return;
@@ -269,16 +268,16 @@ const createConcentrationSound = (rng: () => number) => {
 
 const createRelaxSound = (rng: () => number) => {
     if (!samplers.pad || !reverb) return;
-    const padSampler = samplers.pad;
+    const padSampler = samplers.pad!.sampler;
     padSampler.connect(reverb);
     padSampler.triggerAttack('C4');
 };
 
 const createLoFiSound = (rng: () => number) => {
     if (!Tone || !samplers.epiano || !samplers.kick || !samplers.snare) return;
-    const epiano = samplers.epiano;
-    const kick = samplers.kick;
-    const snare = samplers.snare;
+    const epiano = samplers.epiano!.sampler;
+    const kick = samplers.kick!.sampler;
+    const snare = samplers.snare!.sampler;
 
     epiano.connect(chorus!);
 
@@ -302,15 +301,15 @@ const createLoFiSound = (rng: () => number) => {
 
 const createRockSound = (rng: () => number) => {
     if (!Tone || !samplers.eguitar || !samplers.ebass || !samplers.rockKick || !samplers.rockSnare || !samplers.crash || !samplers.tomHigh || !samplers.tomMid || !samplers.tomFloor || !samplers.ride || !guitarPitchShift) return;
-    const guitar = samplers.eguitar;
-    const bass = samplers.ebass;
-    const kick = samplers.rockKick;
-    const snare = samplers.rockSnare;
-    const crash = samplers.crash;
-    const tomHigh = samplers.tomHigh;
-    const tomMid = samplers.tomMid;
-    const tomFloor = samplers.tomFloor;
-    const ride = samplers.ride;
+    const guitar = samplers.eguitar!.sampler;
+    const bass = samplers.ebass!.sampler;
+    const kick = samplers.rockKick!.sampler;
+    const snare = samplers.rockSnare!.sampler;
+    const crash = samplers.crash!.sampler;
+    const tomHigh = samplers.tomHigh!.sampler;
+    const tomMid = samplers.tomMid!.sampler;
+    const tomFloor = samplers.tomFloor!.sampler;
+    const ride = samplers.ride!.sampler;
     const pitchShift = guitarPitchShift;
 
     Tone.Transport.bpm.value = 125 + rng() * 20;
@@ -318,19 +317,19 @@ const createRockSound = (rng: () => number) => {
     const bluesScale = [0, 3, 5, 6, 7, 10]; 
 
     const drumLoop = new Tone.Loop(time => {
+        const sixteenth = Tone!.Time('16n').toSeconds();
         const position = Tone!.Transport.position.toString();
         const measureStr = position.split(':')[0];
         const measure = measureStr ? parseInt(measureStr, 10) : 0;
         
-        const sixteenth = Tone!.Time('16n').toSeconds();
         if (measure % 4 === 3 && rng() < 0.7) {
-            const fillPatterns: { time: number, note: ToneType.Sampler }[][] = [
-                [{ time: sixteenth * 12, note: tomHigh }, { time: sixteenth * 13, note: tomMid }, { time: sixteenth * 14, note: tomFloor }, { time: sixteenth * 15, note: crash }],
-                [{ time: sixteenth * 12, note: snare }, { time: sixteenth * 13, note: snare }, { time: sixteenth * 14, note: tomHigh }, { time: sixteenth * 15, note: tomMid }]
+            const fillPatterns = [
+                [{ offset: sixteenth * 12, note: tomHigh }, { offset: sixteenth * 13, note: tomMid }, { offset: sixteenth * 14, note: tomFloor }, { offset: sixteenth * 15, note: crash }],
+                [{ offset: sixteenth * 12, note: snare }, { offset: sixteenth * 13, note: snare }, { offset: sixteenth * 14, note: tomHigh }, { offset: sixteenth * 15, note: tomMid }]
             ];
             const pattern = fillPatterns[Math.floor(rng() * fillPatterns.length)]!;
             pattern.forEach(fill => {
-                fill.note.triggerAttack('C4', time + fill.time, 0.8 + rng() * 0.2);
+                fill.note.triggerAttack('C4', time + fill.offset, 0.8 + rng() * 0.2);
             });
         } else {
             kick.triggerAttack('C4', time, 1.0);
@@ -355,7 +354,7 @@ const createRockSound = (rng: () => number) => {
 
     const guitarPart = new Tone.Part<{ time: string, pitch: number, dur: ToneType.Unit.Time }>((time, value) => {
         const vel = 0.9 + rng() * 0.1;
-        const baseNote = 'C3';
+        const baseNote = samplers.eguitar!.baseNote;
         if (isSolo) {
             const pitch = bluesScale[Math.floor(rng() * bluesScale.length)]!;
             pitchShift.pitch = pitch;
@@ -373,10 +372,10 @@ const createRockSound = (rng: () => number) => {
 
 const createJazzSound = (rng: () => number) => {
     if (!Tone || !samplers.piano || !samplers.bass || !samplers.ride || !samplers.sax) return;
-    const piano = samplers.piano;
-    const bass = samplers.bass;
-    const ride = samplers.ride;
-    const sax = samplers.sax;
+    const piano = samplers.piano!.sampler;
+    const bass = samplers.bass!.sampler;
+    const ride = samplers.ride!.sampler;
+    const sax = samplers.sax!.sampler;
 
     piano.connect(reverb!);
     sax.connect(delay!);
