@@ -32,9 +32,11 @@ let guitarPreComp: ToneType.Compressor | null = null;
 let guitarDistortion: ToneType.Distortion | null = null;
 let guitarPostEQ: ToneType.EQ3 | null = null;
 let guitarCab: ToneType.Convolver | null = null;
-let bassDistortion: ToneType.Distortion | null = null; // Corrected: Replaced Saturator with Distortion
+let guitarMakeUpGain: ToneType.Volume | null = null; // GAIN STAGING
+let bassDistortion: ToneType.Distortion | null = null;
 let bassEQ: ToneType.EQ3 | null = null;
 let bassCab: ToneType.Convolver | null = null;
+let bassMakeUpGain: ToneType.Volume | null = null; // GAIN STAGING
 let bassPostComp: ToneType.Compressor | null = null;
 
 const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [];
@@ -44,7 +46,7 @@ let isAudioInitialized = ref(false);
 type TuningParams = Record<string, { volume: number; attack: number; release: number; distortion?: number }>;
 
 const tuningParams = ref<TuningParams>({});
-const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v6';
+const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v7'; // Updated key for new tuning philosophy
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value) return;
@@ -83,8 +85,8 @@ const initializeAudio = async () => {
     "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    "eguitar": { "volume": -6, "attack": 0.01, "release": 1.5, "distortion": 0.9 }, // Final tuning for IR
-    "ebass": { "volume": 0, "attack": 0.01, "release": 1.5 }, // Final tuning for IR
+    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.9 },
+    "ebass": { "volume": 3, "attack": 0.01, "release": 1.5 },
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
     "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
@@ -122,13 +124,15 @@ const initializeAudio = async () => {
     // Guitar Rig
     guitarPreComp = new Tone.Compressor(-24, 8);
     guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.9);
-    guitarPostEQ = new Tone.EQ3({ low: 2, mid: -8, high: 4 }); // Metal "scoop"
+    guitarPostEQ = new Tone.EQ3({ low: 2, mid: -4, high: 4 }); // Re-calibrated scoop
     guitarCab = new Tone.Convolver('/ir-guitar-cab.wav');
+    guitarMakeUpGain = new Tone.Volume(12); // Make-up gain after IR
 
     // Bass Rig
     bassEQ = new Tone.EQ3({ low: 4, mid: 0, high: -2 });
-    bassDistortion = new Tone.Distortion(0.2); // CORRECTED IMPLEMENTATION FOR SATURATION
+    bassDistortion = new Tone.Distortion(0.2); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
+    bassMakeUpGain = new Tone.Volume(10); // Make-up gain after IR
     bassPostComp = new Tone.Compressor({threshold: -20, ratio: 4});
 
     await Promise.all([guitarCab.load, bassCab.load]);
@@ -153,11 +157,11 @@ const initializeAudio = async () => {
       // --- Final Audio Routing ---
       switch(name) {
         case 'eguitar':
-          sampler.chain(guitarPreComp, guitarDistortion, guitarPostEQ, guitarCab);
-          guitarCab.fan(masterComp, reverb);
+          sampler.chain(guitarPreComp, guitarDistortion, guitarPostEQ, guitarCab, guitarMakeUpGain);
+          guitarMakeUpGain.fan(masterComp, reverb);
           break;
         case 'ebass':
-          sampler.chain(bassEQ, bassDistortion, bassCab, bassPostComp, masterComp);
+          sampler.chain(bassEQ, bassDistortion, bassCab, bassMakeUpGain, bassPostComp, masterComp);
           break;
         case 'kick':
         case 'rockKick':
