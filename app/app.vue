@@ -26,12 +26,17 @@ let chorus: ToneType.Chorus | null = null;
 let delay: ToneType.PingPongDelay | null = null;
 let masterComp: ToneType.Compressor | null = null;
 let limiter: ToneType.Limiter | null = null;
-let guitarPitchShift: ToneType.PitchShift | null = null;
+
+// --- Virtual Amp Rig ---
+let guitarPreComp: ToneType.Compressor | null = null;
 let guitarDistortion: ToneType.Distortion | null = null;
-let guitarAmp: ToneType.EQ3 | null = null;
-let guitarCabSim: ToneType.EQ3 | null = null; // Advanced Cabinet Simulator
-let bassComp: ToneType.Compressor | null = null;
+let guitarPostEQ: ToneType.EQ3 | null = null;
+let guitarCab: ToneType.Convolver | null = null;
+let bassDistortion: ToneType.Distortion | null = null; // Corrected: Replaced Saturator with Distortion
 let bassEQ: ToneType.EQ3 | null = null;
+let bassCab: ToneType.Convolver | null = null;
+let bassPostComp: ToneType.Compressor | null = null;
+
 const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [];
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
@@ -78,8 +83,8 @@ const initializeAudio = async () => {
     "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    "eguitar": { "volume": -9, "attack": 0.01, "release": 1.2, "distortion": 0.2 }, // Increased release
-    "ebass": { "volume": -6, "attack": 0.01, "release": 1.2 }, // Increased release
+    "eguitar": { "volume": -6, "attack": 0.01, "release": 1.5, "distortion": 0.9 }, // Final tuning for IR
+    "ebass": { "volume": 0, "attack": 0.01, "release": 1.5 }, // Final tuning for IR
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
     "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
@@ -112,15 +117,21 @@ const initializeAudio = async () => {
     chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
     delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
     
-    // --- Instrument Specific Effects ---
-    guitarPitchShift = new Tone.PitchShift({ pitch: 0 });
-    guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.2);
-    guitarAmp = new Tone.EQ3({ low: -2, mid: 0, high: 2 });
-    guitarCabSim = new Tone.EQ3({ low: -6, mid: 4, high: -12 }); // Re-designed CabSim to add body and cut fizz
+    // --- Virtual Amp Rig Construction ---
+    loadingMessage.value = '仮想アンプを構築しています...';
+    // Guitar Rig
+    guitarPreComp = new Tone.Compressor(-24, 8);
+    guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.9);
+    guitarPostEQ = new Tone.EQ3({ low: 2, mid: -8, high: 4 }); // Metal "scoop"
+    guitarCab = new Tone.Convolver('/ir-guitar-cab.wav');
 
-    bassEQ = new Tone.EQ3({ low: 4, mid: -2, high: 0 }); // EQ to add weight
-    bassComp = new Tone.Compressor({threshold: -24, ratio: 6}); // Re-tuned compressor for punch
+    // Bass Rig
+    bassEQ = new Tone.EQ3({ low: 4, mid: 0, high: -2 });
+    bassDistortion = new Tone.Distortion(0.2); // CORRECTED IMPLEMENTATION FOR SATURATION
+    bassCab = new Tone.Convolver('/ir-bass-cab.wav');
+    bassPostComp = new Tone.Compressor({threshold: -20, ratio: 4});
 
+    await Promise.all([guitarCab.load, bassCab.load]);
     loadingMessage.value = '楽器を準備しています...';
     
     for (const name of instrumentList.value) {
@@ -139,34 +150,34 @@ const initializeAudio = async () => {
         attack: params.attack, release: params.release,
       });
 
-      // --- Audio Routing ---
+      // --- Final Audio Routing ---
       switch(name) {
         case 'eguitar':
-          sampler.chain(guitarPitchShift, guitarDistortion, guitarAmp, guitarCabSim);
-          guitarCabSim.fan(masterComp, reverb, delay); // Send final tone to master and effects
+          sampler.chain(guitarPreComp, guitarDistortion, guitarPostEQ, guitarCab);
+          guitarCab.fan(masterComp, reverb);
           break;
         case 'ebass':
-          sampler.chain(bassEQ, bassComp, masterComp);
+          sampler.chain(bassEQ, bassDistortion, bassCab, bassPostComp, masterComp);
           break;
         case 'kick':
         case 'rockKick':
         case 'tomHigh':
         case 'tomMid':
         case 'tomFloor':
-          sampler.connect(masterComp); // Dry and punchy
+          sampler.connect(masterComp);
           break;
         case 'snare':
         case 'rockSnare':
         case 'crash':
         case 'ride':
         case 'brush':
-           sampler.fan(masterComp, reverb); // A bit of reverb
+           sampler.fan(masterComp, reverb);
           break;
         case 'pad':
-          sampler.chain(reverb, masterComp); // Lush reverb
+          sampler.chain(reverb, masterComp);
           break;
-        default: // For piano, epiano, sax, trombone etc.
-          sampler.fan(masterComp, reverb, chorus, delay); // Send to all effects
+        default:
+          sampler.fan(masterComp, reverb, chorus, delay);
           break;
       }
       samplers[name] = { sampler, baseNote };
@@ -247,9 +258,6 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw') 
 
   const samplerData = samplers[instrumentName];
   if (type === 'sampler' && samplerData) {
-    if (instrumentName === 'eguitar' && guitarPitchShift) {
-      guitarPitchShift.pitch = 0;
-    }
     samplerData.sampler.triggerAttackRelease(samplerData.baseNote, '1n');
   } else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) {
     const player = rawSamplePlayers.player(instrumentName);
@@ -326,7 +334,7 @@ const createLoFiSound = (rng: () => number) => {
 };
 
 const createRockSound = (rng: () => number) => {
-    if (!Tone || !samplers.eguitar || !samplers.ebass || !samplers.rockKick || !samplers.rockSnare || !samplers.crash || !samplers.tomHigh || !samplers.tomMid || !samplers.tomFloor || !samplers.ride || !guitarPitchShift) return;
+    if (!Tone || !samplers.eguitar || !samplers.ebass || !samplers.rockKick || !samplers.rockSnare || !samplers.crash || !samplers.tomHigh || !samplers.tomMid || !samplers.tomFloor || !samplers.ride) return;
     const guitar = samplers.eguitar.sampler;
     const bass = samplers.ebass.sampler;
     const kick = samplers.rockKick.sampler;
@@ -336,11 +344,8 @@ const createRockSound = (rng: () => number) => {
     const tomMid = samplers.tomMid.sampler;
     const tomFloor = samplers.tomFloor.sampler;
     const ride = samplers.ride.sampler;
-    const pitchShift = guitarPitchShift;
 
     Tone.Transport.bpm.value = 125 + rng() * 20;
-    let isSolo = false;
-    const bluesScale = [0, 3, 5, 6, 7, 10]; 
 
     const drumLoop = new Tone.Loop(time => {
         const sixteenth = Tone!.Time('16n').toSeconds();
@@ -370,30 +375,21 @@ const createRockSound = (rng: () => number) => {
 
     const bassPart = new Tone.Sequence((time, note) => {
         if (note) bass.triggerAttackRelease(note, '8n', time, 0.9);
-    }, ['E1', 'E1', 'G1', 'G1', 'A1', 'A1', 'B1', 'B1'], "8n").start(0);
+    }, ['E1', 'G1', 'A1', 'B1'], "4n").start(0);
 
     const guitarRiffPatterns = [
-      [ { time: '0:0', pitch: 0, dur: '4n' }, { time: '0:2', pitch: 3, dur: '8n' }, { time: '0:3', pitch: 5, dur: '8n' } ],
-      [ { time: '0:0', pitch: 7, dur: '2n' }, { time: '0:2', pitch: 5, dur: '4n' } ],
+      [ { time: '0:0', note: 'E3', dur: '4n' }, { time: '0:2', note: 'G3', dur: '8n' }, { time: '0:3', note: 'A3', dur: '8n' } ],
+      [ { time: '0:0', note: 'B3', dur: '2n' }, { time: '0:2', note: 'A3', dur: '4n' } ],
     ];
     const guitarRiff = guitarRiffPatterns[Math.floor(rng() * guitarRiffPatterns.length)]!;
 
-    const guitarPart = new Tone.Part<{ time: string, pitch: number, dur: ToneType.Unit.Time }>((time, value) => {
+    const guitarPart = new Tone.Part<{ time: string, note: string, dur: ToneType.Unit.Time }>((time, value) => {
         const vel = 0.9 + rng() * 0.1;
-        const baseNote = samplers.eguitar!.baseNote;
-        if (isSolo) {
-            const pitch = bluesScale[Math.floor(rng() * bluesScale.length)]!;
-            pitchShift.pitch = pitch;
-            guitar.triggerAttackRelease(baseNote, '16n', time, vel);
-        } else {
-            pitchShift.pitch = value.pitch;
-            guitar.triggerAttackRelease(baseNote, value.dur, time, vel);
-        }
+        guitar.triggerAttackRelease(value.note, value.dur, time, vel);
     }, guitarRiff).start(0);
     guitarPart.loop = true; guitarPart.loopEnd = '1m';
     
-    const soloToggle = new Tone.Loop(() => { isSolo = !isSolo; }, '4m').start('2m');
-    scheduledEvents.push(bassPart, guitarPart, soloToggle, drumLoop);
+    scheduledEvents.push(bassPart, guitarPart, drumLoop);
 };
 
 const createJazzSound = (rng: () => number) => {
