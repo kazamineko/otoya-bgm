@@ -40,8 +40,8 @@ let bassDistortion: ToneType.Distortion | null = null;
 let bassCab: ToneType.Convolver | null = null;
 let bassMakeUpGain: ToneType.Volume | null = null;
 let bassPostComp: ToneType.Compressor | null = null;
-let bassSubFilter: ToneType.Filter | null = null; // Sub Channel Filter
-let bassSubGain: ToneType.Volume | null = null; // Sub Channel Gain
+let bassSubFilter: ToneType.Filter | null = null;
+let bassSubGain: ToneType.Volume | null = null;
 
 const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [];
 let noise: ToneType.Noise | null = null;
@@ -50,7 +50,7 @@ let isAudioInitialized = ref(false);
 type TuningParams = Record<string, { volume: number; attack: number; release: number; distortion?: number }>;
 
 const tuningParams = ref<TuningParams>({});
-const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v8'; // Final version key
+const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v9-final'; // The Final Build
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value) return;
@@ -90,7 +90,7 @@ const initializeAudio = async () => {
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
     "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.9 },
-    "ebass": { "volume": 6, "attack": 0.01, "release": 1.5 }, // Increased input gain for parallel chains
+    "ebass": { "volume": 6, "attack": 0.01, "release": 1.5 },
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
     "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
@@ -125,20 +125,20 @@ const initializeAudio = async () => {
     
     // --- Virtual Amp Rig Construction ---
     loadingMessage.value = '仮想アンプを構築しています...';
-    // Guitar Rig (Serial)
-    guitarPreComp = new Tone.Compressor(-24, 8);
+    // Guitar Rig (Serial) - Now with Transient Preservation
+    guitarPreComp = new Tone.Compressor({threshold: -20, ratio: 4, attack: 0.01, release: 0.1});
     guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.9);
     guitarPostEQ = new Tone.EQ3({ low: 2, mid: -4, high: 4 });
     guitarCab = new Tone.Convolver('/ir-guitar-cab.wav');
     guitarMakeUpGain = new Tone.Volume(12);
 
-    // Bass Rig (Parallel)
+    // Bass Rig (Parallel) - Now with Transient Preservation
     // Drive Channel
     bassEQ = new Tone.EQ3({ low: 4, mid: 0, high: -2 });
     bassDistortion = new Tone.Distortion(0.2); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
     bassMakeUpGain = new Tone.Volume(8);
-    bassPostComp = new Tone.Compressor({threshold: -20, ratio: 4});
+    bassPostComp = new Tone.Compressor({threshold: -18, ratio: 4, attack: 0.02, release: 0.2});
     // Sub Channel
     bassSubFilter = new Tone.Filter(120, 'lowpass');
     bassSubGain = new Tone.Volume(0);
@@ -169,20 +169,15 @@ const initializeAudio = async () => {
           guitarMakeUpGain.fan(masterComp, reverb);
           break;
         case 'ebass':
-          // Parallel Chains
-          const driveChain = [bassEQ, bassDistortion, bassCab, bassMakeUpGain, bassPostComp];
-          const subChain = [bassSubFilter, bassSubGain];
-          // Connect sampler to the start of both chains
+          // Connect sampler to the start of both parallel chains
           sampler.connect(bassEQ);
           sampler.connect(bassSubFilter);
-          // Connect the chains to the master compressor
-          bassPostComp.connect(masterComp);
-          bassSubGain.connect(masterComp);
-          // Chain up the nodes within the drive chain
-          bassEQ.connect(bassDistortion);
-          bassDistortion.connect(bassCab);
-          bassCab.connect(bassMakeUpGain);
-          bassMakeUpGain.connect(bassPostComp);
+          
+          // Define the Drive Chain path
+          bassEQ.chain(bassDistortion, bassCab, bassMakeUpGain, bassPostComp, masterComp);
+
+          // Define the Sub Chain path
+          bassSubFilter.chain(bassSubGain, masterComp);
           break;
         case 'kick':
         case 'rockKick':
