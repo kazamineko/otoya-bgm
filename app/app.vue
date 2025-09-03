@@ -29,6 +29,7 @@ let limiter: ToneType.Limiter | null = null;
 let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarDistortion: ToneType.Distortion | null = null;
 let guitarAmp: ToneType.EQ3 | null = null;
+let guitarCab: ToneType.Filter | null = null; // Cabinet Simulator
 let bassComp: ToneType.Compressor | null = null;
 let bassEQ: ToneType.EQ3 | null = null;
 const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [];
@@ -77,7 +78,7 @@ const initializeAudio = async () => {
     "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    "eguitar": { "volume": -9, "attack": 0.01, "release": 0.5, "distortion": 0.8 },
+    "eguitar": { "volume": -9, "attack": 0.01, "release": 0.5, "distortion": 0.2 }, // Reduced default distortion
     "ebass": { "volume": -6, "attack": 0.01, "release": 0.5 },
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
@@ -113,8 +114,9 @@ const initializeAudio = async () => {
     
     // --- Instrument Specific Effects ---
     guitarAmp = new Tone.EQ3({ low: -4, mid: 2, high: 4 });
-    guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.8);
+    guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.2);
     guitarPitchShift = new Tone.PitchShift({ pitch: 0 });
+    guitarCab = new Tone.Filter(4500, "lowpass"); // Cabinet simulator to cut fizz
 
     bassEQ = new Tone.EQ3({ low: 2, mid: -4, high: -2 });
     bassComp = new Tone.Compressor(-20, 4);
@@ -140,8 +142,8 @@ const initializeAudio = async () => {
       // --- Audio Routing ---
       switch(name) {
         case 'eguitar':
-          sampler.chain(guitarPitchShift, guitarDistortion, guitarAmp);
-          guitarAmp.fan(masterComp, reverb, delay); // Send to master and effects
+          sampler.chain(guitarPitchShift, guitarDistortion, guitarAmp, guitarCab);
+          guitarCab.fan(masterComp, reverb, delay); // Send final tone to master and effects
           break;
         case 'ebass':
           sampler.chain(bassEQ, bassComp, masterComp);
