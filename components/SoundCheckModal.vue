@@ -22,13 +22,6 @@
             </summary>
             
             <div class="sliders" v-if="tuningParams[instrument]">
-              <div v-if="instrument === 'eguitar'" class="slider-container">
-                <label>Pre-Gain</label>
-                <input type="range" min="-24" max="0" step="0.1" 
-                  :value="tuningParams[instrument]!.preGain" 
-                  @input="updateParam(instrument, 'preGain', $event)">
-                <span>{{ tuningParams[instrument]!.preGain?.toFixed(1) }} dB</span>
-              </div>
               <div class="slider-container">
                 <label>Volume</label>
                 <input type="range" min="-40" max="6" step="0.1" 
@@ -63,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-type TuningParams = Record<string, { volume: number; attack: number; release: number; preGain?: number }>;
+type TuningParams = Record<string, { volume: number; attack: number; release: number }>;
 
 defineProps<{
   isVisible: boolean;
