@@ -19,7 +19,7 @@ const loadingMessage = ref<string>('');
 
 // --- 音声関連 ---
 let Tone: typeof ToneType | null = null;
-let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {}; // 【修正】Samplerと基準音をペアで管理
+let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let rawSamplePlayers: ToneType.Players | null = null;
 let reverb: ToneType.Reverb | null = null;
 let chorus: ToneType.Chorus | null = null;
@@ -27,6 +27,7 @@ let delay: ToneType.PingPongDelay | null = null;
 let masterComp: ToneType.Compressor | null = null;
 let limiter: ToneType.Limiter | null = null;
 let guitarPitchShift: ToneType.PitchShift | null = null;
+let guitarDistortion: ToneType.Distortion | null = null; // 【追加】ギター専用のDistortion
 let guitarAmp: ToneType.EQ3 | null = null;
 let bassComp: ToneType.Compressor | null = null;
 let bassEQ: ToneType.EQ3 | null = null;
@@ -34,10 +35,11 @@ const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
-type TuningParams = Record<string, { volume: number; attack: number; release: number; }>;
+// 【修正】eguitarにdistortionを追加
+type TuningParams = Record<string, { volume: number; attack: number; release: number; distortion?: number }>;
 
 const tuningParams = ref<TuningParams>({});
-const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v5';
+const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v6';
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value) return;
@@ -48,6 +50,10 @@ watch(tuningParams, (newParams) => {
       sampler.volume.value = params.volume;
       sampler.attack = params.attack;
       sampler.release = params.release;
+
+      if (instrumentName === 'eguitar' && guitarDistortion && params.distortion !== undefined) {
+        guitarDistortion.distortion = params.distortion;
+      }
     }
   }
 }, { deep: true });
@@ -72,7 +78,8 @@ const initializeAudio = async () => {
     "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    "eguitar": { "volume": -12, "attack": 0.01, "release": 1 }, "ebass": { "volume": -6, "attack": 0.01, "release": 0.5 }, 
+    "eguitar": { "volume": -9, "attack": 0.01, "release": 0.5, "distortion": 0.8 }, 
+    "ebass": { "volume": -6, "attack": 0.01, "release": 0.5 }, 
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
     "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
@@ -104,8 +111,10 @@ const initializeAudio = async () => {
     chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
     delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
     
+    // 【修正】ギターのシグナルチェーンを再構築
     guitarAmp = new Tone.EQ3({ low: -4, mid: 2, high: 4 }).connect(masterComp);
-    guitarPitchShift = new Tone.PitchShift({ pitch: 0 }).connect(guitarAmp);
+    guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.8).connect(guitarAmp);
+    guitarPitchShift = new Tone.PitchShift({ pitch: 0 }).connect(guitarDistortion);
 
     bassEQ = new Tone.EQ3({ low: 2, mid: -4, high: -2 }).connect(masterComp);
     bassComp = new Tone.Compressor(-20, 4).connect(bassEQ);
