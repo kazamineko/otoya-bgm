@@ -39,7 +39,7 @@
               </div>
               <div class="slider-container">
                 <label>Attack</label>
-                <input type="range" min="0" max="2" step="0.001" 
+                <input type="range" min="0" max="2" step="0.01" 
                   :value="tuningParams[instrument]!.attack" 
                   @input="updateParam(instrument, 'attack', $event)">
                 <span>{{ tuningParams[instrument]!.attack.toFixed(3) }} s</span>
@@ -52,7 +52,6 @@
                 <span>{{ tuningParams[instrument]!.release.toFixed(2) }} s</span>
               </div>
               
-              <!-- 修正: eguitarのパラメータをDistortionのみに修正し、orderを削除 -->
               <template v-if="instrument === 'eguitar' && tuningParams.eguitar">
                 <hr class="separator">
                 <div class="slider-container">
@@ -77,7 +76,6 @@
 </template>
 
 <script setup lang="ts">
-// 修正: orderプロパティを型定義から削除
 type TuningParams = Record<string, {
   volume: number;
   attack: number;

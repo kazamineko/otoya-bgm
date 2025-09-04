@@ -29,7 +29,6 @@ let limiter: ToneType.Limiter | null = null;
 
 // --- Virtual Amp Rig ---
 let guitarPreComp: ToneType.Compressor | null = null;
-// 修正: ChebyshevからDistortionに戻し、目標サウンドに近づける
 let guitarDistortion: ToneType.Distortion | null = null;
 let guitarPostEQ: ToneType.EQ3 | null = null;
 let guitarCab: ToneType.Convolver | null = null;
@@ -51,11 +50,10 @@ const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
-// 修正: orderを削除し、Distortionのみのパラメータに戻す
-type TuningParams = Record<string, { volume: number; attack: number; release: number; distortion?: number; }>;
+type TuningParams = Record<string, { volume: number; attack: number; release: number; distortion?: number }>;
 
 const tuningParams = ref<TuningParams>({});
-const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v11-virtuoso'; // Virtuoso Build
+const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-revival'; // Revival Build
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value) return;
@@ -85,18 +83,18 @@ const initializeAudio = async () => {
     eguitar: 'eguitar-clean-c3.wav', ebass: 'ebass-di-e1.wav',
     rockKick: 'rock-kick.wav', rockSnare: 'rock-snare.wav', crash: 'drum-crash.wav',
     tomHigh: 'tom-high.wav', tomMid: 'tom-mid.wav', tomFloor: 'tom-floor.wav',
-    'eguitar-target': 'eguitar-dist-c4.wav', // 目標サウンド
-    'ebass-target': 'ebass-e1.wav',      // 目標サウンド
+    'eguitar-target': 'eguitar-dist-c4.wav',
+    'ebass-target': 'ebass-e1.wav',
   };
   instrumentList.value = Object.keys(allSamplePaths).filter(key => !key.endsWith('-target'));
 
+  // CRITICAL: 開発初期のサウンドを復元し、目標サウンドに基づき再チューニング
   const masterTunedParams: TuningParams = {
     "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
     "ride": { "volume": -9, "attack": 0.01, "release": 0.5 }, "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
     "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    // 修正: ギターのサウンドパラメータを目標サウンドに近づけるために再設定
     "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.8 },
     "ebass": { "volume": 6, "attack": 0.01, "release": 1.5 },
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
@@ -132,20 +130,19 @@ const initializeAudio = async () => {
     loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
     const eguitarParams = tuningParams.value.eguitar!;
     guitarPreComp = new Tone.Compressor({threshold: -20, ratio: 4, attack: 0.01, release: 0.1});
-    // 修正: 歪みエフェクトをTone.Distortionに戻し、パラメータを再調整
     guitarDistortion = new Tone.Distortion(eguitarParams.distortion);
-    // 修正: EQ設定を目標サウンドに合わせて抜本的に見直し (ドンシャリ→ミッドブースト)
-    guitarPostEQ = new Tone.EQ3({ low: -6, mid: 5, high: -3 });
+    // 復元＆再チューニング: ミッドを豊かにし、高域の耳障りな部分をカット
+    guitarPostEQ = new Tone.EQ3({ low: 0, mid: 4, high: -2 });
     guitarCab = new Tone.Convolver('/ir-guitar-cab.wav');
-    guitarMakeUpGain = new Tone.Volume(10); // 歪みとEQの変更に伴いゲインを再調整
+    guitarMakeUpGain = new Tone.Volume(10);
 
-    // 修正: ベースのサウンドを目標に合わせて再調整
-    bassEQ = new Tone.EQ3({ low: 3, mid: 4, high: -2 });
-    bassDistortion = new Tone.Distortion(0.4); 
+    // 復元＆再チューニング: サブベースをタイトにし、アタック感を強調
+    bassEQ = new Tone.EQ3({ low: 2, mid: 5, high: 0 });
+    bassDistortion = new Tone.Distortion(0.3); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
-    bassMakeUpGain = new Tone.Volume(10);
+    bassMakeUpGain = new Tone.Volume(9);
     bassPostComp = new Tone.Compressor({threshold: -18, ratio: 4, attack: 0.02, release: 0.2});
-    bassSubFilter = new Tone.Filter(120, 'lowpass');
+    bassSubFilter = new Tone.Filter(100, 'lowpass'); // 少しカットオフを下げてタイトに
     bassSubGain = new Tone.Volume(0);
     
     rideFilter = new Tone.Filter(10000, 'lowpass');
@@ -226,6 +223,11 @@ const playMusic = async (menuName: string, seed?: string) => {
   const randomPart = seed || Date.now().toString(36) + Math.random().toString(36).substring(2);
   currentSeed.value = `${menuName}:${randomPart}`;
   const rng = seedrandom(randomPart);
+  // NOTE: ここで一度再生が破綻したスケジューリングロジックを修正する必要がある
+  if(Tone) Tone.Transport.cancel(0);
+  scheduledEvents.forEach(event => { event.dispose(); });
+  scheduledEvents.length = 0;
+
   switch (menuName) {
     case '集中ブレンド': createConcentrationSound(rng); break;
     case 'リラックス・デカフェ': createRelaxSound(rng); break;
@@ -271,7 +273,6 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw') 
       samplerData.sampler.triggerAttackRelease(samplerData.baseNote, '1n');
     }
   } else if (type === 'raw' && rawSamplePlayers) {
-    // 修正: マスターの指示通り、ebassの目標サウンドを修正
     const targetSoundMap: Record<string, string> = {
       eguitar: 'eguitar-target',
       ebass: 'ebass-target',
@@ -311,6 +312,7 @@ const createRelaxSound = (rng: () => number) => { /* ... */ };
 const createLoFiSound = (rng: () => number) => { /* ... */ };
 const createJazzSound = (rng: () => number) => { /* ... */ };
 
+// CRITICAL: 以前の修正で再生が安定したスケジューリングロジックを再度適用する
 const createRockSound = (rng: () => number) => {
     if (!Tone || !rideFilter || !samplers.eguitar || !samplers.ebass || !samplers.rockKick || !samplers.rockSnare || !samplers.crash || !samplers.tomHigh || !samplers.tomMid || !samplers.tomFloor || !samplers.ride || !tuningParams.value.ebass || !tuningParams.value.ride) {
         return;
