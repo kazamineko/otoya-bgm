@@ -43,6 +43,9 @@ let bassPostComp: ToneType.Compressor | null = null;
 let bassSubFilter: ToneType.Filter | null = null;
 let bassSubGain: ToneType.Volume | null = null;
 
+// --- AI Drummer Nuance Engine ---
+let rideFilter: ToneType.Filter | null = null;
+
 const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [];
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
@@ -123,28 +126,26 @@ const initializeAudio = async () => {
     chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
     delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
     
-    // --- Virtual Amp Rig Construction ---
-    loadingMessage.value = '仮想アンプを構築しています...';
-    // Guitar Rig (Serial) - Now with Transient Preservation
+    // --- Virtual Amp Rig & Nuance Engine ---
+    loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
     guitarPreComp = new Tone.Compressor({threshold: -20, ratio: 4, attack: 0.01, release: 0.1});
     guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.9);
     guitarPostEQ = new Tone.EQ3({ low: 2, mid: -4, high: 4 });
     guitarCab = new Tone.Convolver('/ir-guitar-cab.wav');
     guitarMakeUpGain = new Tone.Volume(12);
 
-    // Bass Rig (Parallel) - Now with Transient Preservation
-    // Drive Channel
     bassEQ = new Tone.EQ3({ low: 4, mid: 0, high: -2 });
     bassDistortion = new Tone.Distortion(0.2); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
     bassMakeUpGain = new Tone.Volume(8);
     bassPostComp = new Tone.Compressor({threshold: -18, ratio: 4, attack: 0.02, release: 0.2});
-    // Sub Channel
     bassSubFilter = new Tone.Filter(120, 'lowpass');
     bassSubGain = new Tone.Volume(0);
+    
+    rideFilter = new Tone.Filter(10000, 'lowpass'); // Dedicated filter for ride cymbal timbre
 
     await Promise.all([guitarCab.load, bassCab.load]);
-    loadingMessage.value = '楽器を準備しています...';
+    loadingMessage.value = '楽器を最終調整しています...';
     
     for (const name of instrumentList.value) {
       const params = tuningParams.value[name]!;
@@ -169,27 +170,23 @@ const initializeAudio = async () => {
           guitarMakeUpGain.fan(masterComp, reverb);
           break;
         case 'ebass':
-          // Connect sampler to the start of both parallel chains
           sampler.connect(bassEQ);
           sampler.connect(bassSubFilter);
-          
-          // Define the Drive Chain path
           bassEQ.chain(bassDistortion, bassCab, bassMakeUpGain, bassPostComp, masterComp);
-
-          // Define the Sub Chain path
           bassSubFilter.chain(bassSubGain, masterComp);
+          break;
+        case 'ride': // Special routing for ride cymbal
+          sampler.connect(rideFilter);
+          rideFilter.fan(masterComp, reverb);
           break;
         case 'kick':
         case 'rockKick':
         case 'tomHigh':
         case 'tomMid':
         case 'tomFloor':
-          sampler.connect(masterComp);
-          break;
         case 'snare':
         case 'rockSnare':
         case 'crash':
-        case 'ride':
         case 'brush':
            sampler.fan(masterComp, reverb);
           break;
@@ -354,7 +351,7 @@ const createLoFiSound = (rng: () => number) => {
 };
 
 const createRockSound = (rng: () => number) => {
-    if (!Tone || !samplers.eguitar || !samplers.ebass || !samplers.rockKick || !samplers.rockSnare || !samplers.crash || !samplers.tomHigh || !samplers.tomMid || !samplers.tomFloor || !samplers.ride) return;
+    if (!Tone || !samplers.eguitar || !samplers.ebass || !samplers.rockKick || !samplers.rockSnare || !samplers.crash || !samplers.tomHigh || !samplers.tomMid || !samplers.tomFloor || !samplers.ride || !rideFilter) return;
     const guitar = samplers.eguitar.sampler;
     const bass = samplers.ebass.sampler;
     const kick = samplers.rockKick.sampler;
@@ -367,17 +364,16 @@ const createRockSound = (rng: () => number) => {
 
     Tone.Transport.bpm.value = 110 + rng() * 60;
 
-    // --- AI Drummer's Beat Textbook (Revised Edition) ---
     const rhythmPatternLibrary = {
         '8-Beat': {
             kick:   [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             snare:  [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
             ride:   [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
         },
-        '16-Beat': { // Musically Corrected 16-Beat
+        '16-Beat': {
             kick:   [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0],
             snare:  [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-            ride:   [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], // The pulse is 8th notes
+            ride:   [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
         }
     };
 
@@ -385,8 +381,7 @@ const createRockSound = (rng: () => number) => {
     const chosenPatternKey = patternKeys[Math.floor(rng() * patternKeys.length)]!;
     const basePattern = rhythmPatternLibrary[chosenPatternKey as keyof typeof rhythmPatternLibrary];
     
-    // Add human-like variations to the chosen pattern
-    if (rng() < 0.2) basePattern.snare[7] = 0.3; // Ghost note
+    if (rng() < 0.2) basePattern.snare[7] = 0.3;
 
     let currentMeasure = 0;
     const drumSeq = new Tone.Sequence((time, step) => {
@@ -398,7 +393,11 @@ const createRockSound = (rng: () => number) => {
         }
         
         const grooveOffset = (rng() - 0.5) * 0.02;
-        if (basePattern.ride[step]) ride.triggerAttack('C4', time + grooveOffset, 0.6 + rng() * 0.2);
+        if (basePattern.ride[step]) {
+            const vel = 0.5 + rng() * 0.5;
+            rideFilter!.frequency.value = 2000 + (vel * 8000); // Non-null assertion
+            ride.triggerAttack('C4', time + grooveOffset, vel);
+        }
 
     }, Array.from(Array(16).keys()), "16n").start(0);
 
@@ -407,13 +406,13 @@ const createRockSound = (rng: () => number) => {
             const quarter = Tone!.Time('4n').toSeconds();
             const eighth = Tone!.Time('8n').toSeconds();
              const fillLibrary = [
-                () => { // Snare roll
+                () => {
                     snare.triggerAttack('C4', time + quarter * 2, 0.8);
                     snare.triggerAttack('C4', time + quarter * 2 + eighth, 0.7);
                     snare.triggerAttack('C4', time + quarter * 3, 0.8);
                     snare.triggerAttack('C4', time + quarter * 3 + eighth, 0.7);
                 },
-                () => { // Tom run
+                () => {
                     tomHigh.triggerAttack('C4', time + quarter * 2, 0.8);
                     tomMid.triggerAttack('C4', time + quarter * 2 + eighth, 0.8);
                     tomFloor.triggerAttack('C4', time + quarter * 3, 0.9);
