@@ -80,7 +80,7 @@ const initializeAudio = async () => {
     piano: 'piano-c4.wav', bass: 'bass-c1.wav', ride: 'drum-ride.wav', brush: 'drum-brush.wav',
     epiano: 'epiano-c4.wav', kick: 'drum-kick.wav', snare: 'drum-snare.wav', pad: 'pad-cmaj7.wav',
     sax: 'sax-c4.wav', trombone: 'trombone-c3.wav',
-    eguitar: 'eguitar-dist-c4.wav', ebass: 'ebass-di-e1.wav',
+    eguitar: 'eguitar-clean-c3.wav', ebass: 'ebass-di-e1.wav',
     rockKick: 'rock-kick.wav', rockSnare: 'rock-snare.wav', crash: 'drum-crash.wav',
     tomHigh: 'tom-high.wav', tomMid: 'tom-mid.wav', tomFloor: 'tom-floor.wav',
   };
@@ -92,7 +92,7 @@ const initializeAudio = async () => {
     "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5 },
+    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.9 },
     "ebass": { "volume": 6, "attack": 0.01, "release": 1.5 },
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
@@ -165,6 +165,10 @@ const initializeAudio = async () => {
 
       // --- Final Audio Routing ---
       switch(name) {
+        case 'eguitar':
+          sampler.chain(guitarPreComp, guitarDistortion, guitarPostEQ, guitarCab, guitarMakeUpGain);
+          guitarMakeUpGain.fan(masterComp, reverb);
+          break;
         case 'ebass':
           sampler.connect(bassEQ);
           sampler.connect(bassSubFilter);
@@ -182,7 +186,7 @@ const initializeAudio = async () => {
         case 'pad':
           sampler.chain(reverb, masterComp);
           break;
-        default: // eguitar uses this default now
+        default:
           sampler.fan(masterComp, reverb, chorus, delay);
           break;
       }
