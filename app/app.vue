@@ -53,7 +53,7 @@ let isAudioInitialized = ref(false);
 type TuningParams = Record<string, { volume: number; attack: number; release: number; distortion?: number }>;
 
 const tuningParams = ref<TuningParams>({});
-const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v10-stable'; // Stable Build
+const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v11-virtuoso'; // Virtuoso Build
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value) return;
@@ -285,10 +285,7 @@ const handleExportParams = () => {
   alert('現在の設定を開発者コンソールに出力しました。(F12で確認)');
 };
 
-
 // --- 音楽生成関数 ---
-
-// CORRECTED: Moved type definitions to a shared scope
 const ROLES = { BACKING: 'backing', GUITAR_SOLO: 'guitar_solo', DRUM_BREAK: 'drum_break' } as const;
 type Role = typeof ROLES[keyof typeof ROLES];
 
@@ -298,21 +295,18 @@ const createLoFiSound = (rng: () => number) => { /* ... */ };
 const createJazzSound = (rng: () => number) => { /* ... */ };
 
 const createRockSound = (rng: () => number) => {
-    // --- Ironclad Guard Clause ---
     if (!Tone || !rideFilter || !samplers.eguitar || !samplers.ebass || !samplers.rockKick || !samplers.rockSnare || !samplers.crash || !samplers.tomHigh || !samplers.tomMid || !samplers.tomFloor || !samplers.ride || !tuningParams.value.ebass || !tuningParams.value.ride) {
-        console.error("Rock sound generation aborted: Required assets not ready.");
         return;
     }
     const { eguitar, ebass, rockKick, rockSnare, crash, tomHigh, tomMid, tomFloor, ride } = samplers;
     
     Tone.Transport.bpm.value = 110 + rng() * 60;
 
-    // --- AI Composer & Arranger: Type Definitions ---
-    type PartPattern = { time: string, note: string, dur: ToneType.Unit.Time }[];
+    type PartEvent = { time: string, note: string, dur: ToneType.Unit.Time };
+    type PartPattern = PartEvent[];
     type BassPattern = (string | null)[];
     type Section = { role: Role; duration: number; };
 
-    // --- AI Composer & Arranger: Phrase Palettes ---
     const guitarBackingPatterns: PartPattern[] = [
         [{ time: '0:0', note: 'E3', dur: '4n' }, { time: '0:2', note: 'G3', dur: '8n' }, { time: '0:3', note: 'A3', dur: '8n' }],
         [{ time: '0:0', note: 'B3', dur: '2n' }, { time: '0:2', note: 'A3', dur: '4n' }],
@@ -329,7 +323,6 @@ const createRockSound = (rng: () => number) => {
         ['E1', 'E1', 'G1', null, 'A1', null, 'A1', null],
     ];
 
-    // --- AI Band Master: Blueprint Generation ---
     const songBlueprint: Section[] = [];
     let totalMeasures = 0;
     let soloCooldown = 0;
@@ -350,12 +343,16 @@ const createRockSound = (rng: () => number) => {
         totalMeasures += nextDuration;
     }
 
-    // --- AI Conductor: Scheduling ---
+    // --- AI Virtuoso: Weaving the Entire Performance ---
+    const guitarEvents: PartEvent[] = [];
+    const bassEvents: { time: number, note: string | null }[] = [];
     let currentTime = 0;
+
     songBlueprint.forEach(section => {
         const sectionStart = currentTime;
-        const sectionDuration = section.duration * Tone!.Time('1m').toSeconds();
+        const measureDuration = Tone!.Time('1m').toSeconds();
         
+        // Dynamics Control
         if (section.role === ROLES.GUITAR_SOLO) {
             ebass.sampler.volume.rampTo(-6, 0.5, sectionStart);
             ride.sampler.volume.rampTo(-15, 0.5, sectionStart);
@@ -364,24 +361,42 @@ const createRockSound = (rng: () => number) => {
             ride.sampler.volume.rampTo(tuningParams.value.ride!.volume, 0.5, sectionStart);
         }
 
-        if (section.role !== ROLES.DRUM_BREAK) {
-            const guitarPattern = section.role === ROLES.GUITAR_SOLO ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]! : guitarBackingPatterns[Math.floor(rng() * guitarBackingPatterns.length)]!;
-            const bassPattern = bassBackingPatterns[Math.floor(rng() * bassBackingPatterns.length)]!;
-            const guitarPart = new Tone!.Part(((time, value) => { eguitar.sampler.triggerAttackRelease(value.note, value.dur, time, 0.9 + rng() * 0.1); }), guitarPattern).start(sectionStart).stop(sectionStart + sectionDuration);
-            guitarPart.loop = true; guitarPart.loopEnd = '1m';
-            scheduledEvents.push(guitarPart);
+        for (let i = 0; i < section.duration; i++) {
+            const measureStartTime = sectionStart + i * measureDuration;
+            if (section.role !== ROLES.DRUM_BREAK) {
+                // Weave Guitar Part
+                const guitarPattern = section.role === ROLES.GUITAR_SOLO 
+                    ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]!
+                    : guitarBackingPatterns[Math.floor(rng() * guitarBackingPatterns.length)]!;
+                guitarPattern.forEach(noteEvent => {
+                    guitarEvents.push({ ...noteEvent, time: `0:${i}:0 + ${noteEvent.time}` });
+                });
 
-            const bassPart = new Tone!.Sequence(((time, note) => { if (note) ebass.sampler.triggerAttackRelease(note, '8n', time, 0.9); }), bassPattern, "8n").start(sectionStart).stop(sectionStart + sectionDuration);
-            scheduledEvents.push(bassPart);
+                // Weave Bass Part
+                const bassPattern = bassBackingPatterns[Math.floor(rng() * bassBackingPatterns.length)]!;
+                bassPattern.forEach((note, index) => {
+                    bassEvents.push({ time: measureStartTime + index * Tone!.Time('8n').toSeconds(), note: note });
+                });
+            }
         }
         
         createRockDrums(rng, { rockKick, rockSnare, ride, crash, tomHigh, tomMid, tomFloor, rideFilter }, section.duration, sectionStart, section.role);
-
-        currentTime += sectionDuration;
+        currentTime += section.duration * measureDuration;
     });
+    
+    // --- Final Scheduling ---
+    const guitarPart = new Tone.Part<PartEvent>(((time, value) => {
+        eguitar.sampler.triggerAttackRelease(value.note, value.dur, time, 0.9 + rng() * 0.1);
+    }), guitarEvents).start(0);
+    scheduledEvents.push(guitarPart);
+
+    const bassPart = new Tone.Part(((time, value) => {
+        if (value.note) ebass.sampler.triggerAttackRelease(value.note, '8n', time, 0.9);
+    }), bassEvents).start(0);
+    scheduledEvents.push(bassPart);
 };
 
-const createRockDrums = (rng:() => number, instruments: any, durationInMeasures: number, startTime: number, role: Role) => {
+const createRockDrums = (rng: () => number, instruments: any, durationInMeasures: number, startTime: number, role: Role) => {
     const { rockKick: kick, rockSnare: snare, ride, crash, tomHigh, tomMid, tomFloor, rideFilter } = instruments;
     if (!Tone) return;
 
