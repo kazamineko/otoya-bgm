@@ -53,7 +53,7 @@ let isAudioInitialized = ref(false);
 type TuningParams = Record<string, { volume: number; attack: number; release: number; distortion?: number }>;
 
 const tuningParams = ref<TuningParams>({});
-const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-revival'; // Revival Build
+const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v11-virtuoso'; // Virtuoso Build
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value) return;
@@ -83,19 +83,16 @@ const initializeAudio = async () => {
     eguitar: 'eguitar-clean-c3.wav', ebass: 'ebass-di-e1.wav',
     rockKick: 'rock-kick.wav', rockSnare: 'rock-snare.wav', crash: 'drum-crash.wav',
     tomHigh: 'tom-high.wav', tomMid: 'tom-mid.wav', tomFloor: 'tom-floor.wav',
-    'eguitar-target': 'eguitar-dist-c4.wav',
-    'ebass-target': 'ebass-e1.wav',
   };
-  instrumentList.value = Object.keys(allSamplePaths).filter(key => !key.endsWith('-target'));
+  instrumentList.value = Object.keys(allSamplePaths);
 
-  // CRITICAL: 開発初期のサウンドを復元し、目標サウンドに基づき再チューニング
   const masterTunedParams: TuningParams = {
     "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
     "ride": { "volume": -9, "attack": 0.01, "release": 0.5 }, "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
     "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.8 },
+    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.9 },
     "ebass": { "volume": 6, "attack": 0.01, "release": 1.5 },
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
@@ -119,30 +116,30 @@ const initializeAudio = async () => {
     await Tone.start();
     loadingMessage.value = '店内の響きを調整しています...';
     
+    // --- Master Output Chain ---
     limiter = new Tone.Limiter(-0.1).toDestination();
     masterComp = new Tone.Compressor({ threshold: -12, ratio: 3 }).connect(limiter);
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
 
+    // --- Global Effects (Sends) ---
     reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.01, wet: 0.3 }).connect(masterComp);
     chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
     delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
     
+    // --- Virtual Amp Rig & Nuance Engine ---
     loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
-    const eguitarParams = tuningParams.value.eguitar!;
     guitarPreComp = new Tone.Compressor({threshold: -20, ratio: 4, attack: 0.01, release: 0.1});
-    guitarDistortion = new Tone.Distortion(eguitarParams.distortion);
-    // 復元＆再チューニング: ミッドを豊かにし、高域の耳障りな部分をカット
-    guitarPostEQ = new Tone.EQ3({ low: 0, mid: 4, high: -2 });
+    guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.9);
+    guitarPostEQ = new Tone.EQ3({ low: 2, mid: -4, high: 4 });
     guitarCab = new Tone.Convolver('/ir-guitar-cab.wav');
-    guitarMakeUpGain = new Tone.Volume(10);
+    guitarMakeUpGain = new Tone.Volume(12);
 
-    // 復元＆再チューニング: サブベースをタイトにし、アタック感を強調
-    bassEQ = new Tone.EQ3({ low: 2, mid: 5, high: 0 });
-    bassDistortion = new Tone.Distortion(0.3); 
+    bassEQ = new Tone.EQ3({ low: 4, mid: 0, high: -2 });
+    bassDistortion = new Tone.Distortion(0.2); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
-    bassMakeUpGain = new Tone.Volume(9);
+    bassMakeUpGain = new Tone.Volume(8);
     bassPostComp = new Tone.Compressor({threshold: -18, ratio: 4, attack: 0.02, release: 0.2});
-    bassSubFilter = new Tone.Filter(100, 'lowpass'); // 少しカットオフを下げてタイトに
+    bassSubFilter = new Tone.Filter(120, 'lowpass');
     bassSubGain = new Tone.Volume(0);
     
     rideFilter = new Tone.Filter(10000, 'lowpass');
@@ -166,6 +163,7 @@ const initializeAudio = async () => {
         attack: params.attack, release: params.release,
       });
 
+      // --- Final Audio Routing ---
       switch(name) {
         case 'eguitar':
           sampler.chain(guitarPreComp, guitarDistortion, guitarPostEQ, guitarCab, guitarMakeUpGain);
@@ -195,7 +193,7 @@ const initializeAudio = async () => {
       samplers[name] = { sampler, baseNote };
     }
     
-    rawSamplePlayers = await new Promise<ToneType.Players>((resolve) => {
+    rawSamplePlayers = await new Promise<ToneType.Players>((resolve, reject) => {
         const p = new Tone!.Players({ urls: allSamplePaths, baseUrl: "/", onload: () => resolve(p) }).toDestination();
     });
 
@@ -220,25 +218,41 @@ const playMusic = async (menuName: string, seed?: string) => {
     if (!isAudioInitialized.value) return;
   }
   if (isPlaying.value) stopMusic();
+
   const randomPart = seed || Date.now().toString(36) + Math.random().toString(36).substring(2);
-  currentSeed.value = `${menuName}:${randomPart}`;
+  const newSeed = `${menuName}:${randomPart}`;
   const rng = seedrandom(randomPart);
-  // NOTE: ここで一度再生が破綻したスケジューリングロジックを修正する必要がある
-  if(Tone) Tone.Transport.cancel(0);
-  scheduledEvents.forEach(event => { event.dispose(); });
-  scheduledEvents.length = 0;
+
+  let musicGenerated = false;
 
   switch (menuName) {
-    case '集中ブレンド': createConcentrationSound(rng); break;
-    case 'リラックス・デカフェ': createRelaxSound(rng); break;
-    case 'ジャズ・スペシャル': createJazzSound(rng); break;
-    case 'Lo-Fi・ビター': createLoFiSound(rng); break;
-    case 'ロック・ビート': createRockSound(rng); break;
+    case '集中ブレンド':
+      musicGenerated = createConcentrationSound(rng);
+      break;
+    case 'リラックス・デカフェ':
+      musicGenerated = createRelaxSound(rng);
+      break;
+    case 'ジャズ・スペシャル':
+      musicGenerated = createJazzSound(rng);
+      break;
+    case 'Lo-Fi・ビター':
+      musicGenerated = createLoFiSound(rng);
+      break;
+    case 'ロック・ビート':
+      musicGenerated = createRockSound(rng);
+      break;
   }
-  Tone!.Transport.start();
-  isPlaying.value = true;
-  selectedMenu.value = menuName;
+
+  if (musicGenerated) {
+    currentSeed.value = newSeed;
+    Tone!.Transport.start();
+    isPlaying.value = true;
+    selectedMenu.value = menuName;
+  } else if (!seed) { // Don't show alert when playing from a (potentially invalid) seed
+      alert('このメニューは現在準備中です。');
+  }
 };
+
 
 const stopMusic = () => {
   if (!isPlaying.value || !Tone) return;
@@ -251,6 +265,7 @@ const stopMusic = () => {
   isPlaying.value = false;
 };
 
+// --- UI Event Handlers ---
 const togglePlayback = async () => { if (isPlaying.value) { stopMusic(); } else { if (selectedMenu.value) { const [menuName, seed] = currentSeed.value.split(':'); if (menuName && seed) await playMusic(menuName, seed); } } };
 const handleVolumeChange = (event: Event) => { const newVolume = parseFloat((event.target as HTMLInputElement).value); volume.value = newVolume; if (isAudioInitialized.value) { Tone!.Destination.volume.value = Tone!.gainToDb(newVolume); } };
 const openModal = () => { isModalVisible.value = true; };
@@ -258,35 +273,23 @@ const closeModal = () => { isModalVisible.value = false; };
 const copySeed = () => { if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value); };
 const playFromSeed = async () => { if (seedInput.value) { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート']; if (menuName && seed && validMenus.includes(menuName)) { await playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } } };
 
+// --- Sound Tuning Modal Handlers ---
 const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; };
 const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
-
 const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw') => {
   if (!isAudioInitialized.value) {
     await initializeAudio();
     if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; }
   }
-
-  if (type === 'sampler') {
-    const samplerData = samplers[instrumentName];
-    if (samplerData) {
-      samplerData.sampler.triggerAttackRelease(samplerData.baseNote, '1n');
-    }
-  } else if (type === 'raw' && rawSamplePlayers) {
-    const targetSoundMap: Record<string, string> = {
-      eguitar: 'eguitar-target',
-      ebass: 'ebass-target',
-    };
-    const soundToPlay = targetSoundMap[instrumentName] || instrumentName;
-
-    if (rawSamplePlayers.has(soundToPlay)) {
-      const player = rawSamplePlayers.player(soundToPlay);
-      player.loop = false;
-      player.start();
-    }
+  const samplerData = samplers[instrumentName];
+  if (type === 'sampler' && samplerData) {
+    samplerData.sampler.triggerAttackRelease(samplerData.baseNote, '1n');
+  } else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) {
+    const player = rawSamplePlayers.player(instrumentName);
+    player.loop = false;
+    player.start();
   }
 };
-
 const handleUpdateParam = (payload: { instrument: string, param: keyof TuningParams[string], value: number }) => {
   if (tuningParams.value[payload.instrument]) { (tuningParams.value[payload.instrument] as any)[payload.param] = payload.value; }
 };
@@ -307,33 +310,30 @@ const handleExportParams = () => {
 const ROLES = { BACKING: 'backing', GUITAR_SOLO: 'guitar_solo', DRUM_BREAK: 'drum_break' } as const;
 type Role = typeof ROLES[keyof typeof ROLES];
 
-const createConcentrationSound = (rng: () => number) => { /* ... */ };
-const createRelaxSound = (rng: () => number) => { /* ... */ };
-const createLoFiSound = (rng: () => number) => { /* ... */ };
-const createJazzSound = (rng: () => number) => { /* ... */ };
+const createConcentrationSound = (rng: () => number): boolean => { return false; };
+const createRelaxSound = (rng: () => number): boolean => { return false; };
+const createLoFiSound = (rng: () => number): boolean => { return false; };
+const createJazzSound = (rng: () => number): boolean => { return false; };
 
-// CRITICAL: 以前の修正で再生が安定したスケジューリングロジックを再度適用する
-const createRockSound = (rng: () => number) => {
+const createRockSound = (rng: () => number): boolean => {
     if (!Tone || !rideFilter || !samplers.eguitar || !samplers.ebass || !samplers.rockKick || !samplers.rockSnare || !samplers.crash || !samplers.tomHigh || !samplers.tomMid || !samplers.tomFloor || !samplers.ride || !tuningParams.value.ebass || !tuningParams.value.ride) {
-        return;
+        return false;
     }
     const { eguitar, ebass, rockKick, rockSnare, crash, tomHigh, tomMid, tomFloor, ride } = samplers;
     
     Tone.Transport.bpm.value = 110 + rng() * 60;
 
-    type ScheduledGuitarEvent = { time: number; note: string; dur: ToneType.Unit.Time };
-    type ScheduledBassEvent = { time: number; note: string | null };
-    type PatternNote = { time: string; note: string; dur: ToneType.Unit.Time };
-    type GuitarPattern = PatternNote[];
+    type PartEvent = { time: string, note: string, dur: ToneType.Unit.Time };
+    type PartPattern = PartEvent[];
     type BassPattern = (string | null)[];
     type Section = { role: Role; duration: number; };
 
-    const guitarBackingPatterns: GuitarPattern[] = [
+    const guitarBackingPatterns: PartPattern[] = [
         [{ time: '0:0', note: 'E3', dur: '4n' }, { time: '0:2', note: 'G3', dur: '8n' }, { time: '0:3', note: 'A3', dur: '8n' }],
         [{ time: '0:0', note: 'B3', dur: '2n' }, { time: '0:2', note: 'A3', dur: '4n' }],
         [{ time: '0:0', note: 'E3', dur: '8n' }, { time: '0:1', note: 'E3', dur: '8n' }, { time: '0:2', note: 'G3', dur: '4n' }],
     ];
-    const guitarSoloPatterns: GuitarPattern[] = [
+    const guitarSoloPatterns: PartPattern[] = [
         [{ time: '0:0', note: 'E4', dur: '8n' }, { time: '0:1', note: 'G4', dur: '8n' }, { time: '0:2', note: 'A4', dur: '8n' }, { time: '0:3', note: 'B4', dur: '8n' }],
         [{ time: '0:0', note: 'B4', dur: '4n' }, { time: '0:2', note: 'A4', dur: '4n' }, { time: '0:3', note: 'G4', dur: '8n' }],
         [{ time: '0:0', note: 'G4', dur: '2n.' }, { time: '0:3', note: 'E4', dur: '4n' }],
@@ -364,14 +364,16 @@ const createRockSound = (rng: () => number) => {
         totalMeasures += nextDuration;
     }
 
-    const guitarEvents: ScheduledGuitarEvent[] = [];
-    const bassEvents: ScheduledBassEvent[] = [];
+    // --- AI Virtuoso: Weaving the Entire Performance ---
+    const guitarEvents: PartEvent[] = [];
+    const bassEvents: { time: number, note: string | null }[] = [];
     let currentTime = 0;
 
     songBlueprint.forEach(section => {
         const sectionStart = currentTime;
         const measureDuration = Tone!.Time('1m').toSeconds();
         
+        // Dynamics Control
         if (section.role === ROLES.GUITAR_SOLO) {
             ebass.sampler.volume.rampTo(-6, 0.5, sectionStart);
             ride.sampler.volume.rampTo(-15, 0.5, sectionStart);
@@ -383,21 +385,18 @@ const createRockSound = (rng: () => number) => {
         for (let i = 0; i < section.duration; i++) {
             const measureStartTime = sectionStart + i * measureDuration;
             if (section.role !== ROLES.DRUM_BREAK) {
+                // Weave Guitar Part
                 const guitarPattern = section.role === ROLES.GUITAR_SOLO 
                     ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]!
                     : guitarBackingPatterns[Math.floor(rng() * guitarBackingPatterns.length)]!;
-                
                 guitarPattern.forEach(noteEvent => {
-                    const noteTimeInSeconds = Tone!.Time(noteEvent.time).toSeconds();
-                    const absoluteTime = measureStartTime + noteTimeInSeconds;
-                    guitarEvents.push({ time: absoluteTime, note: noteEvent.note, dur: noteEvent.dur });
+                    guitarEvents.push({ ...noteEvent, time: `0:${i}:0 + ${noteEvent.time}` });
                 });
 
+                // Weave Bass Part
                 const bassPattern = bassBackingPatterns[Math.floor(rng() * bassBackingPatterns.length)]!;
                 bassPattern.forEach((note, index) => {
-                    const noteTimeInSeconds = index * Tone!.Time('8n').toSeconds();
-                    const absoluteTime = measureStartTime + noteTimeInSeconds;
-                    bassEvents.push({ time: absoluteTime, note: note });
+                    bassEvents.push({ time: measureStartTime + index * Tone!.Time('8n').toSeconds(), note: note });
                 });
             }
         }
@@ -406,15 +405,18 @@ const createRockSound = (rng: () => number) => {
         currentTime += section.duration * measureDuration;
     });
     
-    const guitarPart = new Tone.Part<ScheduledGuitarEvent>(((time, value) => {
+    // --- Final Scheduling ---
+    const guitarPart = new Tone.Part<PartEvent>(((time, value) => {
         eguitar.sampler.triggerAttackRelease(value.note, value.dur, time, 0.9 + rng() * 0.1);
     }), guitarEvents).start(0);
     scheduledEvents.push(guitarPart);
 
-    const bassPart = new Tone.Part<ScheduledBassEvent>(((time, value) => {
+    const bassPart = new Tone.Part(((time, value) => {
         if (value.note) ebass.sampler.triggerAttackRelease(value.note, '8n', time, 0.9);
     }), bassEvents).start(0);
     scheduledEvents.push(bassPart);
+
+    return true;
 };
 
 const createRockDrums = (rng: () => number, instruments: any, durationInMeasures: number, startTime: number, role: Role) => {
