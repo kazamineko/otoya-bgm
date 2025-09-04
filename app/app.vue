@@ -29,7 +29,8 @@ let limiter: ToneType.Limiter | null = null;
 
 // --- Virtual Amp Rig ---
 let guitarPreComp: ToneType.Compressor | null = null;
-let guitarDistortion: ToneType.Distortion | null = null;
+// 修正: Tone.DistortionからTone.Chebyshevに変更
+let guitarOverdrive: ToneType.Chebyshev | null = null;
 let guitarPostEQ: ToneType.EQ3 | null = null;
 let guitarCab: ToneType.Convolver | null = null;
 let guitarMakeUpGain: ToneType.Volume | null = null;
@@ -50,7 +51,8 @@ const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
-type TuningParams = Record<string, { volume: number; attack: number; release: number; distortion?: number }>;
+// 修正: 歪みのキャラクター(order)もチューニング可能にする
+type TuningParams = Record<string, { volume: number; attack: number; release: number; distortion?: number; order?: number }>;
 
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v11-virtuoso'; // Virtuoso Build
@@ -65,8 +67,14 @@ watch(tuningParams, (newParams) => {
       sampler.attack = params.attack;
       sampler.release = params.release;
 
-      if (instrumentName === 'eguitar' && guitarDistortion && params.distortion !== undefined) {
-        guitarDistortion.distortion = params.distortion;
+      // 修正: guitarOverdriveのパラメータを更新
+      if (instrumentName === 'eguitar' && guitarOverdrive) {
+        if (params.distortion !== undefined) {
+          guitarOverdrive.wet.value = params.distortion;
+        }
+        if (params.order !== undefined) {
+          guitarOverdrive.order = params.order;
+        }
       }
     }
   }
@@ -92,7 +100,8 @@ const initializeAudio = async () => {
     "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.9 },
+    // 修正: ギターのサウンドパラメータを更新
+    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.9, "order": 3 },
     "ebass": { "volume": 6, "attack": 0.01, "release": 1.5 },
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
@@ -128,9 +137,15 @@ const initializeAudio = async () => {
     
     // --- Virtual Amp Rig & Nuance Engine ---
     loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
+    const eguitarParams = tuningParams.value.eguitar!;
     guitarPreComp = new Tone.Compressor({threshold: -20, ratio: 4, attack: 0.01, release: 0.1});
-    guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.9);
-    guitarPostEQ = new Tone.EQ3({ low: 2, mid: -4, high: 4 });
+    // 修正: Tone.Chebyshevを使用して、よりリッチな歪みを生成
+    guitarOverdrive = new Tone.Chebyshev({
+      order: eguitarParams.order ?? 3,
+      wet: eguitarParams.distortion ?? 0.9,
+    });
+    // 修正: EQ設定を見直し、サウンドに厚みを持たせる
+    guitarPostEQ = new Tone.EQ3({ low: -2, mid: 2, high: -4 });
     guitarCab = new Tone.Convolver('/ir-guitar-cab.wav');
     guitarMakeUpGain = new Tone.Volume(12);
 
@@ -166,7 +181,8 @@ const initializeAudio = async () => {
       // --- Final Audio Routing ---
       switch(name) {
         case 'eguitar':
-          sampler.chain(guitarPreComp, guitarDistortion, guitarPostEQ, guitarCab, guitarMakeUpGain);
+          // 修正: 歪みエフェクトをguitarOverdriveに変更
+          sampler.chain(guitarPreComp, guitarOverdrive, guitarPostEQ, guitarCab, guitarMakeUpGain);
           guitarMakeUpGain.fan(masterComp, reverb);
           break;
         case 'ebass':

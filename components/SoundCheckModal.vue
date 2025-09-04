@@ -43,6 +43,26 @@
                   @input="updateParam(instrument, 'release', $event)">
                 <span>{{ tuningParams[instrument]!.release.toFixed(2) }} s</span>
               </div>
+              
+              <!-- eguitar専用の追加パラメータ -->
+              <template v-if="instrument === 'eguitar' && tuningParams.eguitar">
+                <hr class="separator">
+                <div class="slider-container">
+                  <label>歪みの量</label>
+                  <input type="range" min="0" max="1" step="0.01"
+                    :value="tuningParams.eguitar.distortion"
+                    @input="updateParam(instrument, 'distortion', $event)">
+                  <span>{{ (tuningParams.eguitar.distortion! * 100).toFixed(0) }} %</span>
+                </div>
+                 <div class="slider-container">
+                  <label>歪みの質感 (Order)</label>
+                  <input type="range" min="1" max="10" step="1"
+                    :value="tuningParams.eguitar.order"
+                    @input="updateParam(instrument, 'order', $event)">
+                  <span>{{ tuningParams.eguitar.order }}</span>
+                </div>
+              </template>
+
             </div>
           </details>
         </li>
@@ -56,7 +76,14 @@
 </template>
 
 <script setup lang="ts">
-type TuningParams = Record<string, { volume: number; attack: number; release: number }>;
+// 修正: orderプロパティも許容するように型定義を更新
+type TuningParams = Record<string, {
+  volume: number;
+  attack: number;
+  release: number;
+  distortion?: number;
+  order?: number;
+}>;
 
 defineProps<{
   isVisible: boolean;
@@ -119,11 +146,16 @@ const updateParam = (instrument: string, param: string, event: Event) => {
 .play-buttons button:hover { background-color: #555; }
 .sliders { padding: 10px 15px 20px; background-color: #f9f9f9; }
 .slider-container {
-  display: grid; grid-template-columns: 80px 1fr 100px;
+  display: grid; grid-template-columns: 140px 1fr 100px;
   align-items: center; gap: 10px; margin-bottom: 8px;
 }
 .slider-container label { text-align: right; font-size: 0.9em; }
 .slider-container input[type="range"] { width: 100%; }
 .slider-container span { font-family: monospace; font-size: 0.9em; text-align: left; }
 .no-sounds-message { text-align: center; color: #7a7a7a; padding: 20px; }
+.separator {
+  border: none;
+  border-top: 1px dashed #ccc;
+  margin: 15px 0;
+}
 </style>
