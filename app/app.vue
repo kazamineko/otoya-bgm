@@ -21,6 +21,7 @@ const loadingMessage = ref<string>('');
 let Tone: typeof ToneType | null = null;
 let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let rawSamplePlayers: ToneType.Players | null = null;
+let targetGuitarPlayer: ToneType.Player | null = null; // 【追加】目標サウンド比較用
 let reverb: ToneType.Reverb | null = null;
 let chorus: ToneType.Chorus | null = null;
 let delay: ToneType.PingPongDelay | null = null;
@@ -144,7 +145,10 @@ const initializeAudio = async () => {
     
     rideFilter = new Tone.Filter(10000, 'lowpass');
 
-    await Promise.all([guitarCab.load, bassCab.load]);
+    // 【追加】目標サウンド比較用プレイヤーの準備
+    targetGuitarPlayer = new Tone.Player('/eguitar-dist-c4.wav').toDestination();
+
+    await Promise.all([guitarCab.load, bassCab.load, targetGuitarPlayer.load]);
     loadingMessage.value = '楽器を最終調整しています...';
     
     for (const name of instrumentList.value) {
@@ -276,7 +280,7 @@ const playFromSeed = async () => { if (seedInput.value) { const [menuName, seed]
 // --- Sound Tuning Modal Handlers ---
 const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; };
 const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
-const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw') => {
+const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' | 'target') => {
   if (!isAudioInitialized.value) {
     await initializeAudio();
     if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; }
@@ -285,9 +289,9 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw') 
   if (type === 'sampler' && samplerData) {
     samplerData.sampler.triggerAttackRelease(samplerData.baseNote, '1n');
   } else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) {
-    const player = rawSamplePlayers.player(instrumentName);
-    player.loop = false;
-    player.start();
+    rawSamplePlayers.player(instrumentName).start();
+  } else if (type === 'target' && instrumentName === 'eguitar' && targetGuitarPlayer) {
+    targetGuitarPlayer.start();
   }
 };
 const handleUpdateParam = (payload: { instrument: string, param: keyof TuningParams[string], value: number }) => {
