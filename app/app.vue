@@ -302,17 +302,23 @@ const createRockSound = (rng: () => number) => {
     
     Tone.Transport.bpm.value = 110 + rng() * 60;
 
-    type PartEvent = { time: string, note: string, dur: ToneType.Unit.Time };
-    type PartPattern = PartEvent[];
+    // --- TypeScriptエラー修正: 型定義を整理・修正 ---
+    // 最終的にTone.Partに渡され、スケジュールされるイベントの型 (時間は絶対秒数)
+    type ScheduledGuitarEvent = { time: number; note: string; dur: ToneType.Unit.Time };
+    type ScheduledBassEvent = { time: number; note: string | null };
+
+    // 再利用可能なフレーズパターンを定義するための型 (時間は小節内の相対表記)
+    type PatternNote = { time: string; note: string; dur: ToneType.Unit.Time };
+    type GuitarPattern = PatternNote[];
     type BassPattern = (string | null)[];
     type Section = { role: Role; duration: number; };
 
-    const guitarBackingPatterns: PartPattern[] = [
+    const guitarBackingPatterns: GuitarPattern[] = [
         [{ time: '0:0', note: 'E3', dur: '4n' }, { time: '0:2', note: 'G3', dur: '8n' }, { time: '0:3', note: 'A3', dur: '8n' }],
         [{ time: '0:0', note: 'B3', dur: '2n' }, { time: '0:2', note: 'A3', dur: '4n' }],
         [{ time: '0:0', note: 'E3', dur: '8n' }, { time: '0:1', note: 'E3', dur: '8n' }, { time: '0:2', note: 'G3', dur: '4n' }],
     ];
-    const guitarSoloPatterns: PartPattern[] = [
+    const guitarSoloPatterns: GuitarPattern[] = [
         [{ time: '0:0', note: 'E4', dur: '8n' }, { time: '0:1', note: 'G4', dur: '8n' }, { time: '0:2', note: 'A4', dur: '8n' }, { time: '0:3', note: 'B4', dur: '8n' }],
         [{ time: '0:0', note: 'B4', dur: '4n' }, { time: '0:2', note: 'A4', dur: '4n' }, { time: '0:3', note: 'G4', dur: '8n' }],
         [{ time: '0:0', note: 'G4', dur: '2n.' }, { time: '0:3', note: 'E4', dur: '4n' }],
@@ -344,8 +350,8 @@ const createRockSound = (rng: () => number) => {
     }
 
     // --- AI Virtuoso: Weaving the Entire Performance ---
-    const guitarEvents: PartEvent[] = [];
-    const bassEvents: { time: number, note: string | null }[] = [];
+    const guitarEvents: ScheduledGuitarEvent[] = [];
+    const bassEvents: ScheduledBassEvent[] = [];
     let currentTime = 0;
 
     songBlueprint.forEach(section => {
@@ -368,14 +374,19 @@ const createRockSound = (rng: () => number) => {
                 const guitarPattern = section.role === ROLES.GUITAR_SOLO 
                     ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]!
                     : guitarBackingPatterns[Math.floor(rng() * guitarBackingPatterns.length)]!;
+                
                 guitarPattern.forEach(noteEvent => {
-                    guitarEvents.push({ ...noteEvent, time: `0:${i}:0 + ${noteEvent.time}` });
+                    const noteTimeInSeconds = Tone!.Time(noteEvent.time).toSeconds();
+                    const absoluteTime = measureStartTime + noteTimeInSeconds;
+                    guitarEvents.push({ time: absoluteTime, note: noteEvent.note, dur: noteEvent.dur });
                 });
 
                 // Weave Bass Part
                 const bassPattern = bassBackingPatterns[Math.floor(rng() * bassBackingPatterns.length)]!;
                 bassPattern.forEach((note, index) => {
-                    bassEvents.push({ time: measureStartTime + index * Tone!.Time('8n').toSeconds(), note: note });
+                    const noteTimeInSeconds = index * Tone!.Time('8n').toSeconds();
+                    const absoluteTime = measureStartTime + noteTimeInSeconds;
+                    bassEvents.push({ time: absoluteTime, note: note });
                 });
             }
         }
@@ -385,12 +396,12 @@ const createRockSound = (rng: () => number) => {
     });
     
     // --- Final Scheduling ---
-    const guitarPart = new Tone.Part<PartEvent>(((time, value) => {
+    const guitarPart = new Tone.Part<ScheduledGuitarEvent>(((time, value) => {
         eguitar.sampler.triggerAttackRelease(value.note, value.dur, time, 0.9 + rng() * 0.1);
     }), guitarEvents).start(0);
     scheduledEvents.push(guitarPart);
 
-    const bassPart = new Tone.Part(((time, value) => {
+    const bassPart = new Tone.Part<ScheduledBassEvent>(((time, value) => {
         if (value.note) ebass.sampler.triggerAttackRelease(value.note, '8n', time, 0.9);
     }), bassEvents).start(0);
     scheduledEvents.push(bassPart);
