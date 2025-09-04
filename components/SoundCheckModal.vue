@@ -8,6 +8,7 @@
       <div class="global-actions">
         <button @click="saveParams" class="action-button">現在の設定を保存</button>
         <button @click="exportParams" class="action-button">コンソールに出力</button>
+        <button @click="resetParams" class="action-button action-button-reset">初期設定に戻す</button>
       </div>
 
       <ul class="sound-list">
@@ -142,12 +143,13 @@ defineProps<{
   tuningParams: Record<string, any>;
 }>();
 
-const emit = defineEmits(['close', 'playSound', 'updateParam', 'saveParams', 'exportParams']);
+const emit = defineEmits(['close', 'playSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams']);
 
 const close = () => emit('close');
 const playSound = (instrumentName: string, type: 'sampler' | 'raw' | 'target') => emit('playSound', instrumentName, type);
 const saveParams = () => emit('saveParams');
 const exportParams = () => emit('exportParams');
+const resetParams = () => emit('resetParams');
 
 const updateParam = (instrument: string, param: string, event: Event) => {
   const value = parseFloat((event.target as HTMLInputElement).value);
@@ -179,6 +181,12 @@ const updateParam = (instrument: string, param: string, event: Event) => {
   padding: 10px 15px; cursor: pointer; transition: background-color 0.2s ease;
 }
 .action-button:hover { background-color: #3e51b3; }
+.action-button-reset {
+  background-color: #7a7a7a;
+}
+.action-button-reset:hover {
+  background-color: #6a6a6a;
+}
 .sound-list { list-style: none; padding: 0; margin: 0; }
 .instrument-details { border-bottom: 1px solid #eee; }
 .instrument-summary {

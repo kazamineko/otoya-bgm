@@ -69,6 +69,20 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro'; // Pro Build
 
+const masterTunedParams: TuningParams = {
+  "eguitar": { "preEqFreq": 800, "preEqGain": 12, "distortion": 0.9, "postEqLow": 3, "postEqMid": -12, "postEqHigh": 6, "chorusDepth": 0.1, "chorusRate": 1.5 },
+  "ebass": { "subBlend": 0.5, "drive": 0.3, "eqLow": 4, "eqMid": -2, "eqHigh": 2 },
+  "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
+  "ride": { "volume": -9, "attack": 0.01, "release": 0.5 }, "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
+  "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
+  "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
+  "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
+  "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
+  "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
+  "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
+  "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
+};
+
 // Watcher to apply tuning changes in real-time
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value || !Tone) return;
@@ -124,30 +138,18 @@ const initializeAudio = async () => {
   };
   instrumentList.value = Object.keys(allSamplePaths);
 
-  const masterTunedParams: TuningParams = {
-    "eguitar": { "preEqFreq": 800, "preEqGain": 12, "distortion": 0.9, "postEqLow": 3, "postEqMid": -12, "postEqHigh": 6, "chorusDepth": 0.1, "chorusRate": 1.5 },
-    "ebass": { "subBlend": 0.5, "drive": 0.3, "eqLow": 4, "eqMid": -2, "eqHigh": 2 },
-    "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
-    "ride": { "volume": -9, "attack": 0.01, "release": 0.5 }, "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
-    "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
-    "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
-    "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
-    "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
-    "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
-    "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  };
+  const initialParams = JSON.parse(JSON.stringify(masterTunedParams)); // Deep copy
   
   try {
     const savedParams = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (savedParams) {
       const parsed = JSON.parse(savedParams);
-      Object.keys(masterTunedParams).forEach(key => {
-        if (parsed[key]) { masterTunedParams[key] = { ...masterTunedParams[key], ...parsed[key] }; }
+      Object.keys(initialParams).forEach(key => {
+        if (parsed[key]) { initialParams[key] = { ...initialParams[key], ...parsed[key] }; }
       });
     }
   } catch (e) { console.error("Failed to load tuning params", e); }
-  tuningParams.value = masterTunedParams;
+  tuningParams.value = initialParams;
 
   try {
     Tone = await import('tone');
@@ -227,9 +229,12 @@ const initializeAudio = async () => {
           sampler.chain(reverb, masterComp); 
           break;
         default:
-          if(name.includes('Kick') || name.includes('Snare') || name.includes('Tom') || name.includes('crash') || name.includes('brush')) {
+          const isTightRhythm = name.includes('kick') || name.includes('snare') || name.includes('tom');
+          if (isTightRhythm) {
+            // タイト・リズム隊: ディレイとコーラスをバイパス
             sampler.fan(masterComp, reverb);
           } else {
+            // 空間系・色彩楽器: 従来通り全てのエフェクトへ
             sampler.fan(masterComp, reverb, chorus, delay);
           }
           break;
@@ -315,6 +320,13 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
 const handleUpdateParam = (payload: { instrument: string, param: string, value: number }) => { if (tuningParams.value[payload.instrument]) { tuningParams.value[payload.instrument][payload.param] = payload.value; } };
 const handleSaveParams = () => { try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(tuningParams.value)); alert('現在の設定をブラウザに保存しました。'); } catch (e) { alert('設定の保存に失敗しました。'); } };
 const handleExportParams = () => { console.clear(); console.log(JSON.stringify(tuningParams.value, null, 2)); alert('現在の設定を開発者コンソールに出力しました。'); };
+const handleResetParams = () => { 
+  if (confirm('現在の調整を破棄し、全ての設定を初期値に戻します。よろしいですか？')) {
+    tuningParams.value = JSON.parse(JSON.stringify(masterTunedParams)); 
+    alert('設定を初期化しました。');
+  }
+};
+
 
 // --- 音楽生成関数 ---
 const ROLES = { BACKING: 'backing', GUITAR_SOLO: 'guitar_solo', DRUM_BREAK: 'drum_break' } as const;
@@ -599,6 +611,7 @@ const createRockDrums = (rng: () => number, instruments: any, time: number, role
       @update-param="handleUpdateParam"
       @save-params="handleSaveParams"
       @export-params="handleExportParams"
+      @reset-params="handleResetParams"
     />
   </div>
 </template>
