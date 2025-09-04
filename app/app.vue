@@ -365,7 +365,28 @@ const createRockSound = (rng: () => number) => {
     const tomFloor = samplers.tomFloor.sampler;
     const ride = samplers.ride.sampler;
 
-    Tone.Transport.bpm.value = 125 + rng() * 20;
+    // --- Dynamic BPM ---
+    Tone.Transport.bpm.value = 110 + rng() * 60; // From 110 to 170 BPM
+
+    // --- AI Drummer's Fill-in Library ---
+    const fillLibrary = [
+        // #1: Simple Snare Roll
+        [
+            { note: snare, pos: 12 }, { note: snare, pos: 13 }, { note: snare, pos: 14 }, { note: snare, pos: 15 }
+        ],
+        // #2: Tom Run Down
+        [
+            { note: tomHigh, pos: 12 }, { note: tomMid, pos: 13 }, { note: tomFloor, pos: 14 }, { note: crash, pos: 15 }
+        ],
+        // #3: Syncopated Snare + Tom
+        [
+            { note: snare, pos: 12 }, { note: tomHigh, pos: 14 }, { note: tomMid, pos: 15 }
+        ],
+        // #4: Kick + Snare build-up
+        [
+            { note: kick, pos: 12 }, { note: kick, pos: 13 }, { note: snare, pos: 14 }, { note: snare, pos: 15 }
+        ],
+    ];
 
     const drumLoop = new Tone.Loop(time => {
         const sixteenth = Tone!.Time('16n').toSeconds();
@@ -373,23 +394,27 @@ const createRockSound = (rng: () => number) => {
         const measureStr = position.split(':')[0];
         const measure = measureStr ? parseInt(measureStr, 10) : 0;
         
-        if (measure % 4 === 3 && rng() < 0.7) {
-            const fillPatterns = [
-                [{ offset: sixteenth * 12, note: tomHigh }, { offset: sixteenth * 13, note: tomMid }, { offset: sixteenth * 14, note: tomFloor }, { offset: sixteenth * 15, note: crash }],
-                [{ offset: sixteenth * 12, note: snare }, { offset: sixteenth * 13, note: snare }, { offset: sixteenth * 14, note: tomHigh }, { offset: sixteenth * 15, note: tomMid }]
-            ];
-            const pattern = fillPatterns[Math.floor(rng() * fillPatterns.length)]!;
+        // Decide if a fill-in should be played (on the 4th measure)
+        if (measure % 4 === 3 && rng() < 0.75) {
+            // AI selects a random fill from the library
+            const pattern = fillLibrary[Math.floor(rng() * fillLibrary.length)]!;
             pattern.forEach(fill => {
-                fill.note.triggerAttack('C4', time + fill.offset, 0.8 + rng() * 0.2);
+                const vel = 0.8 + rng() * 0.2;
+                fill.note.triggerAttack('C4', time + sixteenth * fill.pos, vel);
             });
         } else {
+            // Standard Beat
             kick.triggerAttack('C4', time, 1.0);
             snare.triggerAttack('C4', time + Tone!.Time('4n').toSeconds(), 0.9);
             kick.triggerAttack('C4', time + Tone!.Time('2n').toSeconds(), 1.0);
             snare.triggerAttack('C4', time + Tone!.Time('2n + 4n').toSeconds(), 0.9);
         }
+
+        // Ride Cymbal with Humanization (Groove)
         for (let i = 0; i < 8; i++) {
-            ride.triggerAttack('C4', time + (sixteenth * 2 * i), 0.4 + (i % 2 === 0 ? 0.2 : 0) + rng() * 0.1);
+            const vel = 0.4 + (i % 2 === 0 ? 0.2 : 0) + rng() * 0.1;
+            const grooveOffset = (rng() - 0.5) * 0.02; // +/- 10ms of sway
+            ride.triggerAttack('C4', time + (sixteenth * 2 * i) + grooveOffset, vel);
         }
     }, '1m').start(0);
 
