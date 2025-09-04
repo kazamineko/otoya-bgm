@@ -367,57 +367,69 @@ const createRockSound = (rng: () => number) => {
 
     Tone.Transport.bpm.value = 110 + rng() * 60;
 
-    const drumLoop = new Tone.Loop(time => {
-        const eighth = Tone!.Time('8n').toSeconds();
-        const quarter = Tone!.Time('4n').toSeconds();
+    // --- AI Drummer's Beat Textbook ---
+    const rhythmPatternLibrary = {
+        '8-Beat': {
+            kick:   [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            snare:  [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+            ride:   [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
+        },
+        '16-Beat': {
+            kick:   [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0],
+            snare:  [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+            ride:   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        }
+    };
 
-        const position = Tone!.Transport.position.toString();
-        const measureStr = position.split(':')[0] ?? '0'; // Type-safe fallback
-        const measure = parseInt(measureStr, 10);
+    // AI selects a base pattern for the song
+    const patternKeys = Object.keys(rhythmPatternLibrary);
+    const chosenPatternKey = patternKeys[Math.floor(rng() * patternKeys.length)]!;
+    const basePattern = rhythmPatternLibrary[chosenPatternKey as keyof typeof rhythmPatternLibrary];
+    
+    // AI adds human-like variations to the chosen pattern
+    if (rng() < 0.3) basePattern.kick[6] = 1; // Syncopation
+    if (rng() < 0.2) basePattern.snare[7] = 0.3; // Ghost note
 
-        // --- The Unbreakable Backbone ---
-        kick.triggerAttack('C4', time, 1.0);
-        snare.triggerAttack('C4', time + quarter * 1, 0.9);
+    const eventsToPlay = (instrument: number[], note: ToneType.Sampler, vel: number) => {
+        return instrument.map(v => v > 0 ? { note, vel: vel * v } : null);
+    }
+
+    let currentMeasure = 0;
+    const playDrums = (time: number, step: number) => {
+        const isFillMeasure = currentMeasure % 4 === 3;
         
-        // --- Beat Variations & Fill-ins ---
-        if (measure % 4 === 3 && rng() < 0.75) { // Fill-in on the 4th measure
-            kick.triggerAttack('C4', time + quarter * 2, 1.0); // Keep beat 3 kick
-            
-            const fillLibrary = [
+        // Play backbone beat unless it's the fill part of a fill measure
+        if (!(isFillMeasure && step >= 8)) {
+            if (basePattern.kick[step]) kick.triggerAttack('C4', time, 1.0);
+            if (basePattern.snare[step]) snare.triggerAttack('C4', time, basePattern.snare[step]!);
+        }
+
+        const grooveOffset = (rng() - 0.5) * 0.02; // +/- 10ms
+        if (basePattern.ride[step]) ride.triggerAttack('C4', time + grooveOffset, 0.6 + rng() * 0.2);
+    };
+
+    const drumSeq = new Tone.Sequence(playDrums, Array.from(Array(16).keys()), "16n").start(0);
+
+    const drumLoop = new Tone.Loop((time) => {
+        currentMeasure++;
+        if (currentMeasure % 4 === 3 && rng() < 0.75) {
+            const quarter = Tone!.Time('4n').toSeconds();
+            const eighth = Tone!.Time('8n').toSeconds();
+             const fillLibrary = [
                 () => { // Snare roll
+                    snare.triggerAttack('C4', time + quarter * 2, 0.8);
+                    snare.triggerAttack('C4', time + quarter * 2 + eighth, 0.7);
                     snare.triggerAttack('C4', time + quarter * 3, 0.8);
                     snare.triggerAttack('C4', time + quarter * 3 + eighth, 0.7);
                 },
                 () => { // Tom run
-                    tomHigh.triggerAttack('C4', time + quarter * 3, 0.8);
-                    tomMid.triggerAttack('C4', time + quarter * 3 + eighth, 0.8);
+                    tomHigh.triggerAttack('C4', time + quarter * 2, 0.8);
+                    tomMid.triggerAttack('C4', time + quarter * 2 + eighth, 0.8);
+                    tomFloor.triggerAttack('C4', time + quarter * 3, 0.9);
+                    crash.triggerAttack('C4', time + quarter * 3 + eighth, 0.6);
                 },
-                () => { // Crash ending
-                    snare.triggerAttack('C4', time + quarter * 3, 0.8);
-                    crash.triggerAttack('C4', time + quarter * 3, 0.6);
-                }
             ];
             fillLibrary[Math.floor(rng() * fillLibrary.length)]!();
-
-        } else { // Standard beat with variations
-            // Beat 3
-            kick.triggerAttack('C4', time + quarter * 2, 1.0);
-             if (rng() < 0.3) { // Syncopated kick
-                kick.triggerAttack('C4', time + quarter * 2 + eighth, 0.7);
-            }
-            
-            // Beat 4
-            snare.triggerAttack('C4', time + quarter * 3, 0.9);
-            if (rng() < 0.2) { // Ghost note snare
-                snare.triggerAttack('C4', time + quarter * 3 + eighth, 0.3);
-            }
-        }
-
-        // --- Ride Cymbal with Humanization ---
-        for (let i = 0; i < 8; i++) {
-            const vel = 0.4 + (i % 2 === 0 ? 0.2 : 0) + rng() * 0.1;
-            const grooveOffset = (rng() - 0.5) * 0.02; // +/- 10ms
-            ride.triggerAttack('C4', time + (eighth * i) + grooveOffset, vel);
         }
     }, '1m').start(0);
 
@@ -437,7 +449,7 @@ const createRockSound = (rng: () => number) => {
     }, guitarRiff).start(0);
     guitarPart.loop = true; guitarPart.loopEnd = '1m';
     
-    scheduledEvents.push(bassPart, guitarPart, drumLoop);
+    scheduledEvents.push(bassPart, guitarPart, drumSeq, drumLoop);
 };
 
 const createJazzSound = (rng: () => number) => {
@@ -493,7 +505,7 @@ const createJazzSound = (rng: () => number) => {
               <span class="menu-description">思考を妨げない、静かな雨音のような音楽。</span>
             </div>
             <div v-if="selectedMenu === '集中ブレンド' && isPlaying" class="active-indicator">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
           <button class="menu-button" @click="playMusic('リラックス・デカフェ')" :class="{ 'is-active': selectedMenu === 'リラックス・デカフェ' }">
@@ -502,7 +514,7 @@ const createJazzSound = (rng: () => number) => {
               <span class="menu-description">心のコリをほぐす、優しい陽だまりのような音楽。</span>
             </div>
             <div v-if="selectedMenu === 'リラックス・デカフェ' && isPlaying" class="active-indicator">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
           <button class="menu-button" @click="playMusic('ジャズ・スペシャル')" :class="{ 'is-active': selectedMenu === 'ジャズ・スペシャル' }">
@@ -511,7 +523,7 @@ const createJazzSound = (rng: () => number) => {
               <span class="menu-description">夜の静寂に寄り添う、マスターこだわりの一杯。</span>
             </div>
             <div v-if="selectedMenu === 'ジャズ・スペシャル' && isPlaying" class="active-indicator">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
           <button class="menu-button" @click="playMusic('Lo-Fi・ビター')" :class="{ 'is-active': selectedMenu === 'Lo-Fi・ビター' }">
@@ -520,7 +532,7 @@ const createJazzSound = (rng: () => number) => {
               <span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span>
             </div>
             <div v-if="selectedMenu === 'Lo-Fi・ビター' && isPlaying" class="active-indicator">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
           <button class="menu-button" @click="playMusic('ロック・ビート')" :class="{ 'is-active': selectedMenu === 'ロック・ビート' }">
