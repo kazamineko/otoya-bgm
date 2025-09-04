@@ -21,6 +21,11 @@
                   <button @click.prevent="playSound(instrument, 'target')" title="最終的に目指すべき理想の音">目標サウンド</button>
                   <button @click.prevent="playSound(instrument, 'raw')" title="エフェクトを何も通していない、録音したままの音">原音DI</button>
                 </template>
+                <template v-else-if="instrument === 'ebass'">
+                  <button @click.prevent="playSound(instrument, 'sampler')" title="DI音源を仮想アンプで加工した音">加工後DI</button>
+                  <button @click.prevent="playSound(instrument, 'target')" title="最終的に目指すべき理想の音">目標サウンド</button>
+                  <button @click.prevent="playSound(instrument, 'raw')" title="エフェクトを何も通していない、録音したままの音">原音DI</button>
+                </template>
                 <template v-else>
                   <button @click.prevent="playSound(instrument, 'sampler')">Sampler</button>
                   <button @click.prevent="playSound(instrument, 'raw')">原音</button>
@@ -50,8 +55,8 @@
                   @input="updateParam(instrument, 'release', $event)">
                 <span>{{ tuningParams[instrument]!.release.toFixed(2) }} s</span>
               </div>
-              <!-- eguitar専用スライダー -->
-              <div v-if="instrument === 'eguitar'" class="slider-container">
+              <!-- 専用スライダー -->
+              <div v-if="instrument === 'eguitar' || instrument === 'ebass'" class="slider-container">
                   <label>Distortion</label>
                   <input type="range" min="0" max="1" step="0.01"
                       :value="tuningParams[instrument]!.distortion"

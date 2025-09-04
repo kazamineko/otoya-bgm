@@ -21,7 +21,8 @@ const loadingMessage = ref<string>('');
 let Tone: typeof ToneType | null = null;
 let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let rawSamplePlayers: ToneType.Players | null = null;
-let targetGuitarPlayer: ToneType.Player | null = null; // 【追加】目標サウンド比較用
+let targetGuitarPlayer: ToneType.Player | null = null;
+let targetBassPlayer: ToneType.Player | null = null;
 let reverb: ToneType.Reverb | null = null;
 let chorus: ToneType.Chorus | null = null;
 let delay: ToneType.PingPongDelay | null = null;
@@ -32,6 +33,7 @@ let limiter: ToneType.Limiter | null = null;
 let guitarPreComp: ToneType.Compressor | null = null;
 let guitarDistortion: ToneType.Distortion | null = null;
 let guitarPostEQ: ToneType.EQ3 | null = null;
+let guitarChorus: ToneType.Chorus | null = null; // 【追加】ギター専用コーラス
 let guitarCab: ToneType.Convolver | null = null;
 let guitarMakeUpGain: ToneType.Volume | null = null;
 
@@ -69,6 +71,9 @@ watch(tuningParams, (newParams) => {
       if (instrumentName === 'eguitar' && guitarDistortion && params.distortion !== undefined) {
         guitarDistortion.distortion = params.distortion;
       }
+      if (instrumentName === 'ebass' && bassDistortion && params.distortion !== undefined) {
+        bassDistortion.distortion = params.distortion;
+      }
     }
   }
 }, { deep: true });
@@ -94,7 +99,7 @@ const initializeAudio = async () => {
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
     "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 1.0 },
-    "ebass": { "volume": 6, "attack": 0.01, "release": 1.5 },
+    "ebass": { "volume": 6, "attack": 0.01, "release": 1.5, "distortion": 0.2 },
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
     "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
@@ -131,12 +136,13 @@ const initializeAudio = async () => {
     loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
     guitarPreComp = new Tone.Compressor({threshold: -20, ratio: 4, attack: 0.01, release: 0.1});
     guitarDistortion = new Tone.Distortion({ distortion: tuningParams.value.eguitar?.distortion ?? 1.0, oversample: '4x' });
-    guitarPostEQ = new Tone.EQ3({ low: -2, mid: -12, high: 6 });
+    guitarPostEQ = new Tone.EQ3({ low: 3, mid: -12, high: 6 });
+    guitarChorus = new Tone.Chorus(1.5, 0.3, 3.5).start();
     guitarCab = new Tone.Convolver('/ir-guitar-cab.wav');
     guitarMakeUpGain = new Tone.Volume(12);
 
     bassEQ = new Tone.EQ3({ low: 4, mid: 0, high: -2 });
-    bassDistortion = new Tone.Distortion(0.2); 
+    bassDistortion = new Tone.Distortion(tuningParams.value.ebass?.distortion ?? 0.2); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
     bassMakeUpGain = new Tone.Volume(8);
     bassPostComp = new Tone.Compressor({threshold: -18, ratio: 4, attack: 0.02, release: 0.2});
@@ -144,11 +150,11 @@ const initializeAudio = async () => {
     bassSubGain = new Tone.Volume(0);
     
     rideFilter = new Tone.Filter(10000, 'lowpass');
-
-    // 【追加】目標サウンド比較用プレイヤーの準備
+    
     targetGuitarPlayer = new Tone.Player('/eguitar-dist-c4.wav').toDestination();
+    targetBassPlayer = new Tone.Player('/ebass-e1.wav').toDestination();
 
-    await Promise.all([guitarCab.load, bassCab.load, targetGuitarPlayer.load]);
+    await Promise.all([guitarCab.load, bassCab.load, targetGuitarPlayer.load, targetBassPlayer.load]);
     loadingMessage.value = '楽器を最終調整しています...';
     
     for (const name of instrumentList.value) {
@@ -170,7 +176,7 @@ const initializeAudio = async () => {
       // --- Final Audio Routing ---
       switch(name) {
         case 'eguitar':
-          sampler.chain(guitarPreComp, guitarDistortion, guitarPostEQ, guitarCab, guitarMakeUpGain);
+          sampler.chain(guitarPreComp, guitarDistortion, guitarPostEQ, guitarChorus, guitarCab, guitarMakeUpGain);
           guitarMakeUpGain.fan(masterComp, reverb);
           break;
         case 'ebass':
@@ -292,6 +298,8 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
     rawSamplePlayers.player(instrumentName).start();
   } else if (type === 'target' && instrumentName === 'eguitar' && targetGuitarPlayer) {
     targetGuitarPlayer.start();
+  } else if (type === 'target' && instrumentName === 'ebass' && targetBassPlayer) {
+    targetBassPlayer.start();
   }
 };
 const handleUpdateParam = (payload: { instrument: string, param: keyof TuningParams[string], value: number }) => {
