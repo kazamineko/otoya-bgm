@@ -80,7 +80,7 @@ const initializeAudio = async () => {
     piano: 'piano-c4.wav', bass: 'bass-c1.wav', ride: 'drum-ride.wav', brush: 'drum-brush.wav',
     epiano: 'epiano-c4.wav', kick: 'drum-kick.wav', snare: 'drum-snare.wav', pad: 'pad-cmaj7.wav',
     sax: 'sax-c4.wav', trombone: 'trombone-c3.wav',
-    eguitar: 'eguitar-clean-c3.wav', ebass: 'ebass-di-e1.wav',
+    eguitar: 'eguitar-dist-c4.wav', ebass: 'ebass-di-e1.wav',
     rockKick: 'rock-kick.wav', rockSnare: 'rock-snare.wav', crash: 'drum-crash.wav',
     tomHigh: 'tom-high.wav', tomMid: 'tom-mid.wav', tomFloor: 'tom-floor.wav',
   };
@@ -92,7 +92,7 @@ const initializeAudio = async () => {
     "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.9 },
+    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5 },
     "ebass": { "volume": 6, "attack": 0.01, "release": 1.5 },
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
@@ -165,10 +165,6 @@ const initializeAudio = async () => {
 
       // --- Final Audio Routing ---
       switch(name) {
-        case 'eguitar':
-          sampler.chain(guitarPreComp, guitarDistortion, guitarPostEQ, guitarCab, guitarMakeUpGain);
-          guitarMakeUpGain.fan(masterComp, reverb);
-          break;
         case 'ebass':
           sampler.connect(bassEQ);
           sampler.connect(bassSubFilter);
@@ -186,7 +182,7 @@ const initializeAudio = async () => {
         case 'pad':
           sampler.chain(reverb, masterComp);
           break;
-        default:
+        default: // eguitar uses this default now
           sampler.fan(masterComp, reverb, chorus, delay);
           break;
       }
@@ -310,10 +306,88 @@ const handleExportParams = () => {
 const ROLES = { BACKING: 'backing', GUITAR_SOLO: 'guitar_solo', DRUM_BREAK: 'drum_break' } as const;
 type Role = typeof ROLES[keyof typeof ROLES];
 
-const createConcentrationSound = (rng: () => number): boolean => { return false; };
-const createRelaxSound = (rng: () => number): boolean => { return false; };
-const createLoFiSound = (rng: () => number): boolean => { return false; };
-const createJazzSound = (rng: () => number): boolean => { return false; };
+const createConcentrationSound = (rng: () => number): boolean => {
+    if (!Tone || !masterComp) return false;
+    if (noise) { noise.stop(0); noise.dispose(); noise = null; }
+    noise = new Tone.Noise("pink").start();
+    const filter = new Tone.Filter(800, "lowpass").connect(masterComp);
+    noise.connect(filter);
+    const loop = new Tone.Loop((time) => { filter.frequency.rampTo(600 + rng() * 400, 4, time); }, "4m").start(0);
+    scheduledEvents.push(loop);
+    return true;
+};
+
+const createRelaxSound = (rng: () => number): boolean => {
+    if (!samplers.pad || !reverb) return false;
+    const { sampler: padSampler, baseNote } = samplers.pad;
+    padSampler.triggerAttack(baseNote);
+    return true;
+};
+
+const createLoFiSound = (rng: () => number): boolean => {
+    if (!Tone || !samplers.epiano || !samplers.kick || !samplers.snare || !chorus) return false;
+    const epiano = samplers.epiano.sampler;
+    const kick = samplers.kick.sampler;
+    const snare = samplers.snare.sampler;
+    const kickNote = samplers.kick.baseNote;
+    const snareNote = samplers.snare.baseNote;
+
+    Tone.Transport.bpm.value = 80 + rng() * 15;
+    const chords = [['C2', 'Eb2', 'G2'], ['A1', 'C2', 'E2']];
+    let currentChord = chords[Math.floor(rng() * 2)]!;
+    
+    const kickSeq = new Tone.Sequence((time, note) => {
+        if(note) kick.triggerAttackRelease(kickNote, '8n', time, 0.9 + rng() * 0.1);
+    }, [1,0,1,0,1,0,1,0], "8n").start(0);
+
+    const snareSeq = new Tone.Sequence((time, note) => {
+        if(note) snare.triggerAttackRelease(snareNote, '8n', time, 0.8 + rng() * 0.2);
+    }, [0,1,0,1], "4n").start(0);
+
+    const chordLoop = new Tone.Loop((time) => {
+        epiano.triggerAttackRelease(currentChord, '2n', time, 0.7 + rng() * 0.2);
+    }, "1n").start(0);
+    scheduledEvents.push(kickSeq, snareSeq, chordLoop);
+    return true;
+};
+
+const createJazzSound = (rng: () => number): boolean => {
+    if (!Tone || !samplers.piano || !samplers.bass || !samplers.ride || !samplers.sax || !reverb || !delay) return false;
+    const piano = samplers.piano.sampler;
+    const bass = samplers.bass.sampler;
+    const ride = samplers.ride.sampler;
+    const rideNote = samplers.ride.baseNote;
+    const sax = samplers.sax.sampler;
+
+    Tone.Transport.bpm.value = 100 + rng() * 20;
+    Tone.Transport.swing = 0.05;
+    let isSolo = false;
+
+    const chords = [
+        { time: '0:0', chord: ['D3', 'F3', 'A3', 'C4'] }, { time: '2:0', chord: ['G2', 'F3', 'B3', 'D4'] },
+    ];
+    const pianoPart = new Tone.Part<({ time: string, chord: string[] })>((time, value) => {
+        if(isSolo) return;
+        piano.triggerAttackRelease(value.chord, '2n', time, 0.7);
+    }, chords).start(0);
+    pianoPart.loop = true; pianoPart.loopEnd = '4m';
+    
+    const bassPart = new Tone.Sequence((time, note) => {
+        bass.triggerAttackRelease(note, '4n', time, 0.9);
+    }, ['D1', 'G1', 'C2', 'F1'], '2n').start(0);
+
+    const ridePart = new Tone.Loop(time => {
+        ride.triggerAttack(rideNote, time, 0.7);
+    }, '4n').start(0);
+
+    const saxPart = new Tone.Sequence((time, note) => {
+        if(isSolo && note) sax.triggerAttackRelease(note, '8n', time, 0.8);
+    }, ['G3', 'A3', null, 'C4', 'A3', 'G3', null, 'E3'], '8n').start(0);
+    
+    const soloToggle = new Tone.Loop(() => { isSolo = !isSolo }, '8m').start('4m');
+    scheduledEvents.push(pianoPart, bassPart, ridePart, saxPart, soloToggle);
+    return true;
+};
 
 const createRockSound = (rng: () => number): boolean => {
     if (!Tone || !rideFilter || !samplers.eguitar || !samplers.ebass || !samplers.rockKick || !samplers.rockSnare || !samplers.crash || !samplers.tomHigh || !samplers.tomMid || !samplers.tomFloor || !samplers.ride || !tuningParams.value.ebass || !tuningParams.value.ride) {
