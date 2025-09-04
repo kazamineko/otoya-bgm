@@ -92,7 +92,7 @@ const initializeAudio = async () => {
     "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.9 },
+    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 1.0 },
     "ebass": { "volume": 6, "attack": 0.01, "release": 1.5 },
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
@@ -129,8 +129,8 @@ const initializeAudio = async () => {
     // --- Virtual Amp Rig & Nuance Engine ---
     loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
     guitarPreComp = new Tone.Compressor({threshold: -20, ratio: 4, attack: 0.01, release: 0.1});
-    guitarDistortion = new Tone.Distortion(tuningParams.value.eguitar?.distortion ?? 0.9);
-    guitarPostEQ = new Tone.EQ3({ low: 2, mid: -4, high: 4 });
+    guitarDistortion = new Tone.Distortion({ distortion: tuningParams.value.eguitar?.distortion ?? 1.0, oversample: '4x' });
+    guitarPostEQ = new Tone.EQ3({ low: -2, mid: -12, high: 6 });
     guitarCab = new Tone.Convolver('/ir-guitar-cab.wav');
     guitarMakeUpGain = new Tone.Volume(12);
 
