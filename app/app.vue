@@ -29,7 +29,8 @@ let limiter: ToneType.Limiter | null = null;
 
 // --- Virtual Amp Rig ---
 let guitarPreComp: ToneType.Compressor | null = null;
-let guitarOverdrive: ToneType.Chebyshev | null = null;
+// 修正: ChebyshevからDistortionに戻し、目標サウンドに近づける
+let guitarDistortion: ToneType.Distortion | null = null;
 let guitarPostEQ: ToneType.EQ3 | null = null;
 let guitarCab: ToneType.Convolver | null = null;
 let guitarMakeUpGain: ToneType.Volume | null = null;
@@ -50,7 +51,8 @@ const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
-type TuningParams = Record<string, { volume: number; attack: number; release: number; distortion?: number; order?: number }>;
+// 修正: orderを削除し、Distortionのみのパラメータに戻す
+type TuningParams = Record<string, { volume: number; attack: number; release: number; distortion?: number; }>;
 
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v11-virtuoso'; // Virtuoso Build
@@ -65,13 +67,8 @@ watch(tuningParams, (newParams) => {
       sampler.attack = params.attack;
       sampler.release = params.release;
 
-      if (instrumentName === 'eguitar' && guitarOverdrive) {
-        if (params.distortion !== undefined) {
-          guitarOverdrive.wet.value = params.distortion;
-        }
-        if (params.order !== undefined) {
-          guitarOverdrive.order = params.order;
-        }
+      if (instrumentName === 'eguitar' && guitarDistortion && params.distortion !== undefined) {
+        guitarDistortion.distortion = params.distortion;
       }
     }
   }
@@ -81,7 +78,6 @@ const initializeAudio = async () => {
   isLoading.value = true;
   loadingMessage.value = '喫茶店の準備をしています...';
 
-  // 修正: 目標サウンドである eguitar-dist-c4.wav を追加
   const allSamplePaths: Record<string, string> = {
     piano: 'piano-c4.wav', bass: 'bass-c1.wav', ride: 'drum-ride.wav', brush: 'drum-brush.wav',
     epiano: 'epiano-c4.wav', kick: 'drum-kick.wav', snare: 'drum-snare.wav', pad: 'pad-cmaj7.wav',
@@ -89,9 +85,10 @@ const initializeAudio = async () => {
     eguitar: 'eguitar-clean-c3.wav', ebass: 'ebass-di-e1.wav',
     rockKick: 'rock-kick.wav', rockSnare: 'rock-snare.wav', crash: 'drum-crash.wav',
     tomHigh: 'tom-high.wav', tomMid: 'tom-mid.wav', tomFloor: 'tom-floor.wav',
-    'eguitar-dist-c4': 'eguitar-dist-c4.wav', // 目標サウンドを追加
+    'eguitar-target': 'eguitar-dist-c4.wav', // 目標サウンド
+    'ebass-target': 'ebass-e1.wav',      // 目標サウンド
   };
-  instrumentList.value = Object.keys(allSamplePaths).filter(key => key !== 'eguitar-dist-c4'); // UIリストには表示しない
+  instrumentList.value = Object.keys(allSamplePaths).filter(key => !key.endsWith('-target'));
 
   const masterTunedParams: TuningParams = {
     "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
@@ -99,7 +96,8 @@ const initializeAudio = async () => {
     "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.5, "order": 2 },
+    // 修正: ギターのサウンドパラメータを目標サウンドに近づけるために再設定
+    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.8 },
     "ebass": { "volume": 6, "attack": 0.01, "release": 1.5 },
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
@@ -123,32 +121,29 @@ const initializeAudio = async () => {
     await Tone.start();
     loadingMessage.value = '店内の響きを調整しています...';
     
-    // --- Master Output Chain ---
     limiter = new Tone.Limiter(-0.1).toDestination();
     masterComp = new Tone.Compressor({ threshold: -12, ratio: 3 }).connect(limiter);
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
 
-    // --- Global Effects (Sends) ---
     reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.01, wet: 0.3 }).connect(masterComp);
     chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
     delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
     
-    // --- Virtual Amp Rig & Nuance Engine ---
     loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
     const eguitarParams = tuningParams.value.eguitar!;
     guitarPreComp = new Tone.Compressor({threshold: -20, ratio: 4, attack: 0.01, release: 0.1});
-    guitarOverdrive = new Tone.Chebyshev({
-      order: eguitarParams.order ?? 2,
-      wet: eguitarParams.distortion ?? 0.5,
-    });
-    guitarPostEQ = new Tone.EQ3({ low: -2, mid: 2, high: -4 });
+    // 修正: 歪みエフェクトをTone.Distortionに戻し、パラメータを再調整
+    guitarDistortion = new Tone.Distortion(eguitarParams.distortion);
+    // 修正: EQ設定を目標サウンドに合わせて抜本的に見直し (ドンシャリ→ミッドブースト)
+    guitarPostEQ = new Tone.EQ3({ low: -6, mid: 5, high: -3 });
     guitarCab = new Tone.Convolver('/ir-guitar-cab.wav');
-    guitarMakeUpGain = new Tone.Volume(12);
+    guitarMakeUpGain = new Tone.Volume(10); // 歪みとEQの変更に伴いゲインを再調整
 
-    bassEQ = new Tone.EQ3({ low: 4, mid: 0, high: -2 });
-    bassDistortion = new Tone.Distortion(0.2); 
+    // 修正: ベースのサウンドを目標に合わせて再調整
+    bassEQ = new Tone.EQ3({ low: 3, mid: 4, high: -2 });
+    bassDistortion = new Tone.Distortion(0.4); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
-    bassMakeUpGain = new Tone.Volume(8);
+    bassMakeUpGain = new Tone.Volume(10);
     bassPostComp = new Tone.Compressor({threshold: -18, ratio: 4, attack: 0.02, release: 0.2});
     bassSubFilter = new Tone.Filter(120, 'lowpass');
     bassSubGain = new Tone.Volume(0);
@@ -174,10 +169,9 @@ const initializeAudio = async () => {
         attack: params.attack, release: params.release,
       });
 
-      // --- Final Audio Routing ---
       switch(name) {
         case 'eguitar':
-          sampler.chain(guitarPreComp, guitarOverdrive, guitarPostEQ, guitarCab, guitarMakeUpGain);
+          sampler.chain(guitarPreComp, guitarDistortion, guitarPostEQ, guitarCab, guitarMakeUpGain);
           guitarMakeUpGain.fan(masterComp, reverb);
           break;
         case 'ebass':
@@ -204,7 +198,7 @@ const initializeAudio = async () => {
       samplers[name] = { sampler, baseNote };
     }
     
-    rawSamplePlayers = await new Promise<ToneType.Players>((resolve, reject) => {
+    rawSamplePlayers = await new Promise<ToneType.Players>((resolve) => {
         const p = new Tone!.Players({ urls: allSamplePaths, baseUrl: "/", onload: () => resolve(p) }).toDestination();
     });
 
@@ -255,7 +249,6 @@ const stopMusic = () => {
   isPlaying.value = false;
 };
 
-// --- UI Event Handlers ---
 const togglePlayback = async () => { if (isPlaying.value) { stopMusic(); } else { if (selectedMenu.value) { const [menuName, seed] = currentSeed.value.split(':'); if (menuName && seed) await playMusic(menuName, seed); } } };
 const handleVolumeChange = (event: Event) => { const newVolume = parseFloat((event.target as HTMLInputElement).value); volume.value = newVolume; if (isAudioInitialized.value) { Tone!.Destination.volume.value = Tone!.gainToDb(newVolume); } };
 const openModal = () => { isModalVisible.value = true; };
@@ -263,11 +256,9 @@ const closeModal = () => { isModalVisible.value = false; };
 const copySeed = () => { if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value); };
 const playFromSeed = async () => { if (seedInput.value) { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート']; if (menuName && seed && validMenus.includes(menuName)) { await playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } } };
 
-// --- Sound Tuning Modal Handlers ---
 const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; };
 const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
 
-// 修正: handlePlaySoundのロジックをマスターの指示通りに変更
 const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw') => {
   if (!isAudioInitialized.value) {
     await initializeAudio();
@@ -280,10 +271,10 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw') 
       samplerData.sampler.triggerAttackRelease(samplerData.baseNote, '1n');
     }
   } else if (type === 'raw' && rawSamplePlayers) {
-    // マスターからの指示: eguitarとebassの場合、"原音"は目標サウンドを指す
+    // 修正: マスターの指示通り、ebassの目標サウンドを修正
     const targetSoundMap: Record<string, string> = {
-      eguitar: 'eguitar-dist-c4',
-      ebass: 'bass',
+      eguitar: 'eguitar-target',
+      ebass: 'ebass-target',
     };
     const soundToPlay = targetSoundMap[instrumentName] || instrumentName;
 

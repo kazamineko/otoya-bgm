@@ -16,14 +16,12 @@
             <summary class="instrument-summary">
               <span class="instrument-name">{{ instrument }}</span>
               <div class="play-buttons">
-                <!-- 修正: ボタンのラベルをより分かりやすく変更 -->
                 <button @click.prevent="playSound(instrument, 'sampler')">現在の音</button>
                 <button @click.prevent="playSound(instrument, 'raw')">目標の音</button>
               </div>
             </summary>
             
             <div class="sliders" v-if="tuningParams[instrument]">
-              <!-- 修正: eguitarとebassにDI方式の説明を追加 -->
               <div v-if="instrument === 'eguitar' || instrument === 'ebass'" class="di-explanation">
                 <p>
                   この楽器はDI方式で音作りをしています。<br>
@@ -54,6 +52,7 @@
                 <span>{{ tuningParams[instrument]!.release.toFixed(2) }} s</span>
               </div>
               
+              <!-- 修正: eguitarのパラメータをDistortionのみに修正し、orderを削除 -->
               <template v-if="instrument === 'eguitar' && tuningParams.eguitar">
                 <hr class="separator">
                 <div class="slider-container">
@@ -62,13 +61,6 @@
                     :value="tuningParams.eguitar.distortion"
                     @input="updateParam(instrument, 'distortion', $event)">
                   <span>{{ (tuningParams.eguitar.distortion! * 100).toFixed(0) }} %</span>
-                </div>
-                 <div class="slider-container">
-                  <label>歪みの質感 (Order)</label>
-                  <input type="range" min="1" max="10" step="1"
-                    :value="tuningParams.eguitar.order"
-                    @input="updateParam(instrument, 'order', $event)">
-                  <span>{{ tuningParams.eguitar.order }}</span>
                 </div>
               </template>
 
@@ -85,12 +77,12 @@
 </template>
 
 <script setup lang="ts">
+// 修正: orderプロパティを型定義から削除
 type TuningParams = Record<string, {
   volume: number;
   attack: number;
   release: number;
   distortion?: number;
-  order?: number;
 }>;
 
 defineProps<{
@@ -150,7 +142,7 @@ const updateParam = (instrument: string, param: string, event: Event) => {
 .play-buttons button {
   background-color: #363636; color: white; border: none; border-radius: 4px;
   padding: 8px 12px; cursor: pointer; transition: background-color 0.2s ease;
-  min-width: 80px; /* ボタン幅を揃える */
+  min-width: 80px;
 }
 .play-buttons button:hover { background-color: #555; }
 .sliders { padding: 10px 15px 20px; background-color: #f9f9f9; }
