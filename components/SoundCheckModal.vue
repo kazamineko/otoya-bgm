@@ -3,7 +3,7 @@
     <div class="modal-content">
       <button class="close-button" @click="close">×</button>
       <h2>サウンドチューニング</h2>
-      <p>各楽器の音量、アタック(音の鋭さ)、リリース(余韻)を調整します。</p>
+      <p>各楽器の音量や音質を調整します。</p>
       
       <div class="global-actions">
         <button @click="saveParams" class="action-button">現在の設定を保存</button>
@@ -16,12 +16,22 @@
             <summary class="instrument-summary">
               <span class="instrument-name">{{ instrument }}</span>
               <div class="play-buttons">
-                <button @click.prevent="playSound(instrument, 'sampler')">Sampler</button>
-                <button @click.prevent="playSound(instrument, 'raw')">原音</button>
+                <!-- 修正: ボタンのラベルをより分かりやすく変更 -->
+                <button @click.prevent="playSound(instrument, 'sampler')">現在の音</button>
+                <button @click.prevent="playSound(instrument, 'raw')">目標の音</button>
               </div>
             </summary>
             
             <div class="sliders" v-if="tuningParams[instrument]">
+              <!-- 修正: eguitarとebassにDI方式の説明を追加 -->
+              <div v-if="instrument === 'eguitar' || instrument === 'ebass'" class="di-explanation">
+                <p>
+                  この楽器はDI方式で音作りをしています。<br>
+                  <b>現在の音:</b> DI音源を仮想アンプで加工した、今のあなたの設定音です。<br>
+                  <b>目標の音:</b> AIが目指している、理想のサウンドです。
+                </p>
+              </div>
+
               <div class="slider-container">
                 <label>Volume</label>
                 <input type="range" min="-40" max="6" step="0.1" 
@@ -44,7 +54,6 @@
                 <span>{{ tuningParams[instrument]!.release.toFixed(2) }} s</span>
               </div>
               
-              <!-- eguitar専用の追加パラメータ -->
               <template v-if="instrument === 'eguitar' && tuningParams.eguitar">
                 <hr class="separator">
                 <div class="slider-container">
@@ -76,7 +85,6 @@
 </template>
 
 <script setup lang="ts">
-// 修正: orderプロパティも許容するように型定義を更新
 type TuningParams = Record<string, {
   volume: number;
   attack: number;
@@ -117,7 +125,7 @@ const updateParam = (instrument: string, param: string, event: Event) => {
   color: #333; max-height: 90vh; overflow-y: auto;
 }
 .modal-content h2 { text-align: center; margin-top: 0; margin-bottom: 10px; }
-.modal-content p { text-align: center; margin-top: 0; margin-bottom: 20px; line-height: 1.6; }
+.modal-content > p { text-align: center; margin-top: 0; margin-bottom: 20px; line-height: 1.6; }
 .close-button {
   position: absolute; top: 10px; right: 15px; background: none; border: none;
   font-size: 28px; cursor: pointer; color: #888;
@@ -142,6 +150,7 @@ const updateParam = (instrument: string, param: string, event: Event) => {
 .play-buttons button {
   background-color: #363636; color: white; border: none; border-radius: 4px;
   padding: 8px 12px; cursor: pointer; transition: background-color 0.2s ease;
+  min-width: 80px; /* ボタン幅を揃える */
 }
 .play-buttons button:hover { background-color: #555; }
 .sliders { padding: 10px 15px 20px; background-color: #f9f9f9; }
@@ -157,5 +166,18 @@ const updateParam = (instrument: string, param: string, event: Event) => {
   border: none;
   border-top: 1px dashed #ccc;
   margin: 15px 0;
+}
+.di-explanation {
+  background-color: #eef2fb;
+  border: 1px solid #c7d7fe;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 15px;
+}
+.di-explanation p {
+  margin: 0;
+  font-size: 0.85em;
+  line-height: 1.6;
+  text-align: left;
 }
 </style>

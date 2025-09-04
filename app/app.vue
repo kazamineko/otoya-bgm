@@ -29,7 +29,6 @@ let limiter: ToneType.Limiter | null = null;
 
 // --- Virtual Amp Rig ---
 let guitarPreComp: ToneType.Compressor | null = null;
-// 修正: Tone.DistortionからTone.Chebyshevに変更
 let guitarOverdrive: ToneType.Chebyshev | null = null;
 let guitarPostEQ: ToneType.EQ3 | null = null;
 let guitarCab: ToneType.Convolver | null = null;
@@ -51,7 +50,6 @@ const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
-// 修正: 歪みのキャラクター(order)もチューニング可能にする
 type TuningParams = Record<string, { volume: number; attack: number; release: number; distortion?: number; order?: number }>;
 
 const tuningParams = ref<TuningParams>({});
@@ -67,7 +65,6 @@ watch(tuningParams, (newParams) => {
       sampler.attack = params.attack;
       sampler.release = params.release;
 
-      // 修正: guitarOverdriveのパラメータを更新
       if (instrumentName === 'eguitar' && guitarOverdrive) {
         if (params.distortion !== undefined) {
           guitarOverdrive.wet.value = params.distortion;
@@ -84,6 +81,7 @@ const initializeAudio = async () => {
   isLoading.value = true;
   loadingMessage.value = '喫茶店の準備をしています...';
 
+  // 修正: 目標サウンドである eguitar-dist-c4.wav を追加
   const allSamplePaths: Record<string, string> = {
     piano: 'piano-c4.wav', bass: 'bass-c1.wav', ride: 'drum-ride.wav', brush: 'drum-brush.wav',
     epiano: 'epiano-c4.wav', kick: 'drum-kick.wav', snare: 'drum-snare.wav', pad: 'pad-cmaj7.wav',
@@ -91,8 +89,9 @@ const initializeAudio = async () => {
     eguitar: 'eguitar-clean-c3.wav', ebass: 'ebass-di-e1.wav',
     rockKick: 'rock-kick.wav', rockSnare: 'rock-snare.wav', crash: 'drum-crash.wav',
     tomHigh: 'tom-high.wav', tomMid: 'tom-mid.wav', tomFloor: 'tom-floor.wav',
+    'eguitar-dist-c4': 'eguitar-dist-c4.wav', // 目標サウンドを追加
   };
-  instrumentList.value = Object.keys(allSamplePaths);
+  instrumentList.value = Object.keys(allSamplePaths).filter(key => key !== 'eguitar-dist-c4'); // UIリストには表示しない
 
   const masterTunedParams: TuningParams = {
     "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
@@ -100,8 +99,7 @@ const initializeAudio = async () => {
     "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
     "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
     "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-    // 修正: ギターのサウンドパラメータを更新
-    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.9, "order": 3 },
+    "eguitar": { "volume": 0, "attack": 0.01, "release": 1.5, "distortion": 0.5, "order": 2 },
     "ebass": { "volume": 6, "attack": 0.01, "release": 1.5 },
     "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
     "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
@@ -139,12 +137,10 @@ const initializeAudio = async () => {
     loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
     const eguitarParams = tuningParams.value.eguitar!;
     guitarPreComp = new Tone.Compressor({threshold: -20, ratio: 4, attack: 0.01, release: 0.1});
-    // 修正: Tone.Chebyshevを使用して、よりリッチな歪みを生成
     guitarOverdrive = new Tone.Chebyshev({
-      order: eguitarParams.order ?? 3,
-      wet: eguitarParams.distortion ?? 0.9,
+      order: eguitarParams.order ?? 2,
+      wet: eguitarParams.distortion ?? 0.5,
     });
-    // 修正: EQ設定を見直し、サウンドに厚みを持たせる
     guitarPostEQ = new Tone.EQ3({ low: -2, mid: 2, high: -4 });
     guitarCab = new Tone.Convolver('/ir-guitar-cab.wav');
     guitarMakeUpGain = new Tone.Volume(12);
@@ -181,7 +177,6 @@ const initializeAudio = async () => {
       // --- Final Audio Routing ---
       switch(name) {
         case 'eguitar':
-          // 修正: 歪みエフェクトをguitarOverdriveに変更
           sampler.chain(guitarPreComp, guitarOverdrive, guitarPostEQ, guitarCab, guitarMakeUpGain);
           guitarMakeUpGain.fan(masterComp, reverb);
           break;
@@ -271,20 +266,35 @@ const playFromSeed = async () => { if (seedInput.value) { const [menuName, seed]
 // --- Sound Tuning Modal Handlers ---
 const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; };
 const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
+
+// 修正: handlePlaySoundのロジックをマスターの指示通りに変更
 const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw') => {
   if (!isAudioInitialized.value) {
     await initializeAudio();
     if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; }
   }
-  const samplerData = samplers[instrumentName];
-  if (type === 'sampler' && samplerData) {
-    samplerData.sampler.triggerAttackRelease(samplerData.baseNote, '1n');
-  } else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) {
-    const player = rawSamplePlayers.player(instrumentName);
-    player.loop = false;
-    player.start();
+
+  if (type === 'sampler') {
+    const samplerData = samplers[instrumentName];
+    if (samplerData) {
+      samplerData.sampler.triggerAttackRelease(samplerData.baseNote, '1n');
+    }
+  } else if (type === 'raw' && rawSamplePlayers) {
+    // マスターからの指示: eguitarとebassの場合、"原音"は目標サウンドを指す
+    const targetSoundMap: Record<string, string> = {
+      eguitar: 'eguitar-dist-c4',
+      ebass: 'bass',
+    };
+    const soundToPlay = targetSoundMap[instrumentName] || instrumentName;
+
+    if (rawSamplePlayers.has(soundToPlay)) {
+      const player = rawSamplePlayers.player(soundToPlay);
+      player.loop = false;
+      player.start();
+    }
   }
 };
+
 const handleUpdateParam = (payload: { instrument: string, param: keyof TuningParams[string], value: number }) => {
   if (tuningParams.value[payload.instrument]) { (tuningParams.value[payload.instrument] as any)[payload.param] = payload.value; }
 };
@@ -318,12 +328,8 @@ const createRockSound = (rng: () => number) => {
     
     Tone.Transport.bpm.value = 110 + rng() * 60;
 
-    // --- TypeScriptエラー修正: 型定義を整理・修正 ---
-    // 最終的にTone.Partに渡され、スケジュールされるイベントの型 (時間は絶対秒数)
     type ScheduledGuitarEvent = { time: number; note: string; dur: ToneType.Unit.Time };
     type ScheduledBassEvent = { time: number; note: string | null };
-
-    // 再利用可能なフレーズパターンを定義するための型 (時間は小節内の相対表記)
     type PatternNote = { time: string; note: string; dur: ToneType.Unit.Time };
     type GuitarPattern = PatternNote[];
     type BassPattern = (string | null)[];
@@ -365,7 +371,6 @@ const createRockSound = (rng: () => number) => {
         totalMeasures += nextDuration;
     }
 
-    // --- AI Virtuoso: Weaving the Entire Performance ---
     const guitarEvents: ScheduledGuitarEvent[] = [];
     const bassEvents: ScheduledBassEvent[] = [];
     let currentTime = 0;
@@ -374,7 +379,6 @@ const createRockSound = (rng: () => number) => {
         const sectionStart = currentTime;
         const measureDuration = Tone!.Time('1m').toSeconds();
         
-        // Dynamics Control
         if (section.role === ROLES.GUITAR_SOLO) {
             ebass.sampler.volume.rampTo(-6, 0.5, sectionStart);
             ride.sampler.volume.rampTo(-15, 0.5, sectionStart);
@@ -386,7 +390,6 @@ const createRockSound = (rng: () => number) => {
         for (let i = 0; i < section.duration; i++) {
             const measureStartTime = sectionStart + i * measureDuration;
             if (section.role !== ROLES.DRUM_BREAK) {
-                // Weave Guitar Part
                 const guitarPattern = section.role === ROLES.GUITAR_SOLO 
                     ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]!
                     : guitarBackingPatterns[Math.floor(rng() * guitarBackingPatterns.length)]!;
@@ -397,7 +400,6 @@ const createRockSound = (rng: () => number) => {
                     guitarEvents.push({ time: absoluteTime, note: noteEvent.note, dur: noteEvent.dur });
                 });
 
-                // Weave Bass Part
                 const bassPattern = bassBackingPatterns[Math.floor(rng() * bassBackingPatterns.length)]!;
                 bassPattern.forEach((note, index) => {
                     const noteTimeInSeconds = index * Tone!.Time('8n').toSeconds();
@@ -411,7 +413,6 @@ const createRockSound = (rng: () => number) => {
         currentTime += section.duration * measureDuration;
     });
     
-    // --- Final Scheduling ---
     const guitarPart = new Tone.Part<ScheduledGuitarEvent>(((time, value) => {
         eguitar.sampler.triggerAttackRelease(value.note, value.dur, time, 0.9 + rng() * 0.1);
     }), guitarEvents).start(0);
