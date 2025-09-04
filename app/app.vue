@@ -367,51 +367,42 @@ const createRockSound = (rng: () => number) => {
 
     Tone.Transport.bpm.value = 110 + rng() * 60;
 
-    // --- AI Drummer's Beat Textbook ---
+    // --- AI Drummer's Beat Textbook (Revised Edition) ---
     const rhythmPatternLibrary = {
         '8-Beat': {
             kick:   [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             snare:  [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
             ride:   [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
         },
-        '16-Beat': {
-            kick:   [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0],
+        '16-Beat': { // Musically Corrected 16-Beat
+            kick:   [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0],
             snare:  [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-            ride:   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            ride:   [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], // The pulse is 8th notes
         }
     };
 
-    // AI selects a base pattern for the song
     const patternKeys = Object.keys(rhythmPatternLibrary);
     const chosenPatternKey = patternKeys[Math.floor(rng() * patternKeys.length)]!;
     const basePattern = rhythmPatternLibrary[chosenPatternKey as keyof typeof rhythmPatternLibrary];
     
-    // AI adds human-like variations to the chosen pattern
-    if (rng() < 0.3) basePattern.kick[6] = 1; // Syncopation
+    // Add human-like variations to the chosen pattern
     if (rng() < 0.2) basePattern.snare[7] = 0.3; // Ghost note
 
-    const eventsToPlay = (instrument: number[], note: ToneType.Sampler, vel: number) => {
-        return instrument.map(v => v > 0 ? { note, vel: vel * v } : null);
-    }
-
     let currentMeasure = 0;
-    const playDrums = (time: number, step: number) => {
+    const drumSeq = new Tone.Sequence((time, step) => {
         const isFillMeasure = currentMeasure % 4 === 3;
         
-        // Play backbone beat unless it's the fill part of a fill measure
         if (!(isFillMeasure && step >= 8)) {
             if (basePattern.kick[step]) kick.triggerAttack('C4', time, 1.0);
             if (basePattern.snare[step]) snare.triggerAttack('C4', time, basePattern.snare[step]!);
         }
-
-        const grooveOffset = (rng() - 0.5) * 0.02; // +/- 10ms
+        
+        const grooveOffset = (rng() - 0.5) * 0.02;
         if (basePattern.ride[step]) ride.triggerAttack('C4', time + grooveOffset, 0.6 + rng() * 0.2);
-    };
 
-    const drumSeq = new Tone.Sequence(playDrums, Array.from(Array(16).keys()), "16n").start(0);
+    }, Array.from(Array(16).keys()), "16n").start(0);
 
     const drumLoop = new Tone.Loop((time) => {
-        currentMeasure++;
         if (currentMeasure % 4 === 3 && rng() < 0.75) {
             const quarter = Tone!.Time('4n').toSeconds();
             const eighth = Tone!.Time('8n').toSeconds();
@@ -431,6 +422,7 @@ const createRockSound = (rng: () => number) => {
             ];
             fillLibrary[Math.floor(rng() * fillLibrary.length)]!();
         }
+        currentMeasure = (currentMeasure + 1) % 4;
     }, '1m').start(0);
 
     const bassPart = new Tone.Sequence((time, note) => {
@@ -541,7 +533,7 @@ const createJazzSound = (rng: () => number) => {
               <span class="menu-description">魂を揺さぶる、力強いリズムと歪んだギターのブレンド。</span>
             </div>
             <div v-if="selectedMenu === 'ロック・ビート' && isPlaying" class="active-indicator">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
             </div>
           </button>
         </div>
