@@ -365,56 +365,59 @@ const createRockSound = (rng: () => number) => {
     const tomFloor = samplers.tomFloor.sampler;
     const ride = samplers.ride.sampler;
 
-    // --- Dynamic BPM ---
-    Tone.Transport.bpm.value = 110 + rng() * 60; // From 110 to 170 BPM
-
-    // --- AI Drummer's Fill-in Library ---
-    const fillLibrary = [
-        // #1: Simple Snare Roll
-        [
-            { note: snare, pos: 12 }, { note: snare, pos: 13 }, { note: snare, pos: 14 }, { note: snare, pos: 15 }
-        ],
-        // #2: Tom Run Down
-        [
-            { note: tomHigh, pos: 12 }, { note: tomMid, pos: 13 }, { note: tomFloor, pos: 14 }, { note: crash, pos: 15 }
-        ],
-        // #3: Syncopated Snare + Tom
-        [
-            { note: snare, pos: 12 }, { note: tomHigh, pos: 14 }, { note: tomMid, pos: 15 }
-        ],
-        // #4: Kick + Snare build-up
-        [
-            { note: kick, pos: 12 }, { note: kick, pos: 13 }, { note: snare, pos: 14 }, { note: snare, pos: 15 }
-        ],
-    ];
+    Tone.Transport.bpm.value = 110 + rng() * 60;
 
     const drumLoop = new Tone.Loop(time => {
-        const sixteenth = Tone!.Time('16n').toSeconds();
+        const eighth = Tone!.Time('8n').toSeconds();
+        const quarter = Tone!.Time('4n').toSeconds();
+
         const position = Tone!.Transport.position.toString();
-        const measureStr = position.split(':')[0];
-        const measure = measureStr ? parseInt(measureStr, 10) : 0;
+        const measureStr = position.split(':')[0] ?? '0'; // Type-safe fallback
+        const measure = parseInt(measureStr, 10);
+
+        // --- The Unbreakable Backbone ---
+        kick.triggerAttack('C4', time, 1.0);
+        snare.triggerAttack('C4', time + quarter * 1, 0.9);
         
-        // Decide if a fill-in should be played (on the 4th measure)
-        if (measure % 4 === 3 && rng() < 0.75) {
-            // AI selects a random fill from the library
-            const pattern = fillLibrary[Math.floor(rng() * fillLibrary.length)]!;
-            pattern.forEach(fill => {
-                const vel = 0.8 + rng() * 0.2;
-                fill.note.triggerAttack('C4', time + sixteenth * fill.pos, vel);
-            });
-        } else {
-            // Standard Beat
-            kick.triggerAttack('C4', time, 1.0);
-            snare.triggerAttack('C4', time + Tone!.Time('4n').toSeconds(), 0.9);
-            kick.triggerAttack('C4', time + Tone!.Time('2n').toSeconds(), 1.0);
-            snare.triggerAttack('C4', time + Tone!.Time('2n + 4n').toSeconds(), 0.9);
+        // --- Beat Variations & Fill-ins ---
+        if (measure % 4 === 3 && rng() < 0.75) { // Fill-in on the 4th measure
+            kick.triggerAttack('C4', time + quarter * 2, 1.0); // Keep beat 3 kick
+            
+            const fillLibrary = [
+                () => { // Snare roll
+                    snare.triggerAttack('C4', time + quarter * 3, 0.8);
+                    snare.triggerAttack('C4', time + quarter * 3 + eighth, 0.7);
+                },
+                () => { // Tom run
+                    tomHigh.triggerAttack('C4', time + quarter * 3, 0.8);
+                    tomMid.triggerAttack('C4', time + quarter * 3 + eighth, 0.8);
+                },
+                () => { // Crash ending
+                    snare.triggerAttack('C4', time + quarter * 3, 0.8);
+                    crash.triggerAttack('C4', time + quarter * 3, 0.6);
+                }
+            ];
+            fillLibrary[Math.floor(rng() * fillLibrary.length)]!();
+
+        } else { // Standard beat with variations
+            // Beat 3
+            kick.triggerAttack('C4', time + quarter * 2, 1.0);
+             if (rng() < 0.3) { // Syncopated kick
+                kick.triggerAttack('C4', time + quarter * 2 + eighth, 0.7);
+            }
+            
+            // Beat 4
+            snare.triggerAttack('C4', time + quarter * 3, 0.9);
+            if (rng() < 0.2) { // Ghost note snare
+                snare.triggerAttack('C4', time + quarter * 3 + eighth, 0.3);
+            }
         }
 
-        // Ride Cymbal with Humanization (Groove)
+        // --- Ride Cymbal with Humanization ---
         for (let i = 0; i < 8; i++) {
             const vel = 0.4 + (i % 2 === 0 ? 0.2 : 0) + rng() * 0.1;
-            const grooveOffset = (rng() - 0.5) * 0.02; // +/- 10ms of sway
-            ride.triggerAttack('C4', time + (sixteenth * 2 * i) + grooveOffset, vel);
+            const grooveOffset = (rng() - 0.5) * 0.02; // +/- 10ms
+            ride.triggerAttack('C4', time + (eighth * i) + grooveOffset, vel);
         }
     }, '1m').start(0);
 
