@@ -229,9 +229,9 @@ const initializeAudio = async () => {
           sampler.chain(reverb, masterComp); 
           break;
         default:
-          const isTightRhythm = name.includes('kick') || name.includes('snare') || name.includes('tom');
-          if (isTightRhythm) {
-            // タイト・リズム隊: ディレイとコーラスをバイパス
+          const isDryInstrument = /kick|snare|tom|sax/i.test(name);
+          if (isDryInstrument) {
+            // ディレイとコーラスをバイパスする、クリーンな経路
             sampler.fan(masterComp, reverb);
           } else {
             // 空間系・色彩楽器: 従来通り全てのエフェクトへ
