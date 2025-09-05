@@ -30,7 +30,7 @@ let masterComp: ToneType.Compressor | null = null;
 let limiter: ToneType.Limiter | null = null;
 
 // --- Virtual Amp Rig ---
-let guitarPreComp: ToneType.Compressor | null = null;
+let guitarPreDistComp: ToneType.Compressor | null = null; // ★ 武装: コンプレッサー追加
 let guitarPreEQ: ToneType.Filter | null = null; 
 let guitarDistortion: ToneType.Distortion | null = null;
 let guitarPostEQ: ToneType.EQ3 | null = null;
@@ -39,6 +39,7 @@ let guitarCab: ToneType.Convolver | null = null;
 let guitarMakeUpGain: ToneType.Volume | null = null;
 
 // --- Bass Parallel Processing Rig ---
+let bassPreDistComp: ToneType.Compressor | null = null; // ★ 武装: ベースにもコンプレッサー追加
 let bassEQ: ToneType.EQ3 | null = null;
 let bassDistortion: ToneType.Distortion | null = null;
 let bassCab: ToneType.Convolver | null = null;
@@ -55,12 +56,14 @@ let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
 type AmpParams = {
+  preCompThreshold: number; preCompRatio: number; preCompAttack: number; preCompRelease: number;
   preEqFreq: number; preEqGain: number;
   distortion: number;
   postEqLow: number; postEqMid: number; postEqHigh: number;
   chorusDepth: number; chorusRate: number;
 };
 type BassAmpParams = {
+  preCompThreshold: number; preCompRatio: number; preCompAttack: number; preCompRelease: number;
   subBlend: number; drive: number;
   eqLow: number; eqMid: number; eqHigh: number;
 };
@@ -70,8 +73,8 @@ const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro'; // Pro Build
 
 const masterTunedParams: TuningParams = {
-  "eguitar": { "preEqFreq": 800, "preEqGain": 12, "distortion": 0.9, "postEqLow": 3, "postEqMid": -12, "postEqHigh": 6, "chorusDepth": 0.1, "chorusRate": 1.5 },
-  "ebass": { "subBlend": 0.5, "drive": 0.3, "eqLow": 4, "eqMid": -2, "eqHigh": 2 },
+  "eguitar": { "preCompThreshold": -24, "preCompRatio": 4, "preCompAttack": 0.01, "preCompRelease": 0.1, "preEqFreq": 800, "preEqGain": 12, "distortion": 0.9, "postEqLow": 3, "postEqMid": -12, "postEqHigh": 6, "chorusDepth": 0.1, "chorusRate": 1.5 },
+  "ebass": { "preCompThreshold": -20, "preCompRatio": 4, "preCompAttack": 0.02, "preCompRelease": 0.2, "subBlend": 0.5, "drive": 0.3, "eqLow": 4, "eqMid": -2, "eqHigh": 2 },
   "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
   "ride": { "volume": -9, "attack": 0.01, "release": 0.5 }, "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
   "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
@@ -89,23 +92,31 @@ watch(tuningParams, (newParams) => {
   
   // Apply eGuitar params
   const eguitarParams = newParams.eguitar as AmpParams;
-  if (eguitarParams && guitarPreEQ && guitarDistortion && guitarPostEQ && guitarChorus) {
+  if (eguitarParams && guitarPreDistComp && guitarPreEQ && guitarDistortion && guitarPostEQ && guitarChorus) {
+    guitarPreDistComp.threshold.value = eguitarParams.preCompThreshold;
+    guitarPreDistComp.ratio.value = eguitarParams.preCompRatio;
+    guitarPreDistComp.attack.value = eguitarParams.preCompAttack;
+    guitarPreDistComp.release.value = eguitarParams.preCompRelease;
     guitarPreEQ.frequency.value = eguitarParams.preEqFreq;
     guitarPreEQ.gain.value = eguitarParams.preEqGain;
     guitarDistortion.distortion = eguitarParams.distortion;
     guitarPostEQ.low.value = eguitarParams.postEqLow;
     guitarPostEQ.mid.value = eguitarParams.postEqMid;
     guitarPostEQ.high.value = eguitarParams.postEqHigh;
-    guitarChorus.depth = eguitarParams.chorusDepth; // .value is not used for depth
+    guitarChorus.depth = eguitarParams.chorusDepth;
     guitarChorus.frequency.value = eguitarParams.chorusRate;
   }
 
   // Apply eBass params
   const ebassParams = newParams.ebass as BassAmpParams;
-  if (ebassParams && bassSubGain && bassDistortion && bassEQ && bassMakeUpGain) {
+  if (ebassParams && bassPreDistComp && bassSubGain && bassDistortion && bassEQ && bassMakeUpGain) {
+      bassPreDistComp.threshold.value = ebassParams.preCompThreshold;
+      bassPreDistComp.ratio.value = ebassParams.preCompRatio;
+      bassPreDistComp.attack.value = ebassParams.preCompAttack;
+      bassPreDistComp.release.value = ebassParams.preCompRelease;
       const diGain = 1.0 - ebassParams.subBlend;
-      bassMakeUpGain.volume.value = Tone.gainToDb(diGain * 16) + 8; // DI path makeup gain
-      bassSubGain.volume.value = Tone.gainToDb(ebassParams.subBlend * 2); // Sub path makeup gain
+      bassMakeUpGain.volume.value = Tone.gainToDb(diGain * 16) + 8;
+      bassSubGain.volume.value = Tone.gainToDb(ebassParams.subBlend * 2);
       bassDistortion.distortion = ebassParams.drive;
       bassEQ.low.value = ebassParams.eqLow;
       bassEQ.mid.value = ebassParams.eqMid;
@@ -166,7 +177,9 @@ const initializeAudio = async () => {
     
     loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
     const eguitarP = tuningParams.value.eguitar;
-    guitarPreComp = new Tone.Compressor({threshold: -20, ratio: 4, attack: 0.01, release: 0.1});
+    guitarPreDistComp = new Tone.Compressor(eguitarP.preCompThreshold, eguitarP.preCompRatio);
+    guitarPreDistComp.attack.value = eguitarP.preCompAttack;
+    guitarPreDistComp.release.value = eguitarP.preCompRelease;
     guitarPreEQ = new Tone.Filter({ type: 'peaking', frequency: eguitarP.preEqFreq, gain: eguitarP.preEqGain });
     guitarDistortion = new Tone.Distortion({ distortion: eguitarP.distortion, oversample: '4x' });
     guitarPostEQ = new Tone.EQ3({ low: eguitarP.postEqLow, mid: eguitarP.postEqMid, high: eguitarP.postEqHigh });
@@ -175,6 +188,9 @@ const initializeAudio = async () => {
     guitarMakeUpGain = new Tone.Volume(12);
 
     const ebassP = tuningParams.value.ebass;
+    bassPreDistComp = new Tone.Compressor(ebassP.preCompThreshold, ebassP.preCompRatio);
+    bassPreDistComp.attack.value = ebassP.preCompAttack;
+    bassPreDistComp.release.value = ebassP.preCompRelease;
     bassEQ = new Tone.EQ3({ low: ebassP.eqLow, mid: ebassP.eqMid, high: ebassP.eqHigh });
     bassDistortion = new Tone.Distortion(ebassP.drive); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
@@ -212,13 +228,13 @@ const initializeAudio = async () => {
 
       switch(name) {
         case 'eguitar':
-          sampler.chain(guitarPreComp, guitarPreEQ, guitarDistortion, guitarPostEQ, guitarChorus, guitarCab, guitarMakeUpGain);
+          sampler.chain(guitarPreDistComp, guitarPreEQ, guitarDistortion, guitarPostEQ, guitarChorus, guitarCab, guitarMakeUpGain);
           guitarMakeUpGain.fan(masterComp, reverb);
           break;
         case 'ebass':
-          sampler.connect(bassEQ);
+          sampler.connect(bassPreDistComp);
           sampler.connect(bassSubFilter);
-          bassEQ.chain(bassDistortion, bassCab, bassMakeUpGain, bassPostComp, masterComp);
+          bassPreDistComp.chain(bassEQ, bassDistortion, bassCab, bassMakeUpGain, bassPostComp, masterComp);
           bassSubFilter.chain(bassSubGain, masterComp);
           break;
         case 'ride': 
@@ -231,10 +247,8 @@ const initializeAudio = async () => {
         default:
           const isDryInstrument = /kick|snare|tom|sax|crash/i.test(name);
           if (isDryInstrument) {
-            // ディレイとコーラスをバイパスする、クリーンな経路
             sampler.fan(masterComp, reverb);
           } else {
-            // 空間系・色彩楽器: 従来通り全てのエフェクトへ
             sampler.fan(masterComp, reverb, chorus, delay);
           }
           break;
@@ -452,7 +466,7 @@ const createRockSound = (rng: () => number): boolean => {
         // --- Instrument Pattern Generation for this measure ---
         if (role !== ROLES.DRUM_BREAK) {
             // Guitar
-            const guitarPattern = role === ROLES.GUITAR_SOLO ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]! : guitarBackingPatterns[Math.floor(rng() * guitarBackingPatterns.length)]!;
+            const guitarPattern = role === ROLES.GUITAR_SOLO ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]! : guitarBackingPatterns[Math.floor(rng() * guitarSoloPatterns.length)]!;
             guitarPattern.forEach(noteEvent => {
                 const noteTime = time + Tone!.Time(noteEvent.time).toSeconds();
                 eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, noteTime, 0.9 + rng() * 0.1);

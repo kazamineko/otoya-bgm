@@ -32,6 +32,27 @@
             <div class="sliders" v-if="tuningParams[instrument]">
               <!-- eGuitar 専用 -->
               <template v-if="instrument === 'eguitar'">
+                <div class="sub-header">Pre-Dist Compressor (音の粒立ち・サステイン)</div>
+                <div class="slider-container">
+                  <label>Threshold</label>
+                  <input type="range" min="-48" max="0" step="1" :value="tuningParams.eguitar.preCompThreshold" @input="updateParam('eguitar', 'preCompThreshold', $event)">
+                  <span>{{ tuningParams.eguitar.preCompThreshold }} dB</span>
+                </div>
+                <div class="slider-container">
+                  <label>Ratio</label>
+                  <input type="range" min="1" max="20" step="1" :value="tuningParams.eguitar.preCompRatio" @input="updateParam('eguitar', 'preCompRatio', $event)">
+                  <span>{{ tuningParams.eguitar.preCompRatio }}:1</span>
+                </div>
+                <div class="slider-container">
+                  <label>Attack</label>
+                  <input type="range" min="0.001" max="0.2" step="0.001" :value="tuningParams.eguitar.preCompAttack" @input="updateParam('eguitar', 'preCompAttack', $event)">
+                  <span>{{ tuningParams.eguitar.preCompAttack.toFixed(3) }} s</span>
+                </div>
+                <div class="slider-container">
+                  <label>Release</label>
+                  <input type="range" min="0.01" max="0.5" step="0.01" :value="tuningParams.eguitar.preCompRelease" @input="updateParam('eguitar', 'preCompRelease', $event)">
+                  <span>{{ tuningParams.eguitar.preCompRelease.toFixed(2) }} s</span>
+                </div>
                 <div class="sub-header">Pre EQ (歪みのキャラクター)</div>
                 <div class="slider-container">
                   <label>Mid Freq</label>
@@ -78,8 +99,29 @@
               </template>
               <!-- eBass 専用 -->
               <template v-else-if="instrument === 'ebass'">
-                 <div class="sub-header">Parallel Blend (サウンドの核)</div>
-                 <div class="slider-container">
+                <div class="sub-header">Pre-Dist Compressor</div>
+                <div class="slider-container">
+                  <label>Threshold</label>
+                  <input type="range" min="-48" max="0" step="1" :value="tuningParams.ebass.preCompThreshold" @input="updateParam('ebass', 'preCompThreshold', $event)">
+                  <span>{{ tuningParams.ebass.preCompThreshold }} dB</span>
+                </div>
+                <div class="slider-container">
+                  <label>Ratio</label>
+                  <input type="range" min="1" max="20" step="1" :value="tuningParams.ebass.preCompRatio" @input="updateParam('ebass', 'preCompRatio', $event)">
+                  <span>{{ tuningParams.ebass.preCompRatio }}:1</span>
+                </div>
+                <div class="slider-container">
+                  <label>Attack</label>
+                  <input type="range" min="0.001" max="0.2" step="0.001" :value="tuningParams.ebass.preCompAttack" @input="updateParam('ebass', 'preCompAttack', $event)">
+                  <span>{{ tuningParams.ebass.preCompAttack.toFixed(3) }} s</span>
+                </div>
+                <div class="slider-container">
+                  <label>Release</label>
+                  <input type="range" min="0.01" max="0.5" step="0.01" :value="tuningParams.ebass.preCompRelease" @input="updateParam('ebass', 'preCompRelease', $event)">
+                  <span>{{ tuningParams.ebass.preCompRelease.toFixed(2) }} s</span>
+                </div>
+                <div class="sub-header">Parallel Blend (サウンドの核)</div>
+                <div class="slider-container">
                   <label>Sub Blend</label>
                   <input type="range" min="0" max="1" step="0.01" :value="tuningParams.ebass.subBlend" @input="updateParam('ebass', 'subBlend', $event)">
                   <span>{{ (tuningParams.ebass.subBlend * 100).toFixed(0) }}%</span>
