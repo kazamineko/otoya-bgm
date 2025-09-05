@@ -30,7 +30,7 @@ let masterComp: ToneType.Compressor | null = null;
 let limiter: ToneType.Limiter | null = null;
 
 // --- Virtual Amp Rig ---
-let guitarPreDistComp: ToneType.Compressor | null = null; // ★ 武装: コンプレッサー追加
+let guitarPreDistComp: ToneType.Compressor | null = null;
 let guitarPreEQ: ToneType.Filter | null = null; 
 let guitarDistortion: ToneType.Distortion | null = null;
 let guitarPostEQ: ToneType.EQ3 | null = null;
@@ -39,7 +39,7 @@ let guitarCab: ToneType.Convolver | null = null;
 let guitarMakeUpGain: ToneType.Volume | null = null;
 
 // --- Bass Parallel Processing Rig ---
-let bassPreDistComp: ToneType.Compressor | null = null; // ★ 武装: ベースにもコンプレッサー追加
+let bassPreDistComp: ToneType.Compressor | null = null;
 let bassEQ: ToneType.EQ3 | null = null;
 let bassDistortion: ToneType.Distortion | null = null;
 let bassCab: ToneType.Convolver | null = null;
@@ -229,13 +229,13 @@ const initializeAudio = async () => {
       switch(name) {
         case 'eguitar':
           sampler.chain(guitarPreDistComp, guitarPreEQ, guitarDistortion, guitarPostEQ, guitarChorus, guitarCab, guitarMakeUpGain);
-          guitarMakeUpGain.fan(masterComp, reverb);
+          guitarMakeUpGain.fan(masterComp, reverb); // ★ 断線を再接続
           break;
         case 'ebass':
-          sampler.connect(bassPreDistComp);
-          sampler.connect(bassSubFilter);
-          bassPreDistComp.chain(bassEQ, bassDistortion, bassCab, bassMakeUpGain, bassPostComp, masterComp);
-          bassSubFilter.chain(bassSubGain, masterComp);
+          // DI Path
+          sampler.chain(bassPreDistComp, bassEQ, bassDistortion, bassCab, bassMakeUpGain, bassPostComp, masterComp);
+          // Sub Path
+          sampler.chain(bassSubFilter, bassSubGain, masterComp);
           break;
         case 'ride': 
           sampler.connect(rideFilter); 
@@ -466,7 +466,7 @@ const createRockSound = (rng: () => number): boolean => {
         // --- Instrument Pattern Generation for this measure ---
         if (role !== ROLES.DRUM_BREAK) {
             // Guitar
-            const guitarPattern = role === ROLES.GUITAR_SOLO ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]! : guitarBackingPatterns[Math.floor(rng() * guitarSoloPatterns.length)]!;
+            const guitarPattern = role === ROLES.GUITAR_SOLO ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]! : guitarBackingPatterns[Math.floor(rng() * guitarBackingPatterns.length)]!;
             guitarPattern.forEach(noteEvent => {
                 const noteTime = time + Tone!.Time(noteEvent.time).toSeconds();
                 eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, noteTime, 0.9 + rng() * 0.1);
