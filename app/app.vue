@@ -394,6 +394,11 @@ const startMonitoring = () => {
   if (!Tone || !meterPreGain || !meterPostGain || !meterPostComp) return;
   if (loggingLoop) { loggingLoop.stop(0); loggingLoop.dispose(); }
   
+  // FINAL FIX: Ensure the Transport is running for the loop to execute.
+  if (Tone.Transport.state !== 'started') {
+    Tone.Transport.start();
+  }
+
   loggingLoop = new Tone.Loop(time => {
     const preGainDb = getSafeDbValue(meterPreGain!.getValue());
     const postGainDb = getSafeDbValue(meterPostGain!.getValue());
@@ -413,6 +418,7 @@ const stopMonitoring = () => {
     loggingLoop.dispose();
     loggingLoop = null;
     console.log("--- Monitoring Stopped ---");
+    // We don't stop the transport here, as it might be used by main playback.
   }
 };
 
@@ -541,7 +547,7 @@ const createRockSound = (rng: () => number): boolean => {
         // --- Instrument Pattern Generation for this measure ---
         if (role !== ROLES.DRUM_BREAK) {
             // Guitar
-            const guitarPattern = role === ROLES.GUITAR_SOLO ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]! : guitarBackingPatterns[Math.floor(rng() * guitarBackingPatterns.length)]!;
+            const guitarPattern = role === ROLES.GUITAR_SOLO ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]! : guitarBackingPatterns[Math.floor(rng() * guitarSoloPatterns.length)]!;
             guitarPattern.forEach(noteEvent => {
                 const noteTime = time + Tone!.Time(noteEvent.time).toSeconds();
                 eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, noteTime, 0.9 + rng() * 0.1);
