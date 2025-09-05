@@ -39,6 +39,10 @@ let delay: ToneType.PingPongDelay | null = null;
 let masterComp: ToneType.Compressor | null = null;
 let limiter: ToneType.Limiter | null = null;
 
+// --- NEW: Drum Bus ---
+let drumBusComp: ToneType.Compressor | null = null;
+let drumBusVolume: ToneType.Volume | null = null;
+
 // --- Virtual Amp Rig ---
 let guitarInputGain: ToneType.Volume | null = null; 
 let guitarPreDistComp: ToneType.Compressor | null = null;
@@ -187,6 +191,11 @@ const initializeAudio = async () => {
     
     limiter = new Tone.Limiter(-0.1).toDestination();
     masterComp = new Tone.Compressor({ threshold: -12, ratio: 3 }).connect(limiter);
+    
+    // FIX: Correctly instantiate and chain the drum bus
+    drumBusVolume = new Tone.Volume(-3).connect(masterComp);
+    drumBusComp = new Tone.Compressor({ threshold: -20, ratio: 4, attack: 0.01, release: 0.1 }).connect(drumBusVolume);
+
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
 
     reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.01, wet: 0.3 }).connect(masterComp);
@@ -226,7 +235,7 @@ const initializeAudio = async () => {
     const allInstruments = Object.keys(allSamplePaths);
     for (const name of allInstruments) {
       const params = tuningParams.value[name];
-      if (!params) continue; // Skip if no params defined
+      if (!params) continue;
 
       const isDi = name === 'eguitar' || name === 'ebass';
       const isTarget = name.startsWith('target_');
@@ -251,7 +260,7 @@ const initializeAudio = async () => {
       else { samplers[name] = samplerData; }
     }
     
-    if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter) {
+    if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter && drumBusComp) {
       const eguitarDI = diSamplers['eguitar'];
       if (eguitarDI) {
         eguitarDI.sampler.connect(guitarInputGain);
@@ -269,10 +278,17 @@ const initializeAudio = async () => {
       }
 
       for (const [name, { sampler }] of Object.entries(samplers)) {
-        if (name === 'ride') { sampler.connect(rideFilter); rideFilter.fan(masterComp, reverb); }
-        else if (name === 'pad') { sampler.chain(reverb, masterComp); }
-        else {
-          const isDry = /kick|snare|tom|sax|crash/i.test(name);
+        const isRockDrum = /rockKick|rockSnare|crash|tom/i.test(name);
+        
+        if (isRockDrum) {
+          sampler.connect(drumBusComp);
+        } else if (name === 'ride') {
+          sampler.connect(rideFilter);
+          rideFilter.connect(drumBusComp);
+        } else if (name === 'pad') {
+          sampler.chain(reverb, masterComp);
+        } else {
+          const isDry = /kick|snare|sax/i.test(name);
           if (isDry) sampler.fan(masterComp, reverb);
           else sampler.fan(masterComp, reverb, chorus, delay);
         }
@@ -513,17 +529,17 @@ const createRockSound = (rng: () => number): boolean => {
 
         if (measuresIntoSection === 0) {
             const sectionStartTime = time;
-            if (role === ROLES.GUITAR_SOLO) {
+            if (role === ROLES.GUITAR_SOLO && ebass && ride) {
                 ebass.sampler.volume.rampTo(-6, 0.5, sectionStartTime);
                 ride.sampler.volume.rampTo(tuningParams.value.ride.volume - 6, 0.5, sectionStartTime);
-            } else {
+            } else if (ebass && ride) {
                 ebass.sampler.volume.rampTo(0, 0.5, sectionStartTime);
                 ride.sampler.volume.rampTo(tuningParams.value.ride.volume, 0.5, sectionStartTime);
             }
         }
         
         if (role !== ROLES.DRUM_BREAK) {
-            const guitarPattern = role === ROLES.GUITAR_SOLO ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]! : guitarBackingPatterns[Math.floor(rng() * guitarBackingPatterns.length)]!;
+            const guitarPattern = role === ROLES.GUITAR_SOLO ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]! : guitarBackingPatterns[Math.floor(rng() * guitarSoloPatterns.length)]!;
             guitarPattern.forEach(noteEvent => {
                 const noteTime = time + Tone!.Time(noteEvent.time).toSeconds();
                 eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, noteTime, 0.9 + rng() * 0.1);
