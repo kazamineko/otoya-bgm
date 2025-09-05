@@ -30,6 +30,7 @@ let masterComp: ToneType.Compressor | null = null;
 let limiter: ToneType.Limiter | null = null;
 
 // --- Virtual Amp Rig ---
+let guitarInputGain: ToneType.Volume | null = null; // ★ 最後の切り札
 let guitarPreDistComp: ToneType.Compressor | null = null;
 let guitarPreEQ: ToneType.Filter | null = null; 
 let guitarDistortion: ToneType.Distortion | null = null;
@@ -39,6 +40,7 @@ let guitarCab: ToneType.Convolver | null = null;
 let guitarMakeUpGain: ToneType.Volume | null = null;
 
 // --- Bass Parallel Processing Rig ---
+let bassInputGain: ToneType.Volume | null = null; // ★ 最後の切り札
 let bassPreDistComp: ToneType.Compressor | null = null;
 let bassEQ: ToneType.EQ3 | null = null;
 let bassDistortion: ToneType.Distortion | null = null;
@@ -56,6 +58,7 @@ let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
 type AmpParams = {
+  inputGain: number;
   preCompThreshold: number; preCompRatio: number; preCompAttack: number; preCompRelease: number;
   preEqFreq: number; preEqGain: number;
   distortion: number;
@@ -63,6 +66,7 @@ type AmpParams = {
   chorusDepth: number; chorusRate: number;
 };
 type BassAmpParams = {
+  inputGain: number;
   preCompThreshold: number; preCompRatio: number; preCompAttack: number; preCompRelease: number;
   subBlend: number; drive: number;
   eqLow: number; eqMid: number; eqHigh: number;
@@ -73,8 +77,8 @@ const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro'; // Pro Build
 
 const masterTunedParams: TuningParams = {
-  "eguitar": { "preCompThreshold": -24, "preCompRatio": 4, "preCompAttack": 0.01, "preCompRelease": 0.1, "preEqFreq": 800, "preEqGain": 12, "distortion": 0.9, "postEqLow": 3, "postEqMid": -12, "postEqHigh": 6, "chorusDepth": 0.1, "chorusRate": 1.5 },
-  "ebass": { "preCompThreshold": -20, "preCompRatio": 4, "preCompAttack": 0.02, "preCompRelease": 0.2, "subBlend": 0.5, "drive": 0.3, "eqLow": 4, "eqMid": -2, "eqHigh": 2 },
+  "eguitar": { "inputGain": 12, "preCompThreshold": -24, "preCompRatio": 4, "preCompAttack": 0.01, "preCompRelease": 0.1, "preEqFreq": 800, "preEqGain": 12, "distortion": 0.9, "postEqLow": 3, "postEqMid": -12, "postEqHigh": 6, "chorusDepth": 0.1, "chorusRate": 1.5 },
+  "ebass": { "inputGain": 12, "preCompThreshold": -20, "preCompRatio": 4, "preCompAttack": 0.02, "preCompRelease": 0.2, "subBlend": 0.5, "drive": 0.3, "eqLow": 4, "eqMid": -2, "eqHigh": 2 },
   "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
   "ride": { "volume": -9, "attack": 0.01, "release": 0.5 }, "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
   "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
@@ -92,7 +96,8 @@ watch(tuningParams, (newParams) => {
   
   // Apply eGuitar params
   const eguitarParams = newParams.eguitar as AmpParams;
-  if (eguitarParams && guitarPreDistComp && guitarPreEQ && guitarDistortion && guitarPostEQ && guitarChorus) {
+  if (eguitarParams && guitarInputGain && guitarPreDistComp && guitarPreEQ && guitarDistortion && guitarPostEQ && guitarChorus) {
+    guitarInputGain.volume.value = eguitarParams.inputGain;
     guitarPreDistComp.threshold.value = eguitarParams.preCompThreshold;
     guitarPreDistComp.ratio.value = eguitarParams.preCompRatio;
     guitarPreDistComp.attack.value = eguitarParams.preCompAttack;
@@ -109,7 +114,8 @@ watch(tuningParams, (newParams) => {
 
   // Apply eBass params
   const ebassParams = newParams.ebass as BassAmpParams;
-  if (ebassParams && bassPreDistComp && bassSubGain && bassDistortion && bassEQ && bassMakeUpGain) {
+  if (ebassParams && bassInputGain && bassPreDistComp && bassSubGain && bassDistortion && bassEQ && bassMakeUpGain) {
+      bassInputGain.volume.value = ebassParams.inputGain;
       bassPreDistComp.threshold.value = ebassParams.preCompThreshold;
       bassPreDistComp.ratio.value = ebassParams.preCompRatio;
       bassPreDistComp.attack.value = ebassParams.preCompAttack;
@@ -177,6 +183,7 @@ const initializeAudio = async () => {
     
     loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
     const eguitarP = tuningParams.value.eguitar;
+    guitarInputGain = new Tone.Volume(eguitarP.inputGain);
     guitarPreDistComp = new Tone.Compressor({
       threshold: eguitarP.preCompThreshold, ratio: eguitarP.preCompRatio,
       attack: eguitarP.preCompAttack, release: eguitarP.preCompRelease
@@ -189,6 +196,7 @@ const initializeAudio = async () => {
     guitarMakeUpGain = new Tone.Volume(12);
 
     const ebassP = tuningParams.value.ebass;
+    bassInputGain = new Tone.Volume(ebassP.inputGain);
     bassPreDistComp = new Tone.Compressor({
       threshold: ebassP.preCompThreshold, ratio: ebassP.preCompRatio,
       attack: ebassP.preCompAttack, release: ebassP.preCompRelease
@@ -230,13 +238,13 @@ const initializeAudio = async () => {
 
       switch(name) {
         case 'eguitar':
-          sampler.chain(guitarPreDistComp, guitarPreEQ, guitarDistortion, guitarPostEQ, guitarChorus, guitarCab, guitarMakeUpGain);
+          sampler.chain(guitarInputGain, guitarPreDistComp, guitarPreEQ, guitarDistortion, guitarPostEQ, guitarChorus, guitarCab, guitarMakeUpGain);
           guitarMakeUpGain.fan(masterComp, reverb);
           break;
         case 'ebass':
-          sampler.connect(bassPreDistComp);
+          sampler.connect(bassInputGain);
           sampler.connect(bassSubFilter);
-          bassPreDistComp.chain(bassEQ, bassDistortion, bassCab, bassMakeUpGain, bassPostComp);
+          bassInputGain.chain(bassPreDistComp, bassEQ, bassDistortion, bassCab, bassMakeUpGain, bassPostComp);
           bassPostComp.fan(masterComp, reverb);
           bassSubFilter.chain(bassSubGain, masterComp);
           break;
@@ -265,10 +273,9 @@ const initializeAudio = async () => {
 
     await Tone.loaded();
 
-    // ★ 始動シーケンス: 生成したコンポーネントに、現在のパラメータを強制的に再適用
     const newTuningParams = tuningParams.value;
-    tuningParams.value = {}; // 一度空にして...
-    tuningParams.value = newTuningParams; // ...再代入することでwatchを発火させ、全パラメータを確実に適用する
+    tuningParams.value = {}; 
+    tuningParams.value = newTuningParams;
 
     isAudioInitialized.value = true;
     loadingMessage.value = '準備ができました';

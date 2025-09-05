@@ -32,6 +32,12 @@
             <div class="sliders" v-if="tuningParams[instrument]">
               <!-- eGuitar 専用 -->
               <template v-if="instrument === 'eguitar'">
+                <div class="sub-header">Input Gain (入力音量)</div>
+                <div class="slider-container">
+                  <label>Gain</label>
+                  <input type="range" min="0" max="24" step="0.5" :value="tuningParams.eguitar.inputGain" @input="updateParam('eguitar', 'inputGain', $event)">
+                  <span>{{ tuningParams.eguitar.inputGain.toFixed(1) }} dB</span>
+                </div>
                 <div class="sub-header">Pre-Dist Compressor (音の粒立ち・サステイン)</div>
                 <div class="slider-container">
                   <label>Threshold</label>
@@ -99,6 +105,12 @@
               </template>
               <!-- eBass 専用 -->
               <template v-else-if="instrument === 'ebass'">
+                <div class="sub-header">Input Gain (入力音量)</div>
+                 <div class="slider-container">
+                  <label>Gain</label>
+                  <input type="range" min="0" max="24" step="0.5" :value="tuningParams.ebass.inputGain" @input="updateParam('ebass', 'inputGain', $event)">
+                  <span>{{ tuningParams.ebass.inputGain.toFixed(1) }} dB</span>
+                </div>
                 <div class="sub-header">Pre-Dist Compressor</div>
                 <div class="slider-container">
                   <label>Threshold</label>
