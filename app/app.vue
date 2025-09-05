@@ -238,7 +238,9 @@ const initializeAudio = async () => {
 
       switch(name) {
         case 'eguitar':
-          sampler.chain(guitarInputGain, guitarPreDistComp, guitarPreEQ, guitarDistortion, guitarPostEQ, guitarChorus, guitarCab, guitarMakeUpGain);
+          // Bug Fix: Corrected signal routing for eguitar
+          sampler.connect(guitarInputGain);
+          guitarInputGain.chain(guitarPreDistComp, guitarPreEQ, guitarDistortion, guitarPostEQ, guitarChorus, guitarCab, guitarMakeUpGain);
           guitarMakeUpGain.fan(masterComp, reverb);
           break;
         case 'ebass':
