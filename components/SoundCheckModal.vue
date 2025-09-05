@@ -17,8 +17,10 @@
             <summary class="instrument-summary">
               <span class="instrument-name">{{ instrument }}</span>
               <div class="play-buttons">
+                <!-- MODIFIED: Button layout changed to 4 buttons for clarity -->
                 <template v-if="instrument === 'eguitar' || instrument === 'ebass'">
                   <button @click.prevent="playSound('target_' + instrument, 'target_sampler')" title="目標サウンドから生成したSampler">目標Sampler</button>
+                  <button @click.prevent="playSound(instrument, 'target')" title="最終的に目指すべき理想の音(WAV再生)">目標サウンド</button>
                   <button @click.prevent="playSound(instrument, 'sampler')" title="DI音源を仮想アンプで加工した音">加工後DI</button>
                   <button @click.prevent="playSound(instrument, 'raw')" title="エフェクトを何も通していない、録音したままの音">原音DI</button>
                 </template>
@@ -292,7 +294,7 @@ const updateSoundSource = (instrument: string, source: 'sampler' | 'di') => {
 }
 .instrument-summary::-webkit-details-marker { display: none; }
 .instrument-name { font-size: 1.1em; font-weight: bold; }
-.play-buttons { display: flex; gap: 8px; }
+.play-buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;}
 .play-buttons button {
   background-color: #363636; color: white; border: none; border-radius: 4px;
   padding: 8px 12px; cursor: pointer; transition: background-color 0.2s ease;
@@ -333,10 +335,3 @@ const updateSoundSource = (instrument: string, source: 'sampler' | 'di') => {
   cursor: pointer;
 }
 </style>
-
----
-### Gitコマンド
-```bash
-git add .
-git commit -m "Fix(ui): Restore DI sliders and hide them conditionally via v-if"
-git push
