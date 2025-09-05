@@ -32,14 +32,6 @@
             <div class="sliders" v-if="tuningParams[instrument]">
               <!-- eGuitar 専用 -->
               <template v-if="instrument === 'eguitar'">
-                <div class="debug-panel">
-                  <div class="sub-header">デバッグ用モニタリング</div>
-                  <p class="debug-description">加工後DIを再生しながらモニタリングを開始し、コンソールの出力を確認してください。</p>
-                  <div class="debug-actions">
-                    <button v-if="!isMonitoring" @click="startMonitoring">リアルタイムモニタリング開始</button>
-                    <button v-else @click="stopMonitoring" class="stop-button">停止</button>
-                  </div>
-                </div>
                 <div class="sub-header">Input Gain (入力音量)</div>
                 <div class="slider-container">
                   <label>Gain</label>
@@ -199,38 +191,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-
 defineProps<{
   isVisible: boolean;
   instruments: string[];
   tuningParams: Record<string, any>;
 }>();
 
-const emit = defineEmits(['close', 'playSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'startMonitoring', 'stopMonitoring']);
+const emit = defineEmits(['close', 'playSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams']);
 
-const isMonitoring = ref(false);
-
-const close = () => {
-  if (isMonitoring.value) {
-    stopMonitoring();
-  }
-  emit('close');
-};
-
+const close = () => emit('close');
 const playSound = (instrumentName: string, type: 'sampler' | 'raw' | 'target') => emit('playSound', instrumentName, type);
 const saveParams = () => emit('saveParams');
 const exportParams = () => emit('exportParams');
 const resetParams = () => emit('resetParams');
-
-const startMonitoring = () => {
-  isMonitoring.value = true;
-  emit('startMonitoring');
-};
-const stopMonitoring = () => {
-  isMonitoring.value = false;
-  emit('stopMonitoring');
-};
 
 const updateParam = (instrument: string, param: string, event: Event) => {
   const value = parseFloat((event.target as HTMLInputElement).value);
@@ -300,33 +273,5 @@ const updateParam = (instrument: string, param: string, event: Event) => {
   background-color: #eee;
   padding: 5px;
   border-radius: 4px;
-}
-.debug-panel {
-  border: 1px solid #485fc7;
-  border-radius: 4px;
-  padding: 15px;
-  margin-bottom: 20px;
-  background-color: #eff2fb;
-}
-.debug-description {
-  font-size: 0.9em;
-  color: #555;
-  text-align: center;
-  margin-top: 0;
-}
-.debug-actions {
-  display: flex;
-  justify-content: center;
-}
-.debug-actions button {
-  background-color: #28a745;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 10px 20px;
-  cursor: pointer;
-}
-.debug-actions button.stop-button {
-  background-color: #dc3545;
 }
 </style>

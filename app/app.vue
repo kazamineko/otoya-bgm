@@ -53,12 +53,6 @@ let bassSubGain: ToneType.Volume | null = null;
 // --- AI Drummer Nuance Engine ---
 let rideFilter: ToneType.Filter | null = null;
 
-// --- Debugging Tools ---
-let meterPreGain: ToneType.Meter | null = null;
-let meterPostGain: ToneType.Meter | null = null;
-let meterPostComp: ToneType.Meter | null = null;
-let loggingLoop: ToneType.Loop | null = null;
-
 const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [];
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
@@ -217,11 +211,6 @@ const initializeAudio = async () => {
     
     rideFilter = new Tone.Filter(10000, 'lowpass');
     
-    // --- Initialize Debugging Meters ---
-    meterPreGain = new Tone.Meter();
-    meterPostGain = new Tone.Meter();
-    meterPostComp = new Tone.Meter();
-
     targetGuitarPlayer = new Tone.Player('/eguitar-dist-c4.wav').toDestination();
     targetBassPlayer = new Tone.Player('/ebass-e1.wav').toDestination();
 
@@ -249,13 +238,8 @@ const initializeAudio = async () => {
 
       switch(name) {
         case 'eguitar':
-          // Debugging Signal Chain for eguitar
-          sampler.connect(meterPreGain);
-          meterPreGain.connect(guitarInputGain);
-          guitarInputGain.connect(meterPostGain);
-          meterPostGain.connect(guitarPreDistComp);
-          guitarPreDistComp.connect(meterPostComp);
-          meterPostComp.chain(guitarPreEQ, guitarDistortion, guitarPostEQ, guitarChorus, guitarCab, guitarMakeUpGain);
+          sampler.connect(guitarInputGain);
+          guitarInputGain.chain(guitarPreDistComp, guitarPreEQ, guitarDistortion, guitarPostEQ, guitarChorus, guitarCab, guitarMakeUpGain);
           guitarMakeUpGain.fan(masterComp, reverb);
           break;
         case 'ebass':
@@ -355,7 +339,7 @@ const playFromSeed = async () => { const [menuName, seed] = seedInput.value.spli
 
 // --- Sound Tuning Modal Handlers ---
 const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; };
-const closeSoundCheckModal = () => { stopMonitoring(); isSoundCheckModalVisible.value = false; };
+const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
 const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' | 'target') => {
   if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; } }
   const samplerData = samplers[instrumentName];
@@ -364,61 +348,21 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
   else if (type === 'target' && instrumentName === 'eguitar' && targetGuitarPlayer) { targetGuitarPlayer.start(); }
   else if (type === 'target' && instrumentName === 'ebass' && targetBassPlayer) { targetBassPlayer.start(); }
 };
-const handleUpdateParam = (payload: { instrument: string, param: string, value: number }) => { if (tuningParams.value[payload.instrument]) { tuningParams.value[payload.instrument][payload.param] = payload.value; } };
+const handleUpdateParam = (payload: { instrument: string, param: string, value: number }) => {
+  if (tuningParams.value[payload.instrument]) {
+    // Create a new object for the specific instrument to ensure reactivity
+    const updatedInstrumentParams = { ...tuningParams.value[payload.instrument] };
+    updatedInstrumentParams[payload.param] = payload.value;
+    // Replace the old instrument parameter object with the new one
+    tuningParams.value[payload.instrument] = updatedInstrumentParams;
+  }
+};
 const handleSaveParams = () => { try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(tuningParams.value)); alert('現在の設定をブラウザに保存しました。'); } catch (e) { alert('設定の保存に失敗しました。'); } };
 const handleExportParams = () => { console.clear(); console.log(JSON.stringify(tuningParams.value, null, 2)); alert('現在の設定を開発者コンソールに出力しました。'); };
 const handleResetParams = () => { 
   if (confirm('現在の調整を破棄し、全ての設定を初期値に戻します。よろしいですか？')) {
     tuningParams.value = JSON.parse(JSON.stringify(masterTunedParams)); 
     alert('設定を初期化しました。');
-  }
-};
-
-// --- Debugging Handlers ---
-/**
- * Safely gets a dB value from a Tone.Meter, handling all possible return types.
- * @param value The raw value from meter.getValue().
- * @returns A valid number, defaulting to -Infinity for silence/uninitialized states.
- */
-const getSafeDbValue = (value: number | number[]): number => {
-  if (typeof value === 'number') {
-    return value;
-  }
-  if (Array.isArray(value) && typeof value[0] === 'number') {
-    return value[0];
-  }
-  return -Infinity; // A safe default for silence or uninitialized meters.
-};
-
-const startMonitoring = () => {
-  if (!Tone || !meterPreGain || !meterPostGain || !meterPostComp) return;
-  if (loggingLoop) { loggingLoop.stop(0); loggingLoop.dispose(); }
-  
-  // FINAL FIX: Ensure the Transport is running for the loop to execute.
-  if (Tone.Transport.state !== 'started') {
-    Tone.Transport.start();
-  }
-
-  loggingLoop = new Tone.Loop(time => {
-    const preGainDb = getSafeDbValue(meterPreGain!.getValue());
-    const postGainDb = getSafeDbValue(meterPostGain!.getValue());
-    const postCompDb = getSafeDbValue(meterPostComp!.getValue());
-
-    console.log(
-      `Pre-Gain: ${preGainDb.toFixed(2)} dB | ` +
-      `Post-Gain: ${postGainDb.toFixed(2)} dB | ` +
-      `Post-Comp: ${postCompDb.toFixed(2)} dB`
-    );
-  }, "16n").start(0);
-};
-
-const stopMonitoring = () => {
-  if (loggingLoop) {
-    loggingLoop.stop(0);
-    loggingLoop.dispose();
-    loggingLoop = null;
-    console.log("--- Monitoring Stopped ---");
-    // We don't stop the transport here, as it might be used by main playback.
   }
 };
 
@@ -707,8 +651,6 @@ const createRockDrums = (rng: () => number, instruments: any, time: number, role
       @save-params="handleSaveParams"
       @export-params="handleExportParams"
       @reset-params="handleResetParams"
-      @start-monitoring="startMonitoring"
-      @stop-monitoring="stopMonitoring"
     />
   </div>
 </template>
