@@ -229,7 +229,7 @@ const initializeAudio = async () => {
           sampler.chain(reverb, masterComp); 
           break;
         default:
-          const isDryInstrument = /kick|snare|tom|sax/i.test(name);
+          const isDryInstrument = /kick|snare|tom|sax|crash/i.test(name);
           if (isDryInstrument) {
             // ディレイとコーラスをバイパスする、クリーンな経路
             sampler.fan(masterComp, reverb);
