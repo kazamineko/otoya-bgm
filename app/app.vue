@@ -177,11 +177,9 @@ const initializeAudio = async () => {
     
     loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
     const eguitarP = tuningParams.value.eguitar;
-    guitarPreDistComp = new Tone.Compressor({ // ★正規の初期化方法に修正
-      threshold: eguitarP.preCompThreshold,
-      ratio: eguitarP.preCompRatio,
-      attack: eguitarP.preCompAttack,
-      release: eguitarP.preCompRelease
+    guitarPreDistComp = new Tone.Compressor({
+      threshold: eguitarP.preCompThreshold, ratio: eguitarP.preCompRatio,
+      attack: eguitarP.preCompAttack, release: eguitarP.preCompRelease
     });
     guitarPreEQ = new Tone.Filter({ type: 'peaking', frequency: eguitarP.preEqFreq, gain: eguitarP.preEqGain });
     guitarDistortion = new Tone.Distortion({ distortion: eguitarP.distortion, oversample: '4x' });
@@ -191,11 +189,9 @@ const initializeAudio = async () => {
     guitarMakeUpGain = new Tone.Volume(12);
 
     const ebassP = tuningParams.value.ebass;
-    bassPreDistComp = new Tone.Compressor({ // ★正規の初期化方法に修正
-      threshold: ebassP.preCompThreshold,
-      ratio: ebassP.preCompRatio,
-      attack: ebassP.preCompAttack,
-      release: ebassP.preCompRelease
+    bassPreDistComp = new Tone.Compressor({
+      threshold: ebassP.preCompThreshold, ratio: ebassP.preCompRatio,
+      attack: ebassP.preCompAttack, release: ebassP.preCompRelease
     });
     bassEQ = new Tone.EQ3({ low: ebassP.eqLow, mid: ebassP.eqMid, high: ebassP.eqHigh });
     bassDistortion = new Tone.Distortion(ebassP.drive); 
@@ -238,11 +234,10 @@ const initializeAudio = async () => {
           guitarMakeUpGain.fan(masterComp, reverb);
           break;
         case 'ebass':
-          // ★ 並列回路を正しく再接続
           sampler.connect(bassPreDistComp);
           sampler.connect(bassSubFilter);
-
-          bassPreDistComp.chain(bassEQ, bassDistortion, bassCab, bassMakeUpGain, bassPostComp, masterComp);
+          bassPreDistComp.chain(bassEQ, bassDistortion, bassCab, bassMakeUpGain, bassPostComp);
+          bassPostComp.fan(masterComp, reverb);
           bassSubFilter.chain(bassSubGain, masterComp);
           break;
         case 'ride': 
@@ -269,6 +264,12 @@ const initializeAudio = async () => {
     });
 
     await Tone.loaded();
+
+    // ★ 始動シーケンス: 生成したコンポーネントに、現在のパラメータを強制的に再適用
+    const newTuningParams = tuningParams.value;
+    tuningParams.value = {}; // 一度空にして...
+    tuningParams.value = newTuningParams; // ...再代入することでwatchを発火させ、全パラメータを確実に適用する
+
     isAudioInitialized.value = true;
     loadingMessage.value = '準備ができました';
 
