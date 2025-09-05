@@ -177,9 +177,12 @@ const initializeAudio = async () => {
     
     loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
     const eguitarP = tuningParams.value.eguitar;
-    guitarPreDistComp = new Tone.Compressor(eguitarP.preCompThreshold, eguitarP.preCompRatio);
-    guitarPreDistComp.attack.value = eguitarP.preCompAttack;
-    guitarPreDistComp.release.value = eguitarP.preCompRelease;
+    guitarPreDistComp = new Tone.Compressor({ // ★正規の初期化方法に修正
+      threshold: eguitarP.preCompThreshold,
+      ratio: eguitarP.preCompRatio,
+      attack: eguitarP.preCompAttack,
+      release: eguitarP.preCompRelease
+    });
     guitarPreEQ = new Tone.Filter({ type: 'peaking', frequency: eguitarP.preEqFreq, gain: eguitarP.preEqGain });
     guitarDistortion = new Tone.Distortion({ distortion: eguitarP.distortion, oversample: '4x' });
     guitarPostEQ = new Tone.EQ3({ low: eguitarP.postEqLow, mid: eguitarP.postEqMid, high: eguitarP.postEqHigh });
@@ -188,9 +191,12 @@ const initializeAudio = async () => {
     guitarMakeUpGain = new Tone.Volume(12);
 
     const ebassP = tuningParams.value.ebass;
-    bassPreDistComp = new Tone.Compressor(ebassP.preCompThreshold, ebassP.preCompRatio);
-    bassPreDistComp.attack.value = ebassP.preCompAttack;
-    bassPreDistComp.release.value = ebassP.preCompRelease;
+    bassPreDistComp = new Tone.Compressor({ // ★正規の初期化方法に修正
+      threshold: ebassP.preCompThreshold,
+      ratio: ebassP.preCompRatio,
+      attack: ebassP.preCompAttack,
+      release: ebassP.preCompRelease
+    });
     bassEQ = new Tone.EQ3({ low: ebassP.eqLow, mid: ebassP.eqMid, high: ebassP.eqHigh });
     bassDistortion = new Tone.Distortion(ebassP.drive); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
@@ -229,13 +235,15 @@ const initializeAudio = async () => {
       switch(name) {
         case 'eguitar':
           sampler.chain(guitarPreDistComp, guitarPreEQ, guitarDistortion, guitarPostEQ, guitarChorus, guitarCab, guitarMakeUpGain);
-          guitarMakeUpGain.fan(masterComp, reverb); // ★ 断線を再接続
+          guitarMakeUpGain.fan(masterComp, reverb);
           break;
         case 'ebass':
-          // DI Path
-          sampler.chain(bassPreDistComp, bassEQ, bassDistortion, bassCab, bassMakeUpGain, bassPostComp, masterComp);
-          // Sub Path
-          sampler.chain(bassSubFilter, bassSubGain, masterComp);
+          // ★ 並列回路を正しく再接続
+          sampler.connect(bassPreDistComp);
+          sampler.connect(bassSubFilter);
+
+          bassPreDistComp.chain(bassEQ, bassDistortion, bassCab, bassMakeUpGain, bassPostComp, masterComp);
+          bassSubFilter.chain(bassSubGain, masterComp);
           break;
         case 'ride': 
           sampler.connect(rideFilter); 
