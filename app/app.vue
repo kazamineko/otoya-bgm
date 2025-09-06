@@ -108,7 +108,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0 },
-  "target_ebass": { "volume": -18, "attack": 0.01, "release": 25.0 },
+  "target_ebass": { "volume": -9, "attack": 0.01, "release": 25.0 },
 };
 
 watch(tuningParams, (newParams) => {
@@ -228,7 +228,11 @@ const initializeAudio = async () => {
     bassDistortion = new Tone.Distortion(ebassP.drive); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
     bassMakeUpGain = new Tone.Volume(8);
-    bassPostComp = new Tone.Compressor({threshold: -18, ratio: 4, attack: 0.02, release: 0.2});
+    //
+    // --- THIS IS THE CRITICAL CHANGE ---
+    // Activate the compressor to manage bass dynamics and create punch.
+    bassPostComp = new Tone.Compressor({threshold: -24, ratio: 6, attack: 0.02, release: 0.2});
+    //
     bassSubFilter = new Tone.Filter(120, 'lowpass');
     bassSubGain = new Tone.Volume(0);
     
@@ -294,7 +298,7 @@ const initializeAudio = async () => {
       else { samplers[name] = samplerData; }
     }
     
-    if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter && drumBusComp && guitarVibrato && guitarEQ && guitarPitchShift) {
+    if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter && drumBusComp && guitarVibrato && guitarEQ && guitarPitchShift && bassPostComp) {
       console.log("LOG: All core audio nodes initialized successfully.");
       const eguitarDI = diSamplers['eguitar'];
       if (eguitarDI) {
@@ -330,8 +334,14 @@ const initializeAudio = async () => {
       }
       
       for (const [name, { sampler }] of Object.entries(targetSamplers)) {
-        sampler.fan(masterComp, reverb);
-        console.log(`LOG: Routing '${name}' to Master Bus.`);
+        // Connect the main eBass sampler to the now-active Post Compressor
+        if (name === 'target_ebass' && bassPostComp) {
+          sampler.chain(bassPostComp, masterComp, reverb);
+          console.log(`LOG: Routing 'target_ebass' through Post Compressor.`);
+        } else {
+          sampler.fan(masterComp, reverb);
+          console.log(`LOG: Routing '${name}' to Master Bus.`);
+        }
       }
 
       if(targetSamplerMulti && guitarInputGain) {
