@@ -73,6 +73,9 @@ const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
+// ADDED: Variable to store the duration of the target sound
+let targetSoundDuration = 0;
+
 type AmpParams = {
   inputGain: number;
   preCompThreshold: number; preCompRatio: number; preCompAttack: number; preCompRelease: number;
@@ -234,6 +237,12 @@ const initializeAudio = async () => {
 
     await Promise.all([guitarCab.load, bassCab.load, targetGuitarPlayer.load, targetBassPlayer.load]);
     loadingMessage.value = '楽器を最終調整しています...';
+
+    // MODIFIED: Get duration from the already loaded player's buffer.
+    if (targetGuitarPlayer.loaded) {
+      targetSoundDuration = targetGuitarPlayer.buffer.duration;
+      console.log(`LOG: Target sound duration loaded: ${targetSoundDuration} seconds`);
+    }
 
     const multiSampleUrls = {
       'E2':  'E2_s1_02.wav',  'F2':  'F2_s1_03.wav',
@@ -475,40 +484,42 @@ const handleSoundSourceChange = (payload: { instrument: 'eguitar' | 'ebass', sou
   }
 };
 
-// ADDED: Handler for recording and downloading the new sampler sound
+// MODIFIED: Reworked the download handler for perfect 1:1 comparison
 const handleDownloadSampler = async () => {
-  if (!Tone || !targetSamplerMulti || !guitarEQ) {
+  if (!Tone || !targetSamplerMulti) {
     alert('音源が初期化されていないため、録音を開始できません。');
+    return;
+  }
+  if (targetSoundDuration === 0) {
+    alert('目標音源の長さが取得できていません。');
     return;
   }
 
   try {
     const recorder = new Tone.Recorder();
-    guitarEQ.connect(recorder); // Connect the final node of the nuance engine to the recorder
+    // MODIFICATION: Connect the sampler DIRECTLY to the recorder, bypassing all effects.
+    targetSamplerMulti.sampler.connect(recorder);
 
-    // Start recording
     await recorder.start();
 
-    // Play the specific note for comparison (C5)
-    targetSamplerMulti.sampler.triggerAttackRelease('C5', '2s', Tone.now());
+    // MODIFICATION: Play the note for the exact duration of the original file.
+    targetSamplerMulti.sampler.triggerAttackRelease('C5', targetSoundDuration, Tone.now());
 
-    // Wait for 2 seconds to ensure the note is captured
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // MODIFICATION: Wait for the exact duration + a small buffer before stopping.
+    await new Promise(resolve => setTimeout(resolve, (targetSoundDuration * 1000) + 100));
 
-    // Stop recording and get the audio as a Blob
     const blob = await recorder.stop();
     
-    // Disconnect the recorder to restore normal audio flow
-    guitarEQ.disconnect(recorder);
+    // MODIFICATION: Disconnect the direct line to the recorder and dispose.
+    targetSamplerMulti.sampler.disconnect(recorder);
     recorder.dispose();
 
-    // Create a URL for the Blob and trigger download
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.download = "shin-sampler-output-C5.wav";
     anchor.href = url;
     anchor.click();
-    URL.revokeObjectURL(url); // Clean up the object URL
+    URL.revokeObjectURL(url);
 
   } catch (error) {
     console.error("Failed to record sampler sound:", error);
@@ -745,7 +756,7 @@ const createRockDrums = (rng: () => number, instruments: typeof samplers, time: 
           <button class="menu-button" @click="playMusic('Lo-Fi・ビター')" :class="{ 'is-active': selectedMenu === 'Lo-Fi・ビター' }">
             <div class="menu-content">
               <span class="menu-title">Lo-Fi・ビター</span>
-              <span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span>
+              <span class="menu-description">懐かしいレコードに針を落toす、あの感覚をあなたに。</span>
             </div>
             <div v-if="selectedMenu === 'Lo-Fi・ビター' && isPlaying" class="active-indicator">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
