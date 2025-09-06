@@ -411,8 +411,16 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
   if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; } }
   
   if (type === 'target_sampler') {
-      if (instrumentName === 'target_eguitar' && targetSamplerMulti) {
-        targetSamplerMulti.sampler.triggerAttackRelease('E5', '1n');
+      if (instrumentName === 'target_eguitar' && targetSamplerMulti && Tone && guitarVibrato && guitarEQ) {
+        const sampler = targetSamplerMulti.sampler;
+        const now = Tone.now();
+        const rng = Math.random;
+
+        guitarVibrato.frequency.value = 4 + rng() * 2;
+        guitarEQ.high.value = 2 + rng() * 2;
+        
+        sampler.triggerAttackRelease('E5', '1n', now);
+
       } else {
         const targetSampler = targetSamplers[instrumentName];
         if (targetSampler) targetSampler.sampler.triggerAttackRelease(targetSampler.baseNote, '1n');
@@ -523,7 +531,7 @@ const createJazzSound = (rng: () => number): boolean => {
 };
 
 const createRockSound = (rng: () => number): boolean => {
-    if (!Tone || !samplers.eguitar || !samplers.ebass) return false;
+    if (!Tone || !samplers.eguitar || !samplers.ebass || !guitarVibrato || !guitarEQ) return false;
     const { eguitar, ebass } = samplers;
     Tone.Transport.bpm.value = 110 + rng() * 60;
     Tone.Transport.swing = 0;
@@ -568,7 +576,7 @@ const createRockSound = (rng: () => number): boolean => {
     let measuresIntoSection = 0;
 
     const masterLoop = new Tone.Loop(time => {
-        if (!Tone) return;
+        if (!Tone || !guitarVibrato || !guitarEQ) return;
 
         const currentSection = songBlueprint[currentSectionIndex]!;
         const role = currentSection.role;
@@ -588,6 +596,10 @@ const createRockSound = (rng: () => number): boolean => {
             const guitarPattern = role === ROLES.GUITAR_SOLO ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]! : guitarBackingPatterns[Math.floor(rng() * guitarSoloPatterns.length)]!;
             guitarPattern.forEach(noteEvent => {
                 const noteTime = time + Tone!.Time(noteEvent.time).toSeconds();
+                if (soundSourceSelection.value.eguitar === 'sampler' && eguitar.sampler) {
+                    guitarVibrato!.frequency.value = 4 + rng() * 2;
+                    guitarEQ!.high.value = 2 + rng() * 2;
+                }
                 eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, noteTime);
             });
 
