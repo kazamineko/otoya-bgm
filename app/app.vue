@@ -342,7 +342,6 @@ const initializeAudio = async () => {
         console.log("LOG: Routing multi-sampled guitar through Nuance Engine AND Virtual Amp Rig.");
       }
 
-      // FIX: Unconditionally set the primary samplers for rock music.
       if (targetSamplerMulti) {
         samplers['eguitar'] = targetSamplerMulti;
         console.log("LOG: 'targetSamplerMulti' is now the primary 'eguitar' sampler.");
@@ -624,7 +623,8 @@ const createRockSound = (rng: () => number): boolean => {
             ebass.sampler.triggerAttackRelease(noteEvent.note, '4n', time + Tone!.Time(noteEvent.time).toSeconds());
         });
 
-        createRockDrums(rng, samplers, time, ROLES.BACKING, 0, measureCounter);
+        // DEBUG: Temporarily disable drums to isolate the source of the clipping.
+        // createRockDrums(rng, samplers, time, ROLES.BACKING, 0, measureCounter);
         measureCounter++;
 
     }), progression).start(0);
