@@ -108,7 +108,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0 },
-  "target_ebass": { "volume": -12, "attack": 0.01, "release": 0.1 },
+  "target_ebass": { "volume": -18, "attack": 0.01, "release": 25.0 },
 };
 
 watch(tuningParams, (newParams) => {
