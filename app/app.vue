@@ -96,8 +96,9 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
+// MODIFIED: Adjusted eguitar amp parameters to reduce harshness
 const masterTunedParams: TuningParams = {
-  "eguitar": { "inputGain": 12, "preCompThreshold": -24, "preCompRatio": 4, "preCompAttack": 0.01, "preCompRelease": 0.1, "preEqFreq": 800, "preEqGain": 12, "distortion": 0.9, "postEqLow": 3, "postEqMid": -12, "postEqHigh": 6, "chorusDepth": 0.1, "chorusRate": 1.5 },
+  "eguitar": { "inputGain": 12, "preCompThreshold": -24, "preCompRatio": 4, "preCompAttack": 0.01, "preCompRelease": 0.1, "preEqFreq": 800, "preEqGain": 6, "distortion": 0.85, "postEqLow": 3, "postEqMid": -12, "postEqHigh": -3, "chorusDepth": 0.1, "chorusRate": 1.5 },
   "ebass": { "inputGain": 12, "preCompThreshold": -20, "preCompRatio": 4, "preCompAttack": 0.02, "preCompRelease": 0.2, "subBlend": 0.5, "drive": 0.3, "eqLow": 4, "eqMid": -2, "eqHigh": 2 },
   "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
   "ride": { "volume": -9, "attack": 0.01, "release": 0.5 }, "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
@@ -335,14 +336,12 @@ const initializeAudio = async () => {
         console.log(`LOG: Routing '${name}' to Master Bus.`);
       }
 
-      // MODIFIED: Route the new multi-sampler through the full virtual amp rig
       if(targetSamplerMulti && guitarInputGain) {
         targetSamplerMulti.sampler.chain(guitarPitchShift, guitarVibrato, guitarEQ);
-        guitarEQ.connect(guitarInputGain); // Connect to the start of the amp chain
+        guitarEQ.connect(guitarInputGain); 
         console.log("LOG: Routing multi-sampled guitar through Nuance Engine AND Virtual Amp Rig.");
       }
 
-      // MODIFIED: Permanently set the new multi-sampler as the main eguitar sound
       if (targetSamplerMulti) {
         samplers['eguitar'] = targetSamplerMulti;
         console.log("LOG: 'targetSamplerMulti' is now the primary 'eguitar' sampler.");
@@ -672,7 +671,6 @@ const createRockSound = (rng: () => number): boolean => {
             });
         }
         
-        // MODIFIED: Pass the global measureCounter to the drum function
         createRockDrums(rng, samplers, time, role, measuresIntoSection, measureCounter);
 
         measureCounter++;
@@ -690,11 +688,9 @@ const createRockSound = (rng: () => number): boolean => {
     return true;
 };
 
-// MODIFIED: Added measureCounter to the function signature
 const createRockDrums = (rng: () => number, instruments: typeof samplers, time: number, role: Role, measureInSec: number, measureCounter: number) => {
     if (!Tone) return;
 
-    // MODIFIED: Play crash cymbal only every 8 measures, for a more natural feel
     if (measureCounter > 0 && measureCounter % 8 === 0 && instruments.crash) { 
         instruments.crash.sampler.triggerAttack('C4', time);
     }
