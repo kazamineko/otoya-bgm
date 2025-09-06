@@ -475,6 +475,48 @@ const handleSoundSourceChange = (payload: { instrument: 'eguitar' | 'ebass', sou
   }
 };
 
+// ADDED: Handler for recording and downloading the new sampler sound
+const handleDownloadSampler = async () => {
+  if (!Tone || !targetSamplerMulti || !guitarEQ) {
+    alert('音源が初期化されていないため、録音を開始できません。');
+    return;
+  }
+
+  try {
+    const recorder = new Tone.Recorder();
+    guitarEQ.connect(recorder); // Connect the final node of the nuance engine to the recorder
+
+    // Start recording
+    await recorder.start();
+
+    // Play the specific note for comparison (C5)
+    targetSamplerMulti.sampler.triggerAttackRelease('C5', '2s', Tone.now());
+
+    // Wait for 2 seconds to ensure the note is captured
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Stop recording and get the audio as a Blob
+    const blob = await recorder.stop();
+    
+    // Disconnect the recorder to restore normal audio flow
+    guitarEQ.disconnect(recorder);
+    recorder.dispose();
+
+    // Create a URL for the Blob and trigger download
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.download = "shin-sampler-output-C5.wav";
+    anchor.href = url;
+    anchor.click();
+    URL.revokeObjectURL(url); // Clean up the object URL
+
+  } catch (error) {
+    console.error("Failed to record sampler sound:", error);
+    alert("録音に失敗しました。詳細はコンソールを確認してください。");
+  }
+};
+
+
 const ROLES = { BACKING: 'backing', GUITAR_SOLO: 'guitar_solo', DRUM_BREAK: 'drum_break' } as const;
 type Role = typeof ROLES[keyof typeof ROLES];
 type PartEvent = { time: string, note: string, dur: ToneType.Unit.Time };
@@ -755,6 +797,7 @@ const createRockDrums = (rng: () => number, instruments: typeof samplers, time: 
       @export-params="handleExportParams"
       @reset-params="handleResetParams"
       @update-sound-source="handleSoundSourceChange"
+      @downloadSampler="handleDownloadSampler"
     />
   </div>
 </template>

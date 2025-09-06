@@ -19,7 +19,13 @@
               <div class="play-buttons">
                 <template v-if="instrument === 'eguitar' || instrument === 'ebass'">
                   <button @click.prevent="playSound('target_' + instrument, 'target_sampler')" :title="instrument === 'eguitar' ? '新しいマルチサンプル音源' : '目標サウンドから生成したSampler'">{{ instrument === 'eguitar' ? '新Sampler' : '目標Sampler' }}</button>
+                  <!-- ADDED START: Download button for the new sampler -->
+                  <button v-if="instrument === 'eguitar'" @click.prevent="downloadSampler" class="download-button">DL</button>
+                  <!-- ADDED END -->
                   <button @click.prevent="playSound(instrument, 'target')" title="最終的に目指すべき理想の音(WAV再生)">目標サウンド</button>
+                  <!-- ADDED START: Download link for the target sound -->
+                  <a v-if="instrument === 'eguitar'" href="/C5_s6_01.wav" download="target-sound-C5.wav" class="download-button" title="目標サウンドをダウンロード">DL</a>
+                  <!-- ADDED END -->
                   <button @click.prevent="playSound(instrument, 'sampler')" title="DI音源を仮想アンプで加工した音">加工後DI</button>
                   <button @click.prevent="playSound(instrument, 'raw')" title="エフェクトを何も通していない、録音したままの音">原音DI</button>
                 </template>
@@ -238,13 +244,17 @@ defineProps<{
   soundSourceSelection: Record<string, 'sampler' | 'di'>;
 }>();
 
-const emit = defineEmits(['close', 'playSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'updateSoundSource']);
+// ADDED: New 'downloadSampler' event
+const emit = defineEmits(['close', 'playSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'updateSoundSource', 'downloadSampler']);
 
 const close = () => emit('close');
 const playSound = (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => emit('playSound', instrumentName, type);
 const saveParams = () => emit('saveParams');
 const exportParams = () => emit('exportParams');
 const resetParams = () => emit('resetParams');
+
+// ADDED: Method to emit the download request
+const downloadSampler = () => emit('downloadSampler');
 
 const updateParam = (instrument: string, param: string, event: Event) => {
   const value = parseFloat((event.target as HTMLInputElement).value);
@@ -301,6 +311,24 @@ const updateSoundSource = (instrument: string, source: 'sampler' | 'di') => {
   font-size: 12px;
 }
 .play-buttons button:hover { background-color: #555; }
+/* ADDED START: Styles for the new download button/link */
+.download-button {
+  background-color: #238636; /* Green color */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-size: 12px;
+  text-decoration: none; /* For the <a> tag */
+  display: inline-block; /* For the <a> tag */
+  font-family: inherit;
+}
+.download-button:hover {
+  background-color: #1a6328;
+}
+/* ADDED END */
 .sliders { padding: 10px 15px 20px; background-color: #f9f9f9; }
 .slider-container {
   display: grid; grid-template-columns: 120px 1fr 100px;
