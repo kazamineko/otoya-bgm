@@ -607,7 +607,8 @@ const createRockSound = (rng: () => number): boolean => {
     const mainPart = new Tone.Part(((time, value) => {
         if (!Tone) return;
 
-        // --- Guitar Part ---
+        /*
+        // --- Guitar Part (Temporarily Disabled for Debugging) ---
         const guitarRiff: PartPattern = [
             { time: "0:0", note: `${value.root}3`, dur: "8n" },
             { time: "0:1", note: `${value.root}3`, dur: "8n" },
@@ -619,6 +620,7 @@ const createRockSound = (rng: () => number): boolean => {
             eguitar.sampler.triggerAttack(noteEvent.note, startTime);
             eguitar.sampler.triggerRelease(noteEvent.note, stopTime);
         });
+        */
 
         // --- Bass Part ---
         const bassRiff: BassPattern = [
