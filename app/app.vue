@@ -96,9 +96,9 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
-// MODIFIED: Adjusted eguitar EQ for more 'thickness'. Adjusted release times for eguitar/ebass.
+// MODIFIED: Final adjustments to guitar sound and bass release time.
 const masterTunedParams: TuningParams = {
-  "eguitar": { "inputGain": 12, "preCompThreshold": -24, "preCompRatio": 4, "preCompAttack": 0.01, "preCompRelease": 0.1, "preEqFreq": 800, "preEqGain": 6, "distortion": 0.85, "postEqLow": 4, "postEqMid": -6, "postEqHigh": -3, "chorusDepth": 0.1, "chorusRate": 1.5 },
+  "eguitar": { "inputGain": 12, "preCompThreshold": -24, "preCompRatio": 4, "preCompAttack": 0.01, "preCompRelease": 0.1, "preEqFreq": 700, "preEqGain": 6, "distortion": 0.85, "postEqLow": 4, "postEqMid": 2, "postEqHigh": -3, "chorusDepth": 0.1, "chorusRate": 1.5 },
   "ebass": { "inputGain": 12, "preCompThreshold": -20, "preCompRatio": 4, "preCompAttack": 0.02, "preCompRelease": 0.2, "subBlend": 0.5, "drive": 0.3, "eqLow": 4, "eqMid": -2, "eqHigh": 2 },
   "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
   "ride": { "volume": -9, "attack": 0.01, "release": 0.5 }, "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
@@ -110,7 +110,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "target_eguitar": { "volume": 0, "attack": 0.001, "release": 7.0, "detune": 0 },
-  "target_ebass": { "volume": 0, "attack": 0.01, "release": 4.0 },
+  "target_ebass": { "volume": 0, "attack": 0.01, "release": 25.0 },
 };
 
 watch(tuningParams, (newParams) => {
@@ -540,6 +540,11 @@ type PartEvent = { time: string, note: string, dur: ToneType.Unit.Time };
 type PartPattern = PartEvent[];
 type BassPattern = (string | null)[];
 type Section = { role: Role; duration: number; };
+// REFACTORED: Create unified riff patterns
+type Riff = {
+    guitar: PartPattern;
+    bass: BassPattern;
+};
 
 const createConcentrationSound = (rng: () => number): boolean => { 
     if (!Tone || !masterComp) return false;
@@ -595,20 +600,31 @@ const createRockSound = (rng: () => number): boolean => {
     Tone.Transport.bpm.value = 110 + rng() * 60;
     Tone.Transport.swing = 0;
 
-    const guitarBackingPatterns: PartPattern[] = [
-        [{ time: '0:0', note: 'E3', dur: '4n' }, { time: '0:2', note: 'G3', dur: '8n' }, { time: '0:3', note: 'A3', dur: '8n' }],
-        [{ time: '0:0', note: 'B3', dur: '2n' }, { time: '0:2', note: 'A3', dur: '4n' }],
-        [{ time: '0:0', note: 'E3', dur: '8n' }, { time: '0:1', note: 'E3', dur: '8n' }, { time: '0:2', note: 'G3', dur: '4n' }],
+    // REFACTORED: Create unified, musically coherent riffs for guitar and bass.
+    const rockRiffs: Riff[] = [
+      { // Riff 1: Classic Rock Power Chord Progression
+        guitar: [{ time: '0:0', note: 'E3', dur: '2n' }, { time: '0:2', note: 'G3', dur: '2n' }],
+        bass: ['E1', null, 'G1', null, 'A1', null, 'G1', null]
+      },
+      { // Riff 2: Simple melodic riff
+        guitar: [{ time: '0:0', note: 'B3', dur: '8n' }, { time: '0:1', note: 'A3', dur: '8n' }, { time: '0:2', note: 'G3', dur: '4n' }],
+        bass: ['G1', null, 'E1', null, 'G1', 'A1', 'G1', null]
+      },
+      { // Riff 3: Driving low-string riff
+        guitar: [{ time: '0:0', note: 'E3', dur: '8n' }, { time: '0:0:2', note: 'E3', dur: '8n' }, { time: '0:1', note: 'G3', dur: '4n' }],
+        bass: ['E1', 'E1', 'G1', 'G1', 'A1', 'A1', 'B1', 'B1']
+      }
     ];
-    const guitarSoloPatterns: PartPattern[] = [
-        [{ time: '0:0', note: 'E4', dur: '8n' }, { time: '0:1', note: 'G4', dur: '8n' }, { time: '0:2', note: 'A4', dur: '8n' }, { time: '0:3', note: 'B4', dur: '8n' }],
-        [{ time: '0:0', note: 'B4', dur: '4n' }, { time: '0:2', note: 'A4', dur: '4n' }, { time: '0:3', note: 'G4', dur: '8n' }],
-        [{ time: '0:0', note: 'G4', dur: '2n.' }, { time: '0:3', note: 'E4', dur: '4n' }],
-    ];
-    const bassBackingPatterns: BassPattern[] = [
-        ['E1', 'G1', 'A1', 'B1'],
-        ['E1', null, 'G1', null, 'A1', 'B1', null, 'A1'],
-        ['E1', 'E1', 'G1', null, 'A1', null, 'A1', null],
+
+    const soloRiffs: Riff[] = [
+        { // Solo Riff 1: Fast pentatonic run
+            guitar: [ { time: '0:0', note: 'E4', dur: '8n' }, { time: '0:1', note: 'G4', dur: '8n' }, { time: '0:2', note: 'A4', dur: '8n' }, { time: '0:3', note: 'B4', dur: '8n' } ],
+            bass: ['E2', null, 'G2', null]
+        },
+        { // Solo Riff 2: Held bend-like note
+            guitar: [ { time: '0:0', note: 'B4', dur: '2n.' } ],
+            bass: ['G2', null, null, null, 'A2', null, null, null]
+        }
     ];
 
     const songBlueprint: Section[] = [];
@@ -652,18 +668,20 @@ const createRockSound = (rng: () => number): boolean => {
         }
         
         if (role !== ROLES.DRUM_BREAK) {
-            const guitarPattern = role === ROLES.GUITAR_SOLO ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]! : guitarBackingPatterns[Math.floor(rng() * guitarSoloPatterns.length)]!;
-            guitarPattern.forEach(noteEvent => {
+            // REFACTORED: Select a complete, coherent riff for both instruments.
+            const riffSet = role === ROLES.GUITAR_SOLO ? soloRiffs : rockRiffs;
+            const currentRiff = riffSet[Math.floor(rng() * riffSet.length)]!;
+            
+            // Play Guitar Part
+            currentRiff.guitar.forEach(noteEvent => {
                 const noteTime = time + Tone!.Time(noteEvent.time).toSeconds();
-                if (soundSourceSelection.value.eguitar === 'sampler' && eguitar.sampler) {
-                    guitarVibrato!.frequency.value = 4 + rng() * 2;
-                    guitarEQ!.high.value = 2 + rng() * 2;
-                }
+                guitarVibrato!.frequency.value = 4 + rng() * 2;
+                guitarEQ!.high.value = 2 + rng() * 2;
                 eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, noteTime);
             });
 
-            const bassPattern = bassBackingPatterns[Math.floor(rng() * bassBackingPatterns.length)]!;
-            bassPattern.forEach((note, index) => {
+            // Play Bass Part
+            currentRiff.bass.forEach((note, index) => {
                 if (note) {
                     const noteTime = time + index * Tone!.Time('8n').toSeconds();
                     ebass.sampler.triggerAttackRelease(note, '8n', noteTime, 0.9);
