@@ -29,6 +29,11 @@ let diSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string }
 let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let targetSamplerMulti: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 
+// NEW: Guitar Nuance Engine
+let guitarVibrato: ToneType.Vibrato | null = null;
+let guitarEQ: ToneType.EQ3 | null = null;
+
+
 let rawSamplePlayers: ToneType.Players | null = null;
 let targetGuitarPlayer: ToneType.Player | null = null;
 let targetBassPlayer: ToneType.Player | null = null;
@@ -99,8 +104,7 @@ const masterTunedParams: TuningParams = {
   "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  // FIX: Drastically reduce release time to match natural sample decay
-  "target_eguitar": { "volume": 0, "attack": 0.01, "release": 0.5 },
+  "target_eguitar": { "volume": 0, "attack": 0.001, "release": 0.5 }, // FIX: Sharpen attack
   "target_ebass": { "volume": 0, "attack": 0.01, "release": 1.0 },
 };
 
@@ -141,7 +145,6 @@ watch(tuningParams, (newParams) => {
   }
   
   for (const instrumentName in newParams) {
-    // Note: Direct updates for targetSamplerMulti are handled in handleUpdateParam
     const activeSampler = samplers[instrumentName] || targetSamplers[instrumentName] || diSamplers[instrumentName];
     if (activeSampler) {
       const sampler = activeSampler.sampler;
@@ -198,6 +201,10 @@ const initializeAudio = async () => {
     reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.01, wet: 0.3 }).connect(masterComp);
     chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
     delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
+    
+    // FIX: Vibrato does not have a .start() method.
+    guitarVibrato = new Tone.Vibrato(5, 0.02);
+    guitarEQ = new Tone.EQ3({ low: -6, mid: 0, high: 3 });
     
     loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
     const eguitarP = tuningParams.value.eguitar;
@@ -273,7 +280,7 @@ const initializeAudio = async () => {
       else { samplers[name] = samplerData; }
     }
     
-    if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter && drumBusComp) {
+    if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter && drumBusComp && guitarVibrato && guitarEQ) {
       console.log("LOG: All core audio nodes initialized successfully.");
       const eguitarDI = diSamplers['eguitar'];
       if (eguitarDI) {
@@ -314,8 +321,9 @@ const initializeAudio = async () => {
       }
 
       if(targetSamplerMulti) {
-        targetSamplerMulti.sampler.fan(masterComp, reverb);
-        console.log("LOG: Routing multi-sampled guitar to Master Bus.");
+        targetSamplerMulti.sampler.chain(guitarVibrato, guitarEQ);
+        guitarEQ.fan(masterComp, reverb);
+        console.log("LOG: Routing multi-sampled guitar through Nuance Engine to Master Bus.");
       }
 
       const diEguitar = diSamplers['eguitar'];
@@ -414,26 +422,18 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
   }
 };
 const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => {
-  // Update the state for persistence and reactivity
   if (tuningParams.value[payload.instrument]) {
     const updatedInstrumentParams = { ...tuningParams.value[payload.instrument] };
     updatedInstrumentParams[payload.param] = payload.value;
     tuningParams.value[payload.instrument] = updatedInstrumentParams;
   }
   
-  // FIX: Directly apply changes to the multi-sampler audio node to ensure it updates
   if (payload.instrument === 'target_eguitar' && targetSamplerMulti) {
     const sampler = targetSamplerMulti.sampler;
     switch (payload.param) {
-      case 'volume':
-        sampler.volume.value = payload.value;
-        break;
-      case 'attack':
-        sampler.attack = payload.value;
-        break;
-      case 'release':
-        sampler.release = payload.value;
-        break;
+      case 'volume': sampler.volume.value = payload.value; break;
+      case 'attack': sampler.attack = payload.value; break;
+      case 'release': sampler.release = payload.value; break;
     }
   }
 };
@@ -442,7 +442,6 @@ const handleExportParams = () => { console.clear(); console.log(JSON.stringify(t
 const handleResetParams = () => { 
   if (confirm('現在の調整を破棄し、全ての設定を初期値に戻します。よろしいですか？')) {
     tuningParams.value = JSON.parse(JSON.stringify(masterTunedParams)); 
-    // Also re-apply the default to the live audio node
     if (targetSamplerMulti) {
       const defaults = masterTunedParams['target_eguitar'];
       targetSamplerMulti.sampler.volume.value = defaults.volume;
@@ -585,7 +584,7 @@ const createRockSound = (rng: () => number): boolean => {
             const guitarPattern = role === ROLES.GUITAR_SOLO ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]! : guitarBackingPatterns[Math.floor(rng() * guitarSoloPatterns.length)]!;
             guitarPattern.forEach(noteEvent => {
                 const noteTime = time + Tone!.Time(noteEvent.time).toSeconds();
-                eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, noteTime, 0.9 + rng() * 0.1);
+                eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, noteTime);
             });
 
             const bassPattern = bassBackingPatterns[Math.floor(rng() * bassBackingPatterns.length)]!;
