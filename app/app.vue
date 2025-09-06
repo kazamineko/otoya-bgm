@@ -228,11 +228,7 @@ const initializeAudio = async () => {
     bassDistortion = new Tone.Distortion(ebassP.drive); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
     bassMakeUpGain = new Tone.Volume(8);
-    //
-    // --- THIS IS THE CRITICAL CHANGE ---
-    // Activate the compressor to manage bass dynamics and create punch.
     bassPostComp = new Tone.Compressor({threshold: -24, ratio: 6, attack: 0.02, release: 0.2});
-    //
     bassSubFilter = new Tone.Filter(120, 'lowpass');
     bassSubGain = new Tone.Volume(0);
     
@@ -333,11 +329,15 @@ const initializeAudio = async () => {
         }
       }
       
+      //
+      // --- THIS IS THE CRITICAL FIX ---
+      // Correctly route the audio signal path for target_ebass
+      //
       for (const [name, { sampler }] of Object.entries(targetSamplers)) {
-        // Connect the main eBass sampler to the now-active Post Compressor
         if (name === 'target_ebass' && bassPostComp) {
-          sampler.chain(bassPostComp, masterComp, reverb);
-          console.log(`LOG: Routing 'target_ebass' through Post Compressor.`);
+          // Route: sampler -> compressor -> (master bus AND reverb send)
+          sampler.chain(bassPostComp).fan(masterComp, reverb);
+          console.log(`LOG: Routing 'target_ebass' through Post Compressor correctly.`);
         } else {
           sampler.fan(masterComp, reverb);
           console.log(`LOG: Routing '${name}' to Master Bus.`);
