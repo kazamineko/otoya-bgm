@@ -35,7 +35,6 @@
             <div class="sliders" v-if="tuningParams[instrument] || tuningParams['target_' + instrument]">
               <!-- eGuitar & eBass Combined Logic -->
               <template v-if="instrument === 'eguitar' || instrument === 'ebass'">
-                <!-- MODIFIED: eGuitar source selector and DI sliders are removed for simplicity -->
                 <div v-if="instrument === 'ebass'" class="source-selector">
                   <div class="sub-header">音源ソース</div>
                   <div class="radio-group">
@@ -50,9 +49,7 @@
                   </div>
                 </div>
 
-                <!-- DI Sliders (Only for eBass now) -->
                 <template v-if="soundSourceSelection[instrument] === 'di'">
-                  <!-- eBass DI Sliders -->
                   <template v-if="instrument === 'ebass'">
                     <div class="sub-header">Input Gain (入力音量)</div>
                     <div class="slider-container">
@@ -110,7 +107,6 @@
                     </div>
                   </template>
                 </template>
-                <!-- Sampler Sliders (Default for eGuitar, conditional for eBass) -->
                 <template v-else>
                   <div class="sub-header">{{ instrument === 'eguitar' ? 'マルチサンプル設定' : 'Sampler 設定' }}</div>
                   <div class="slider-container">
@@ -128,7 +124,6 @@
                     <input type="range" min="0" max="5" step="0.01" :value="tuningParams['target_' + instrument].release" @input="updateParam('target_' + instrument, 'release', $event)">
                     <span>{{ tuningParams['target_' + instrument].release.toFixed(2) }} s</span>
                   </div>
-                  <!-- REMOVED: Detune slider is no longer needed as tuning is handled by AI -->
                 </template>
               </template>
               <!-- Other Instruments -->

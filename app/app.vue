@@ -29,8 +29,6 @@ let diSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string }
 let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let targetSamplerMulti: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 
-// NEW: Guitar Nuance Engine
-// MODIFIED: Added PitchShift for detuning
 let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
@@ -96,21 +94,21 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
-// MODIFIED: Amp settings retuned for low-string riffs to prevent clipping.
+// FINALIZED: All parameters returned to a stable, balanced state.
 const masterTunedParams: TuningParams = {
   "eguitar": { "inputGain": 12, "preCompThreshold": -24, "preCompRatio": 4, "preCompAttack": 0.01, "preCompRelease": 0.1, "preEqFreq": 700, "preEqGain": 6, "distortion": 0.8, "postEqLow": 2, "postEqMid": -2, "postEqHigh": -3, "chorusDepth": 0.1, "chorusRate": 1.5 },
-  "ebass": { "inputGain": 12, "preCompThreshold": -20, "preCompRatio": 4, "preCompAttack": 0.02, "preCompRelease": 0.2, "subBlend": 0.5, "drive": 0.3, "eqLow": 4, "eqMid": -2, "eqHigh": 2 },
+  "ebass": { "inputGain": 10, "preCompThreshold": -20, "preCompRatio": 4, "preCompAttack": 0.02, "preCompRelease": 0.2, "subBlend": 0.5, "drive": 0.3, "eqLow": 4, "eqMid": -2, "eqHigh": 2 },
   "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
-  "ride": { "volume": -9, "attack": 0.01, "release": 0.5 }, "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
+  "ride": { "volume": -12, "attack": 0.01, "release": 0.5 }, "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
   "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
   "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
   "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
   "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
-  "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
+  "crash": { "volume": -12, "attack": 0.01, "release": 0.5 },
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": 0, "attack": 0.001, "release": 7.0, "detune": 0 },
-  "target_ebass": { "volume": 0, "attack": 0.01, "release": 25.0 },
+  "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0 },
+  "target_ebass": { "volume": -9, "attack": 0.01, "release": 1.0 },
 };
 
 watch(tuningParams, (newParams) => {
@@ -198,7 +196,7 @@ const initializeAudio = async () => {
     limiter = new Tone.Limiter(-0.1).toDestination();
     masterComp = new Tone.Compressor({ threshold: -12, ratio: 3 }).connect(limiter);
     
-    drumBusVolume = new Tone.Volume(-3).connect(masterComp);
+    drumBusVolume = new Tone.Volume(-6).connect(masterComp);
     drumBusComp = new Tone.Compressor({ threshold: -20, ratio: 4, attack: 0.01, release: 0.1 }).connect(drumBusVolume);
 
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
@@ -280,7 +278,7 @@ const initializeAudio = async () => {
       
       if (name === 'target_eguitar') { baseNote = 'G#3'; }
       else if (filePath.includes('-c3')) { baseNote = 'C3'; }
-      else if (filePath.includes('-e1')) { baseNote = 'E1'; }
+      else if (filePath.includes('-e1')) { baseNote = 'C1'; } 
       else { baseNote = 'C4'; }
       urls[baseNote] = filePath;
 
@@ -421,7 +419,7 @@ const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
 const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => {
   if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; } }
   
-  const duration = (instrumentName.includes('ebass')) ? '25s' : '2n';
+  const duration = '2n';
 
   if (type === 'target_sampler') {
       if (instrumentName === 'target_eguitar' && targetSamplerMulti && Tone && guitarVibrato && guitarEQ) {
@@ -537,6 +535,10 @@ const handleDownloadSampler = async () => {
 
 const ROLES = { BACKING: 'backing', GUITAR_SOLO: 'guitar_solo', DRUM_BREAK: 'drum_break' } as const;
 type Role = typeof ROLES[keyof typeof ROLES];
+type PartEvent = { time: string, note: string, dur: ToneType.Unit.Time };
+type PartPattern = PartEvent[];
+type BassPattern = { time: string, note: string, dur: ToneType.Unit.Time }[];
+type Section = { role: Role; duration: number; };
 
 const createConcentrationSound = (rng: () => number): boolean => { 
     if (!Tone || !masterComp) return false;
@@ -586,6 +588,7 @@ const createJazzSound = (rng: () => number): boolean => {
     return true; 
 };
 
+// REFACTORED: The final, definitive rock generation logic.
 const createRockSound = (rng: () => number): boolean => {
     if (!Tone || !samplers.eguitar || !samplers.ebass || !guitarVibrato || !guitarEQ) return false;
     const { eguitar, ebass } = samplers;
@@ -593,10 +596,10 @@ const createRockSound = (rng: () => number): boolean => {
     Tone.Transport.swing = 0;
 
     const progression = [
-        { time: '0:0', chord: 'Em', root: 'E' },
-        { time: '1:0', chord: 'G',  root: 'G' },
-        { time: '2:0', chord: 'A',  root: 'A' },
-        { time: '3:0', chord: 'A',  root: 'A' },
+        { time: '0:0', root: 'E', dur: '1m' },
+        { time: '1:0', root: 'G', dur: '1m' },
+        { time: '2:0', root: 'A', dur: '1m' },
+        { time: '3:0', root: 'A', dur: '1m' },
     ];
 
     let measureCounter = 0;
@@ -604,25 +607,32 @@ const createRockSound = (rng: () => number): boolean => {
     const mainPart = new Tone.Part(((time, value) => {
         if (!Tone) return;
 
-        // DEBUG: Temporarily disable guitar to isolate the source of the clipping.
-        // const guitarRiff = [
-        //     { time: '0:0', note: `${value.root}3`, dur: '8n' },
-        //     { time: '0:1', note: `${value.root}3`, dur: '8n' },
-        //     { time: '0:2', note: `${value.root}3`, dur: '4n' },
-        // ];
-        // guitarRiff.forEach(noteEvent => {
-        //     eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, time + Tone!.Time(noteEvent.time).toSeconds());
-        // });
-
-        const bassRiff = [
-            { time: '0:0', note: `${value.root}1` },
-            { time: '0:2', note: `${value.root}1` },
+        // --- Guitar Part ---
+        const guitarRiff: PartPattern = [
+            { time: "0:0", note: `${value.root}3`, dur: "8n" },
+            { time: "0:1", note: `${value.root}3`, dur: "8n" },
+            { time: "0:2", note: `${value.root}3`, dur: "4n" },
         ];
-        
-        bassRiff.forEach(noteEvent => {
-            ebass.sampler.triggerAttackRelease(noteEvent.note, '4n', time + Tone!.Time(noteEvent.time).toSeconds());
+        guitarRiff.forEach(noteEvent => {
+            const startTime = time + Tone!.Time(noteEvent.time).toSeconds();
+            const stopTime = startTime + Tone!.Time(noteEvent.dur).toSeconds() - 0.01;
+            eguitar.sampler.triggerAttack(noteEvent.note, startTime);
+            eguitar.sampler.triggerRelease(noteEvent.note, stopTime);
         });
 
+        // --- Bass Part ---
+        const bassRiff: BassPattern = [
+            { time: "0:0", note: `${value.root}1`, dur: "4n" },
+            { time: "0:2", note: `${value.root}1`, dur: "4n" },
+        ];
+        bassRiff.forEach(noteEvent => {
+            const startTime = time + Tone!.Time(noteEvent.time).toSeconds();
+            const stopTime = startTime + Tone!.Time(noteEvent.dur).toSeconds() - 0.01;
+            ebass.sampler.triggerAttack(noteEvent.note, startTime);
+            ebass.sampler.triggerRelease(noteEvent.note, stopTime);
+        });
+
+        // --- Drums Part ---
         createRockDrums(rng, samplers, time, ROLES.BACKING, 0, measureCounter);
         measureCounter++;
 
