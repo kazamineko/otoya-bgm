@@ -28,6 +28,10 @@ let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } }
 let diSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let targetSamplerMulti: { sampler: ToneType.Sampler, baseNote: string } | null = null;
+//
+// --- THE ULTIMATE FIX: The new multi-sampled bass sampler ---
+let newRockBassSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
+//
 
 let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
@@ -228,11 +232,7 @@ const initializeAudio = async () => {
     bassDistortion = new Tone.Distortion(ebassP.drive); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
     bassMakeUpGain = new Tone.Volume(8);
-    //
-    // --- SIDECHAIN COMPRESSION APPLIED ---
-    // Fast attack/release to duck the bass for the kick
-    bassPostComp = new Tone.Compressor({threshold: -30, ratio: 8, attack: 0.005, release: 0.1});
-    //
+    bassPostComp = new Tone.Compressor({threshold: -24, ratio: 6, attack: 0.02, release: 0.2});
     bassSubFilter = new Tone.Filter(120, 'lowpass');
     bassSubGain = new Tone.Volume(0);
     
@@ -268,7 +268,23 @@ const initializeAudio = async () => {
     targetSamplerMulti = { sampler: loadedMultiSampler, baseNote: 'G#5' }; 
     console.log("LOG: New multi-sampled guitar loaded with URLs:", multiSampleUrls);
 
-    
+    //
+    // --- 1. Load the New Multi-Sampled Bass ---
+    //
+    const newBassUrls = {
+        'E1': 'ebass-new_E.wav', 'F1': 'ebass-new_F.wav', 'F#1': 'ebass-new_F#.wav', 'G1': 'ebass-new_G.wav',
+        'G#1': 'ebass-new_G#.wav', 'A1': 'ebass-new_A.wav', 'A#1': 'ebass-new_A#.wav', 'B1': 'ebass-new_B.wav',
+        'C2': 'ebass-new_C.wav', 'C#2': 'ebass-new_C#.wav', 'D2': 'ebass-new_D.wav', 'D#2': 'ebass-new_D#.wav',
+        'E2': 'ebass-new_E2.wav',
+    };
+    const loadedNewRockBassSampler = new Tone.Sampler({
+        urls: newBassUrls, baseUrl: "/",
+        volume: -6, attack: 0.01, release: 1.0
+    });
+    newRockBassSampler = { sampler: loadedNewRockBassSampler, baseNote: 'A1' };
+    console.log("LOG: New multi-sampled rock bass loaded successfully.");
+    //
+
     for (const name of Object.keys(allSamplePaths)) {
       const params = tuningParams.value[name];
       if (!params) continue;
@@ -298,8 +314,12 @@ const initializeAudio = async () => {
       else { samplers[name] = samplerData; }
     }
     
-    if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter && drumBusComp && guitarVibrato && guitarEQ && guitarPitchShift && bassPostComp) {
+    if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter && drumBusComp && guitarVibrato && guitarEQ && guitarPitchShift && bassPostComp && newRockBassSampler) {
       console.log("LOG: All core audio nodes initialized successfully.");
+      
+      // Connect the new rock bass to the drum bus for a tight rhythm section sound
+      newRockBassSampler.sampler.connect(drumBusComp);
+
       const eguitarDI = diSamplers['eguitar'];
       if (eguitarDI) {
         eguitarDI.sampler.connect(guitarInputGain);
@@ -325,14 +345,6 @@ const initializeAudio = async () => {
             rideFilter.connect(drumBusComp);
           } else {
             data.sampler.connect(drumBusComp);
-          }
-          //
-          // --- SIDECHAIN ACTIVATED ---
-          // The Rock Kick now triggers the bass compressor.
-          //
-          if (name === 'rockKick') {
-              data.sampler.connect(bassPostComp);
-              console.log(`LOG: Sidechain from 'rockKick' to bass compressor is now active.`);
           }
           console.log(`LOG: Routing '${name}' to Drum Bus.`);
         } else {
@@ -605,94 +617,45 @@ const createJazzSound = (rng: () => number): boolean => {
     return true; 
 };
 
-// REFACTORED: The final, definitive rock generation logic.
+//
+// --- 2. Fix TypeScript Errors & Refine Logic ---
+//
 const createRockSound = (rng: () => number): boolean => {
-    if (!Tone || !samplers.eguitar || !samplers.ebass || !guitarVibrato || !guitarEQ) return false;
-    const { eguitar, ebass } = samplers;
-    Tone.Transport.bpm.value = 120 + rng() * 40;
+    // Null-check ensures Tone and instruments are loaded
+    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler) return false;
+    
+    Tone.Transport.bpm.value = 130 + rng() * 20;
     Tone.Transport.swing = 0;
 
-    const progression = [
-        { time: '0:0', root: 'E', dur: '1m' },
-        { time: '1:0', root: 'G', dur: '1m' },
-        { time: '2:0', root: 'A', dur: '1m' },
-        { time: '3:0', root: 'A', dur: '1m' },
-    ];
+    const progression = ['E', 'G', 'A', 'A'];
 
-    let measureCounter = 0;
+    // --- Drum Part (Simple & Stable) ---
+    const kickSeq = new Tone.Sequence((time, note) => {
+        if(note) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time, 0.9 + rng() * 0.1);
+    }, [1, 0, 1, 0, 1, 0, 1, 0], "8n").start(0);
 
-    const mainPart = new Tone.Part(((time, value) => {
-        if (!Tone) return;
+    const snareSeq = new Tone.Sequence((time, note) => {
+        if(note) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, time, 0.8 + rng() * 0.2);
+    }, [0, 1, 0, 1], "4n").start(0);
 
-        // --- Guitar Part ---
-        const guitarRiff: PartPattern = [
-            { time: "0:0", note: `${value.root}3`, dur: "8n" },
-            { time: "0:1", note: `${value.root}3`, dur: "8n" },
-            { time: "0:2", note: `${value.root}3`, dur: "4n" },
-        ];
-        guitarRiff.forEach(noteEvent => {
-            const startTime = time + Tone!.Time(noteEvent.time).toSeconds();
-            const stopTime = startTime + Tone!.Time(noteEvent.dur).toSeconds() - 0.01;
-            eguitar.sampler.triggerAttack(noteEvent.note, startTime);
-            eguitar.sampler.triggerRelease(noteEvent.note, stopTime);
-        });
+    // --- Guitar & Bass Parts (Using stable Tone.Loop) ---
+    const riffLoop = new Tone.Loop((time) => {
+      // Null-check for Tone.Transport
+      if (!Tone) return;
 
-        // --- Bass Part ---
-        const bassRiff: BassPattern = [
-            { time: "0:0", note: `${value.root}1`, dur: "4n" },
-            { time: "0:2", note: `${value.root}1`, dur: "4n" },
-        ];
-        bassRiff.forEach(noteEvent => {
-            const startTime = time + Tone!.Time(noteEvent.time).toSeconds();
-            const stopTime = startTime + Tone!.Time(noteEvent.dur).toSeconds() - 0.01;
-            ebass.sampler.triggerAttack(noteEvent.note, startTime);
-            ebass.sampler.triggerRelease(noteEvent.note, stopTime);
-        });
+      const measure = Math.floor(Tone.Transport.getTicksAtTime(time) / (Tone.Transport.PPQ * 4)) % 4;
+      const rootNote = progression[measure]!;
+      
+      // Guitar plays power chord
+      samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time);
 
-        // --- Drums Part ---
-        createRockDrums(rng, samplers, time, ROLES.BACKING, 0, measureCounter);
-        measureCounter++;
+      // New bass plays root note
+      newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time);
 
-    }), progression).start(0);
+    }, "4n").start(0);
 
-    mainPart.loop = true;
-    mainPart.loopEnd = '4m';
-    
-    scheduledEvents.push(mainPart);
-    return true;
-};
-
-const createRockDrums = (rng: () => number, instruments: typeof samplers, time: number, role: Role, measureInSec: number, measureCounter: number) => {
-    if (!Tone) return;
-
-    if (measureCounter > 0 && measureCounter % 8 === 0 && instruments.crash) { 
-        instruments.crash.sampler.triggerAttack('C4', time);
-    }
-    
-    if (role === ROLES.DRUM_BREAK) {
-        if (measureInSec % 2 === 0 && instruments.tomFloor) instruments.tomFloor.sampler.triggerAttack('C4', time);
-        else if (instruments.rockSnare) instruments.rockSnare.sampler.triggerAttack('C4', time);
-        return;
-    }
-    
-    const isFillMeasure = measureCounter % 4 === 3;
-    const basePattern = { kick: [1,0,0,0,1,0,0,0], snare: [0,0,1,0,0,0,1,0], ride: [1,1,1,1,1,1,1,1] };
-
-    for (let i = 0; i < 8; i++) {
-        const stepTime = time + i * Tone.Time('8n').toSeconds();
-        if (isFillMeasure && i >= 4) {
-            if (rng() > 0.4 && instruments.rockSnare) instruments.rockSnare.sampler.triggerAttack('C4', stepTime, 0.8);
-            if (rng() > 0.8 && instruments.tomMid) instruments.tomMid.sampler.triggerAttack('C4', stepTime);
-            continue;
-        }
-        if (basePattern.kick[i] && instruments.rockKick) instruments.rockKick.sampler.triggerAttack('C4', stepTime, 1.0);
-        if (basePattern.snare[i] && instruments.rockSnare) instruments.rockSnare.sampler.triggerAttack('C4', stepTime, 0.9);
-        if (basePattern.ride[i] && instruments.ride) {
-            const vel = 0.5 + rng() * 0.5;
-            if (rideFilter) rideFilter.frequency.value = 2000 + (vel * 8000);
-            instruments.ride.sampler.triggerAttack('C4', stepTime + (rng() - 0.5) * 0.02, vel);
-        }
-    }
+    scheduledEvents.push(kickSeq, snareSeq, riffLoop);
+    return true; 
 };
 </script>
 
