@@ -35,7 +35,8 @@
             <div class="sliders" v-if="tuningParams[instrument] || tuningParams['target_' + instrument]">
               <!-- eGuitar & eBass Combined Logic -->
               <template v-if="instrument === 'eguitar' || instrument === 'ebass'">
-                <div class="source-selector">
+                <!-- MODIFIED: eGuitar source selector and DI sliders are removed for simplicity -->
+                <div v-if="instrument === 'ebass'" class="source-selector">
                   <div class="sub-header">音源ソース</div>
                   <div class="radio-group">
                     <label>
@@ -49,81 +50,8 @@
                   </div>
                 </div>
 
-                <!-- DI Sliders (Hidden by default) -->
+                <!-- DI Sliders (Only for eBass now) -->
                 <template v-if="soundSourceSelection[instrument] === 'di'">
-                  <!-- eGuitar DI Sliders -->
-                  <template v-if="instrument === 'eguitar'">
-                    <div class="sub-header">Input Gain (入力音量)</div>
-                    <div class="slider-container">
-                      <label>Gain</label>
-                      <input type="range" min="0" max="24" step="0.5" :value="tuningParams.eguitar.inputGain" @input="updateParam('eguitar', 'inputGain', $event)">
-                      <span>{{ tuningParams.eguitar.inputGain.toFixed(1) }} dB</span>
-                    </div>
-                    <div class="sub-header">Pre-Dist Compressor (音の粒立ち・サステイン)</div>
-                    <div class="slider-container">
-                      <label>Threshold</label>
-                      <input type="range" min="-48" max="0" step="1" :value="tuningParams.eguitar.preCompThreshold" @input="updateParam('eguitar', 'preCompThreshold', $event)">
-                      <span>{{ tuningParams.eguitar.preCompThreshold }} dB</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>Ratio</label>
-                      <input type="range" min="1" max="20" step="1" :value="tuningParams.eguitar.preCompRatio" @input="updateParam('eguitar', 'preCompRatio', $event)">
-                      <span>{{ tuningParams.eguitar.preCompRatio }}:1</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>Attack</label>
-                      <input type="range" min="0.001" max="0.2" step="0.001" :value="tuningParams.eguitar.preCompAttack" @input="updateParam('eguitar', 'preCompAttack', $event)">
-                      <span>{{ tuningParams.eguitar.preCompAttack.toFixed(3) }} s</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>Release</label>
-                      <input type="range" min="0.01" max="0.5" step="0.01" :value="tuningParams.eguitar.preCompRelease" @input="updateParam('eguitar', 'preCompRelease', $event)">
-                      <span>{{ tuningParams.eguitar.preCompRelease.toFixed(2) }} s</span>
-                    </div>
-                    <div class="sub-header">Pre EQ (歪みのキャラクター)</div>
-                    <div class="slider-container">
-                      <label>Mid Freq</label>
-                      <input type="range" min="300" max="3000" step="10" :value="tuningParams.eguitar.preEqFreq" @input="updateParam('eguitar', 'preEqFreq', $event)">
-                      <span>{{ tuningParams.eguitar.preEqFreq }} Hz</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>Mid Gain</label>
-                      <input type="range" min="0" max="24" step="0.5" :value="tuningParams.eguitar.preEqGain" @input="updateParam('eguitar', 'preEqGain', $event)">
-                      <span>{{ tuningParams.eguitar.preEqGain.toFixed(1) }} dB</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>Distortion</label>
-                      <input type="range" min="0" max="1" step="0.01" :value="tuningParams.eguitar.distortion" @input="updateParam('eguitar', 'distortion', $event)">
-                      <span>{{ tuningParams.eguitar.distortion.toFixed(2) }}</span>
-                    </div>
-                    <div class="sub-header">Post EQ (最終的な音質)</div>
-                    <div class="slider-container">
-                      <label>Low</label>
-                      <input type="range" min="-24" max="24" step="0.5" :value="tuningParams.eguitar.postEqLow" @input="updateParam('eguitar', 'postEqLow', $event)">
-                      <span>{{ tuningParams.eguitar.postEqLow.toFixed(1) }} dB</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>Mid</label>
-                      <input type="range" min="-24" max="24" step="0.5" :value="tuningParams.eguitar.postEqMid" @input="updateParam('eguitar', 'postEqMid', $event)">
-                      <span>{{ tuningParams.eguitar.postEqMid.toFixed(1) }} dB</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>High</label>
-                      <input type="range" min="-24" max="24" step="0.5" :value="tuningParams.eguitar.postEqHigh" @input="updateParam('eguitar', 'postEqHigh', $event)">
-                      <span>{{ tuningParams.eguitar.postEqHigh.toFixed(1) }} dB</span>
-                    </div>
-                    <div class="sub-header">Chorus (音の揺れ・広がり)</div>
-                    <div class="slider-container">
-                      <label>Depth</label>
-                      <input type="range" min="0" max="1" step="0.01" :value="tuningParams.eguitar.chorusDepth" @input="updateParam('eguitar', 'chorusDepth', $event)">
-                      <span>{{ tuningParams.eguitar.chorusDepth.toFixed(2) }}</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>Rate</label>
-                      <input type="range" min="0.1" max="8" step="0.1" :value="tuningParams.eguitar.chorusRate" @input="updateParam('eguitar', 'chorusRate', $event)">
-                      <span>{{ tuningParams.eguitar.chorusRate.toFixed(1) }} Hz</span>
-                    </div>
-                  </template>
                   <!-- eBass DI Sliders -->
                   <template v-if="instrument === 'ebass'">
                     <div class="sub-header">Input Gain (入力音量)</div>
@@ -182,7 +110,7 @@
                     </div>
                   </template>
                 </template>
-                <!-- Sampler Sliders (Default) -->
+                <!-- Sampler Sliders (Default for eGuitar, conditional for eBass) -->
                 <template v-else>
                   <div class="sub-header">{{ instrument === 'eguitar' ? 'マルチサンプル設定' : 'Sampler 設定' }}</div>
                   <div class="slider-container">
@@ -200,12 +128,7 @@
                     <input type="range" min="0" max="5" step="0.01" :value="tuningParams['target_' + instrument].release" @input="updateParam('target_' + instrument, 'release', $event)">
                     <span>{{ tuningParams['target_' + instrument].release.toFixed(2) }} s</span>
                   </div>
-                  <!-- MODIFIED: Detune slider now correctly controls semitones -->
-                  <div v-if="instrument === 'eguitar'" class="slider-container">
-                    <label>Detune (音階)</label>
-                    <input type="range" min="-2" max="2" step="0.01" :value="tuningParams['target_eguitar'].detune" @input="updateParam('target_eguitar', 'detune', $event)">
-                    <span>{{ tuningParams['target_eguitar'].detune.toFixed(2) }} 半音</span>
-                  </div>
+                  <!-- REMOVED: Detune slider is no longer needed as tuning is handled by AI -->
                 </template>
               </template>
               <!-- Other Instruments -->

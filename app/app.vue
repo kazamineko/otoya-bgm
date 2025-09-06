@@ -206,7 +206,6 @@ const initializeAudio = async () => {
     chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
     delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
     
-    // MODIFIED: Initialize PitchShift node
     const eguitarTargetP = tuningParams.value.target_eguitar;
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
@@ -336,16 +335,17 @@ const initializeAudio = async () => {
         console.log(`LOG: Routing '${name}' to Master Bus.`);
       }
 
-      if(targetSamplerMulti) {
-        // MODIFIED: Rerouted through PitchShift
+      // MODIFIED: Route the new multi-sampler through the full virtual amp rig
+      if(targetSamplerMulti && guitarInputGain) {
         targetSamplerMulti.sampler.chain(guitarPitchShift, guitarVibrato, guitarEQ);
-        guitarEQ.fan(masterComp, reverb);
-        console.log("LOG: Routing multi-sampled guitar through PitchShift and Nuance Engine to Master Bus.");
+        guitarEQ.connect(guitarInputGain); // Connect to the start of the amp chain
+        console.log("LOG: Routing multi-sampled guitar through Nuance Engine AND Virtual Amp Rig.");
       }
 
-      const diEguitar = diSamplers['eguitar'];
-      if (targetSamplerMulti && diEguitar) {
-        samplers['eguitar'] = soundSourceSelection.value.eguitar === 'sampler' ? targetSamplerMulti : diEguitar;
+      // MODIFIED: Permanently set the new multi-sampler as the main eguitar sound
+      if (targetSamplerMulti) {
+        samplers['eguitar'] = targetSamplerMulti;
+        console.log("LOG: 'targetSamplerMulti' is now the primary 'eguitar' sampler.");
       }
 
       const targetEbass = targetSamplers['target_ebass'];
@@ -459,7 +459,6 @@ const handleUpdateParam = (payload: { instrument: string, param: string, value: 
       case 'volume': sampler.volume.value = payload.value; break;
       case 'attack': sampler.attack = payload.value; break;
       case 'release': sampler.release = payload.value; break;
-      // MODIFIED: Control PitchShift node instead of non-existent sampler property
       case 'detune': 
         if (guitarPitchShift) {
           guitarPitchShift.pitch = payload.value;
@@ -478,7 +477,6 @@ const handleResetParams = () => {
       targetSamplerMulti.sampler.volume.value = defaults.volume;
       targetSamplerMulti.sampler.attack = defaults.attack;
       targetSamplerMulti.sampler.release = defaults.release;
-      // MODIFIED: Reset PitchShift node as well
       if (guitarPitchShift) {
         guitarPitchShift.pitch = defaults.detune;
       }
@@ -674,7 +672,8 @@ const createRockSound = (rng: () => number): boolean => {
             });
         }
         
-        createRockDrums(rng, samplers, time, role, measuresIntoSection);
+        // MODIFIED: Pass the global measureCounter to the drum function
+        createRockDrums(rng, samplers, time, role, measuresIntoSection, measureCounter);
 
         measureCounter++;
         measuresIntoSection++;
@@ -691,10 +690,12 @@ const createRockSound = (rng: () => number): boolean => {
     return true;
 };
 
-const createRockDrums = (rng: () => number, instruments: typeof samplers, time: number, role: Role, measureInSec: number) => {
+// MODIFIED: Added measureCounter to the function signature
+const createRockDrums = (rng: () => number, instruments: typeof samplers, time: number, role: Role, measureInSec: number, measureCounter: number) => {
     if (!Tone) return;
 
-    if (measureInSec === 0 && instruments.crash) { 
+    // MODIFIED: Play crash cymbal only every 8 measures, for a more natural feel
+    if (measureCounter > 0 && measureCounter % 8 === 0 && instruments.crash) { 
         instruments.crash.sampler.triggerAttack('C4', time);
     }
     
