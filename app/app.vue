@@ -30,6 +30,8 @@ let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: stri
 let targetSamplerMulti: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 
 // NEW: Guitar Nuance Engine
+// MODIFIED: Added PitchShift for detuning
+let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
 
@@ -73,7 +75,6 @@ const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
-// ADDED: Variable to store the duration of the target sound
 let targetSoundDuration = 0;
 
 type AmpParams = {
@@ -107,7 +108,7 @@ const masterTunedParams: TuningParams = {
   "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": 0, "attack": 0.001, "release": 0.5 },
+  "target_eguitar": { "volume": 0, "attack": 0.001, "release": 0.5, "detune": 0 },
   "target_ebass": { "volume": 0, "attack": 0.01, "release": 1.0 },
 };
 
@@ -205,6 +206,9 @@ const initializeAudio = async () => {
     chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
     delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
     
+    // MODIFIED: Initialize PitchShift node
+    const eguitarTargetP = tuningParams.value.target_eguitar;
+    guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
     guitarEQ = new Tone.EQ3({ low: -6, mid: 0, high: 3 });
     
@@ -238,7 +242,6 @@ const initializeAudio = async () => {
     await Promise.all([guitarCab.load, bassCab.load, targetGuitarPlayer.load, targetBassPlayer.load]);
     loadingMessage.value = '楽器を最終調整しています...';
 
-    // MODIFIED: Get duration from the already loaded player's buffer.
     if (targetGuitarPlayer.loaded) {
       targetSoundDuration = targetGuitarPlayer.buffer.duration;
       console.log(`LOG: Target sound duration loaded: ${targetSoundDuration} seconds`);
@@ -293,7 +296,7 @@ const initializeAudio = async () => {
       else { samplers[name] = samplerData; }
     }
     
-    if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter && drumBusComp && guitarVibrato && guitarEQ) {
+    if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter && drumBusComp && guitarVibrato && guitarEQ && guitarPitchShift) {
       console.log("LOG: All core audio nodes initialized successfully.");
       const eguitarDI = diSamplers['eguitar'];
       if (eguitarDI) {
@@ -334,9 +337,10 @@ const initializeAudio = async () => {
       }
 
       if(targetSamplerMulti) {
-        targetSamplerMulti.sampler.chain(guitarVibrato, guitarEQ);
+        // MODIFIED: Rerouted through PitchShift
+        targetSamplerMulti.sampler.chain(guitarPitchShift, guitarVibrato, guitarEQ);
         guitarEQ.fan(masterComp, reverb);
-        console.log("LOG: Routing multi-sampled guitar through Nuance Engine to Master Bus.");
+        console.log("LOG: Routing multi-sampled guitar through PitchShift and Nuance Engine to Master Bus.");
       }
 
       const diEguitar = diSamplers['eguitar'];
@@ -455,6 +459,12 @@ const handleUpdateParam = (payload: { instrument: string, param: string, value: 
       case 'volume': sampler.volume.value = payload.value; break;
       case 'attack': sampler.attack = payload.value; break;
       case 'release': sampler.release = payload.value; break;
+      // MODIFIED: Control PitchShift node instead of non-existent sampler property
+      case 'detune': 
+        if (guitarPitchShift) {
+          guitarPitchShift.pitch = payload.value;
+        }
+        break;
     }
   }
 };
@@ -468,6 +478,10 @@ const handleResetParams = () => {
       targetSamplerMulti.sampler.volume.value = defaults.volume;
       targetSamplerMulti.sampler.attack = defaults.attack;
       targetSamplerMulti.sampler.release = defaults.release;
+      // MODIFIED: Reset PitchShift node as well
+      if (guitarPitchShift) {
+        guitarPitchShift.pitch = defaults.detune;
+      }
     }
     alert('設定を初期化しました。');
   }
@@ -484,7 +498,6 @@ const handleSoundSourceChange = (payload: { instrument: 'eguitar' | 'ebass', sou
   }
 };
 
-// MODIFIED: Reworked the download handler for perfect 1:1 comparison
 const handleDownloadSampler = async () => {
   if (!Tone || !targetSamplerMulti) {
     alert('音源が初期化されていないため、録音を開始できません。');
@@ -497,20 +510,16 @@ const handleDownloadSampler = async () => {
 
   try {
     const recorder = new Tone.Recorder();
-    // MODIFICATION: Connect the sampler DIRECTLY to the recorder, bypassing all effects.
     targetSamplerMulti.sampler.connect(recorder);
 
     await recorder.start();
 
-    // MODIFICATION: Play the note for the exact duration of the original file.
     targetSamplerMulti.sampler.triggerAttackRelease('C5', targetSoundDuration, Tone.now());
 
-    // MODIFICATION: Wait for the exact duration + a small buffer before stopping.
     await new Promise(resolve => setTimeout(resolve, (targetSoundDuration * 1000) + 100));
 
     const blob = await recorder.stop();
     
-    // MODIFICATION: Disconnect the direct line to the recorder and dispose.
     targetSamplerMulti.sampler.disconnect(recorder);
     recorder.dispose();
 
@@ -756,7 +765,7 @@ const createRockDrums = (rng: () => number, instruments: typeof samplers, time: 
           <button class="menu-button" @click="playMusic('Lo-Fi・ビター')" :class="{ 'is-active': selectedMenu === 'Lo-Fi・ビター' }">
             <div class="menu-content">
               <span class="menu-title">Lo-Fi・ビター</span>
-              <span class="menu-description">懐かしいレコードに針を落toす、あの感覚をあなたに。</span>
+              <span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span>
             </div>
             <div v-if="selectedMenu === 'Lo-Fi・ビター' && isPlaying" class="active-indicator">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
