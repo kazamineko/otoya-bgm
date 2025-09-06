@@ -229,9 +229,9 @@ const initializeAudio = async () => {
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
     bassMakeUpGain = new Tone.Volume(8);
     //
-    // --- GAIN-STAGING APPLIED ---
-    // More aggressive compression to create perceived loudness without clipping
-    bassPostComp = new Tone.Compressor({threshold: -30, ratio: 8, attack: 0.02, release: 0.2});
+    // --- SIDECHAIN COMPRESSION APPLIED ---
+    // Fast attack/release to duck the bass for the kick
+    bassPostComp = new Tone.Compressor({threshold: -30, ratio: 8, attack: 0.005, release: 0.1});
     //
     bassSubFilter = new Tone.Filter(120, 'lowpass');
     bassSubGain = new Tone.Volume(0);
@@ -325,6 +325,14 @@ const initializeAudio = async () => {
             rideFilter.connect(drumBusComp);
           } else {
             data.sampler.connect(drumBusComp);
+          }
+          //
+          // --- SIDECHAIN ACTIVATED ---
+          // The Rock Kick now triggers the bass compressor.
+          //
+          if (name === 'rockKick') {
+              data.sampler.connect(bassPostComp);
+              console.log(`LOG: Sidechain from 'rockKick' to bass compressor is now active.`);
           }
           console.log(`LOG: Routing '${name}' to Drum Bus.`);
         } else {
