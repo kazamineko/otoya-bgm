@@ -342,15 +342,15 @@ const initializeAudio = async () => {
         console.log("LOG: Routing multi-sampled guitar through Nuance Engine AND Virtual Amp Rig.");
       }
 
+      // FIX: Unconditionally set the primary samplers for rock music.
       if (targetSamplerMulti) {
         samplers['eguitar'] = targetSamplerMulti;
         console.log("LOG: 'targetSamplerMulti' is now the primary 'eguitar' sampler.");
       }
-
       const targetEbass = targetSamplers['target_ebass'];
-      const diEbass = diSamplers['ebass'];
-      if (targetEbass && diEbass) {
-        samplers['ebass'] = soundSourceSelection.value.ebass === 'sampler' ? targetEbass : diEbass;
+      if (targetEbass) {
+          samplers['ebass'] = targetEbass;
+          console.log("LOG: 'target_ebass' is now the primary 'ebass' sampler.");
       }
     }
 
@@ -612,7 +612,6 @@ const createRockSound = (rng: () => number): boolean => {
         ];
         
         guitarRiff.forEach(noteEvent => {
-            // FIX: Use non-null assertion operator (!) to assure TypeScript of Tone's existence.
             eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, time + Tone!.Time(noteEvent.time).toSeconds());
         });
 
@@ -622,7 +621,6 @@ const createRockSound = (rng: () => number): boolean => {
         ];
 
         bassRiff.forEach(noteEvent => {
-            // FIX: Use non-null assertion operator (!) here as well.
             ebass.sampler.triggerAttackRelease(noteEvent.note, '4n', time + Tone!.Time(noteEvent.time).toSeconds());
         });
 
