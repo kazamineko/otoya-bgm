@@ -18,7 +18,7 @@
               <span class="instrument-name">{{ instrument }}</span>
               <div class="play-buttons">
                 <template v-if="instrument === 'eguitar' || instrument === 'ebass'">
-                  <button @click.prevent="playSound('target_' + instrument, 'target_sampler')" title="目標サウンドから生成したSampler">目標Sampler</button>
+                  <button @click.prevent="playSound('target_' + instrument, 'target_sampler')" :title="instrument === 'eguitar' ? '新しいマルチサンプル音源' : '目標サウンドから生成したSampler'">{{ instrument === 'eguitar' ? '目標MultiSampler' : '目標Sampler' }}</button>
                   <button @click.prevent="playSound(instrument, 'target')" title="最終的に目指すべき理想の音(WAV再生)">目標サウンド</button>
                   <button @click.prevent="playSound(instrument, 'sampler')" title="DI音源を仮想アンプで加工した音">加工後DI</button>
                   <button @click.prevent="playSound(instrument, 'raw')" title="エフェクトを何も通していない、録音したままの音">原音DI</button>
@@ -182,7 +182,6 @@
                 </template>
                 <!-- Sampler Sliders (Default) -->
                 <template v-else>
-                  <!-- FIX: Add explicit sub-header for clarity -->
                   <div class="sub-header">{{ instrument === 'eguitar' ? 'マルチサンプル設定' : 'Sampler 設定' }}</div>
                   <div class="slider-container">
                     <label>Volume</label>

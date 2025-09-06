@@ -99,7 +99,8 @@ const masterTunedParams: TuningParams = {
   "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": 0, "attack": 0.01, "release": 1.5 },
+  // FIX: Drastically reduce release time to match natural sample decay
+  "target_eguitar": { "volume": 0, "attack": 0.01, "release": 0.5 },
   "target_ebass": { "volume": 0, "attack": 0.01, "release": 1.0 },
 };
 
@@ -140,7 +141,8 @@ watch(tuningParams, (newParams) => {
   }
   
   for (const instrumentName in newParams) {
-    const activeSampler = samplers[instrumentName] || targetSamplers[instrumentName] || diSamplers[instrumentName] || (instrumentName === 'target_eguitar' ? targetSamplerMulti : null);
+    // Note: Direct updates for targetSamplerMulti are handled in handleUpdateParam
+    const activeSampler = samplers[instrumentName] || targetSamplers[instrumentName] || diSamplers[instrumentName];
     if (activeSampler) {
       const sampler = activeSampler.sampler;
       const params = newParams[instrumentName]!;
@@ -221,13 +223,12 @@ const initializeAudio = async () => {
     
     rideFilter = new Tone.Filter(10000, 'lowpass');
     
-    targetGuitarPlayer = new Tone.Player('/C5_s6_01.wav').toDestination(); // Use one of the new samples for target
+    targetGuitarPlayer = new Tone.Player('/C5_s6_01.wav').toDestination();
     targetBassPlayer = new Tone.Player('/ebass-e1.wav').toDestination();
 
     await Promise.all([guitarCab.load, bassCab.load, targetGuitarPlayer.load, targetBassPlayer.load]);
     loadingMessage.value = '楽器を最終調整しています...';
 
-    // REFACTORED: Use the new multi-sample files
     const multiSampleUrls = {
       'E2': 'E2_s1_02.wav', 'A2': 'A2_s2_02.wav',
       'D3': 'D3_s3_02.wav', 'G3': 'G3_s4_01.wav',
@@ -239,7 +240,7 @@ const initializeAudio = async () => {
       urls: multiSampleUrls, baseUrl: "/",
       volume: multiSampleParams.volume, attack: multiSampleParams.attack, release: multiSampleParams.release
     });
-    targetSamplerMulti = { sampler: loadedMultiSampler, baseNote: 'E4' }; // Fallback baseNote
+    targetSamplerMulti = { sampler: loadedMultiSampler, baseNote: 'E4' }; 
     console.log("LOG: New multi-sampled guitar loaded with URLs:", multiSampleUrls);
 
     
@@ -413,10 +414,27 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
   }
 };
 const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => {
+  // Update the state for persistence and reactivity
   if (tuningParams.value[payload.instrument]) {
     const updatedInstrumentParams = { ...tuningParams.value[payload.instrument] };
     updatedInstrumentParams[payload.param] = payload.value;
     tuningParams.value[payload.instrument] = updatedInstrumentParams;
+  }
+  
+  // FIX: Directly apply changes to the multi-sampler audio node to ensure it updates
+  if (payload.instrument === 'target_eguitar' && targetSamplerMulti) {
+    const sampler = targetSamplerMulti.sampler;
+    switch (payload.param) {
+      case 'volume':
+        sampler.volume.value = payload.value;
+        break;
+      case 'attack':
+        sampler.attack = payload.value;
+        break;
+      case 'release':
+        sampler.release = payload.value;
+        break;
+    }
   }
 };
 const handleSaveParams = () => { try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(tuningParams.value)); alert('現在の設定をブラウザに保存しました。'); } catch (e) { alert('設定の保存に失敗しました。'); } };
@@ -424,6 +442,13 @@ const handleExportParams = () => { console.clear(); console.log(JSON.stringify(t
 const handleResetParams = () => { 
   if (confirm('現在の調整を破棄し、全ての設定を初期値に戻します。よろしいですか？')) {
     tuningParams.value = JSON.parse(JSON.stringify(masterTunedParams)); 
+    // Also re-apply the default to the live audio node
+    if (targetSamplerMulti) {
+      const defaults = masterTunedParams['target_eguitar'];
+      targetSamplerMulti.sampler.volume.value = defaults.volume;
+      targetSamplerMulti.sampler.attack = defaults.attack;
+      targetSamplerMulti.sampler.release = defaults.release;
+    }
     alert('設定を初期化しました。');
   }
 };
