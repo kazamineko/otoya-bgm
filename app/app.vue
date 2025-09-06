@@ -619,9 +619,10 @@ const createRockSound = (rng: () => number): boolean => {
             { time: '0:2', note: `${value.root}1` },
         ];
 
-        bassRiff.forEach(noteEvent => {
-            ebass.sampler.triggerAttackRelease(noteEvent.note, '4n', time + Tone!.Time(noteEvent.time).toSeconds());
-        });
+        // DEBUG: Temporarily disable bass to isolate the source of the clipping.
+        // bassRiff.forEach(noteEvent => {
+        //     ebass.sampler.triggerAttackRelease(noteEvent.note, '4n', time + Tone!.Time(noteEvent.time).toSeconds());
+        // });
 
         // DEBUG: Temporarily disable drums to isolate the source of the clipping.
         // createRockDrums(rng, samplers, time, ROLES.BACKING, 0, measureCounter);
