@@ -604,27 +604,26 @@ const createRockSound = (rng: () => number): boolean => {
     const mainPart = new Tone.Part(((time, value) => {
         if (!Tone) return;
 
-        const guitarRiff = [
-            { time: '0:0', note: `${value.root}3`, dur: '8n' },
-            { time: '0:1', note: `${value.root}3`, dur: '8n' },
-            { time: '0:2', note: `${value.root}3`, dur: '4n' },
-        ];
-        
-        guitarRiff.forEach(noteEvent => {
-            eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, time + Tone!.Time(noteEvent.time).toSeconds());
-        });
-
-        // DEBUG: Temporarily disable bass to isolate the source of the clipping.
-        // const bassRiff = [
-        //     { time: '0:0', note: `${value.root}1` },
-        //     { time: '0:2', note: `${value.root}1` },
+        // DEBUG: Temporarily disable guitar to isolate the source of the clipping.
+        // const guitarRiff = [
+        //     { time: '0:0', note: `${value.root}3`, dur: '8n' },
+        //     { time: '0:1', note: `${value.root}3`, dur: '8n' },
+        //     { time: '0:2', note: `${value.root}3`, dur: '4n' },
         // ];
-        // bassRiff.forEach(noteEvent => {
-        //     ebass.sampler.triggerAttackRelease(noteEvent.note, '4n', time + Tone!.Time(noteEvent.time).toSeconds());
+        // guitarRiff.forEach(noteEvent => {
+        //     eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, time + Tone!.Time(noteEvent.time).toSeconds());
         // });
 
-        // DEBUG: Temporarily disable drums to isolate the source of the clipping.
-        // createRockDrums(rng, samplers, time, ROLES.BACKING, 0, measureCounter);
+        const bassRiff = [
+            { time: '0:0', note: `${value.root}1` },
+            { time: '0:2', note: `${value.root}1` },
+        ];
+        
+        bassRiff.forEach(noteEvent => {
+            ebass.sampler.triggerAttackRelease(noteEvent.note, '4n', time + Tone!.Time(noteEvent.time).toSeconds());
+        });
+
+        createRockDrums(rng, samplers, time, ROLES.BACKING, 0, measureCounter);
         measureCounter++;
 
     }), progression).start(0);
