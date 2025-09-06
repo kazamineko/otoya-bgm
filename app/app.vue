@@ -96,9 +96,9 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
-// MODIFIED: Final adjustments to guitar sound for "thickness" and bass release time.
+// MODIFIED: Amp settings retuned for low-string riffs to prevent clipping.
 const masterTunedParams: TuningParams = {
-  "eguitar": { "inputGain": 12, "preCompThreshold": -24, "preCompRatio": 4, "preCompAttack": 0.01, "preCompRelease": 0.1, "preEqFreq": 700, "preEqGain": 6, "distortion": 0.85, "postEqLow": 6, "postEqMid": 5, "postEqHigh": -3, "chorusDepth": 0.1, "chorusRate": 1.5 },
+  "eguitar": { "inputGain": 12, "preCompThreshold": -24, "preCompRatio": 4, "preCompAttack": 0.01, "preCompRelease": 0.1, "preEqFreq": 700, "preEqGain": 6, "distortion": 0.8, "postEqLow": 2, "postEqMid": -2, "postEqHigh": -3, "chorusDepth": 0.1, "chorusRate": 1.5 },
   "ebass": { "inputGain": 12, "preCompThreshold": -20, "preCompRatio": 4, "preCompAttack": 0.02, "preCompRelease": 0.2, "subBlend": 0.5, "drive": 0.3, "eqLow": 4, "eqMid": -2, "eqHigh": 2 },
   "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
   "ride": { "volume": -9, "attack": 0.01, "release": 0.5 }, "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
@@ -614,12 +614,11 @@ const createRockSound = (rng: () => number): boolean => {
             eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, time + Tone!.Time(noteEvent.time).toSeconds());
         });
 
-        const bassRiff = [
-            { time: '0:0', note: `${value.root}1` },
-            { time: '0:2', note: `${value.root}1` },
-        ];
-
         // DEBUG: Temporarily disable bass to isolate the source of the clipping.
+        // const bassRiff = [
+        //     { time: '0:0', note: `${value.root}1` },
+        //     { time: '0:2', note: `${value.root}1` },
+        // ];
         // bassRiff.forEach(noteEvent => {
         //     ebass.sampler.triggerAttackRelease(noteEvent.note, '4n', time + Tone!.Time(noteEvent.time).toSeconds());
         // });
