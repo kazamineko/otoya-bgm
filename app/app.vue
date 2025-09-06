@@ -28,10 +28,7 @@ let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } }
 let diSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let targetSamplerMulti: { sampler: ToneType.Sampler, baseNote: string } | null = null;
-//
-// --- THE ULTIMATE FIX: The new multi-sampled bass sampler ---
 let newRockBassSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
-//
 
 let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
@@ -112,12 +109,20 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0 },
-  "target_ebass": { "volume": -12, "attack": 0.01, "release": 25.0 },
+  "target_ebass": { "volume": -6, "attack": 0.01, "release": 1.0 }, // This now controls the NEW rock bass
 };
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value || !Tone) return;
   
+  // This watcher will now also control the new rock bass sampler via "target_ebass" key
+  if (newRockBassSampler && newParams.target_ebass) {
+      const rockBassParams = newParams.target_ebass;
+      if(rockBassParams.volume !== undefined) newRockBassSampler.sampler.volume.value = rockBassParams.volume;
+      if(rockBassParams.attack !== undefined) newRockBassSampler.sampler.attack = rockBassParams.attack;
+      if(rockBassParams.release !== undefined) newRockBassSampler.sampler.release = rockBassParams.release;
+  }
+
   const eguitarParams = newParams.eguitar as AmpParams;
   if (eguitarParams && guitarInputGain && guitarPreDistComp && guitarPreEQ && guitarDistortion && guitarPostEQ && guitarChorus) {
     guitarInputGain.volume.value = eguitarParams.inputGain;
@@ -152,6 +157,9 @@ watch(tuningParams, (newParams) => {
   }
   
   for (const instrumentName in newParams) {
+    // Exclude target_ebass as it's handled separately now
+    if (instrumentName === 'target_ebass') continue;
+
     const activeSampler = samplers[instrumentName] || targetSamplers[instrumentName] || diSamplers[instrumentName];
     if (activeSampler) {
       const sampler = activeSampler.sampler;
@@ -267,23 +275,20 @@ const initializeAudio = async () => {
     });
     targetSamplerMulti = { sampler: loadedMultiSampler, baseNote: 'G#5' }; 
     console.log("LOG: New multi-sampled guitar loaded with URLs:", multiSampleUrls);
-
-    //
-    // --- 1. Load the New Multi-Sampled Bass ---
-    //
+    
     const newBassUrls = {
         'E1': 'ebass-new_E.wav', 'F1': 'ebass-new_F.wav', 'F#1': 'ebass-new_F#.wav', 'G1': 'ebass-new_G.wav',
         'G#1': 'ebass-new_G#.wav', 'A1': 'ebass-new_A.wav', 'A#1': 'ebass-new_A#.wav', 'B1': 'ebass-new_B.wav',
         'C2': 'ebass-new_C.wav', 'C#2': 'ebass-new_C#.wav', 'D2': 'ebass-new_D.wav', 'D#2': 'ebass-new_D#.wav',
         'E2': 'ebass-new_E2.wav',
     };
+    const newRockBassParams = tuningParams.value['target_ebass'];
     const loadedNewRockBassSampler = new Tone.Sampler({
         urls: newBassUrls, baseUrl: "/",
-        volume: -6, attack: 0.01, release: 1.0
+        volume: newRockBassParams.volume, attack: newRockBassParams.attack, release: newRockBassParams.release
     });
     newRockBassSampler = { sampler: loadedNewRockBassSampler, baseNote: 'A1' };
     console.log("LOG: New multi-sampled rock bass loaded successfully.");
-    //
 
     for (const name of Object.keys(allSamplePaths)) {
       const params = tuningParams.value[name];
@@ -317,7 +322,6 @@ const initializeAudio = async () => {
     if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter && drumBusComp && guitarVibrato && guitarEQ && guitarPitchShift && bassPostComp && newRockBassSampler) {
       console.log("LOG: All core audio nodes initialized successfully.");
       
-      // Connect the new rock bass to the drum bus for a tight rhythm section sound
       newRockBassSampler.sampler.connect(drumBusComp);
 
       const eguitarDI = diSamplers['eguitar'];
@@ -354,9 +358,8 @@ const initializeAudio = async () => {
       }
       
       for (const [name, { sampler }] of Object.entries(targetSamplers)) {
-        if (name === 'target_ebass' && bassPostComp) {
-          sampler.chain(bassPostComp).fan(masterComp, reverb);
-          console.log(`LOG: Routing 'target_ebass' through Post Compressor correctly.`);
+        if (name === 'target_ebass') {
+            // This is now an old path, keep it disconnected to avoid issues.
         } else {
           sampler.fan(masterComp, reverb);
           console.log(`LOG: Routing '${name}' to Master Bus.`);
@@ -373,11 +376,8 @@ const initializeAudio = async () => {
         samplers['eguitar'] = targetSamplerMulti;
         console.log("LOG: 'targetSamplerMulti' is now the primary 'eguitar' sampler.");
       }
-      const targetEbass = targetSamplers['target_ebass'];
-      if (targetEbass) {
-          samplers['ebass'] = targetEbass;
-          console.log("LOG: 'target_ebass' is now the primary 'ebass' sampler.");
-      }
+      // The old 'target_ebass' is no longer the primary 'ebass' sampler.
+      // samplers['ebass'] = targetSamplers['target_ebass']; // This line is removed.
     }
 
     rawSamplePlayers = await new Promise<ToneType.Players>((resolve) => {
@@ -451,6 +451,14 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
   const duration = '2n';
 
   if (type === 'target_sampler') {
+      //
+      // --- 3. Route the "New Rock Bass" button to the correct sampler ---
+      //
+      if (instrumentName === 'target_ebass' && newRockBassSampler) {
+        newRockBassSampler.sampler.triggerAttackRelease(newRockBassSampler.baseNote, duration);
+        return; // Important: exit here to prevent playing the old sampler
+      }
+
       if (instrumentName === 'target_eguitar' && targetSamplerMulti && Tone && guitarVibrato && guitarEQ) {
         const sampler = targetSamplerMulti.sampler;
         const now = Tone.now();
@@ -617,11 +625,7 @@ const createJazzSound = (rng: () => number): boolean => {
     return true; 
 };
 
-//
-// --- 2. Fix TypeScript Errors & Refine Logic ---
-//
 const createRockSound = (rng: () => number): boolean => {
-    // Null-check ensures Tone and instruments are loaded
     if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler) return false;
     
     Tone.Transport.bpm.value = 130 + rng() * 20;
@@ -629,7 +633,6 @@ const createRockSound = (rng: () => number): boolean => {
 
     const progression = ['E', 'G', 'A', 'A'];
 
-    // --- Drum Part (Simple & Stable) ---
     const kickSeq = new Tone.Sequence((time, note) => {
         if(note) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time, 0.9 + rng() * 0.1);
     }, [1, 0, 1, 0, 1, 0, 1, 0], "8n").start(0);
@@ -638,18 +641,13 @@ const createRockSound = (rng: () => number): boolean => {
         if(note) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, time, 0.8 + rng() * 0.2);
     }, [0, 1, 0, 1], "4n").start(0);
 
-    // --- Guitar & Bass Parts (Using stable Tone.Loop) ---
     const riffLoop = new Tone.Loop((time) => {
-      // Null-check for Tone.Transport
       if (!Tone) return;
 
       const measure = Math.floor(Tone.Transport.getTicksAtTime(time) / (Tone.Transport.PPQ * 4)) % 4;
       const rootNote = progression[measure]!;
       
-      // Guitar plays power chord
       samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time);
-
-      // New bass plays root note
       newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time);
 
     }, "4n").start(0);

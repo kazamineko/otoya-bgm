@@ -17,13 +17,18 @@
             <summary class="instrument-summary">
               <span class="instrument-name">{{ instrument }}</span>
               <div class="play-buttons">
-                <template v-if="instrument === 'eguitar' || instrument === 'ebass'">
-                  <button @click.prevent="playSound('target_' + instrument, 'target_sampler')" :title="instrument === 'eguitar' ? '新しいマルチサンプル音源' : '目標サウンドから生成したSampler'">{{ instrument === 'eguitar' ? '新Sampler' : '目標Sampler' }}</button>
-                  <button v-if="instrument === 'eguitar'" @click.prevent="downloadSampler" class="download-button">DL</button>
-                  <button @click.prevent="playSound(instrument, 'target')" title="最終的に目指すべき理想の音(WAV再生)">目標サウンド</button>
-                  <a v-if="instrument === 'eguitar'" href="/C5_s6_01.wav" download="target-sound-C5.wav" class="download-button" title="目標サウンドをダウンロード">DL</a>
-                  <button @click.prevent="playSound(instrument, 'sampler')" title="DI音源を仮想アンプで加工した音">加工後DI</button>
-                  <button @click.prevent="playSound(instrument, 'raw')" title="エフェクトを何も通していない、録音したままの音">原音DI</button>
+                <template v-if="instrument === 'eguitar'">
+                  <button @click.prevent="playSound('target_eguitar', 'target_sampler')" title="新しいマルチサンプル音源">新Sampler</button>
+                  <button @click.prevent="downloadSampler" class="download-button">DL</button>
+                  <button @click.prevent="playSound('eguitar', 'target')" title="最終的に目指すべき理想の音(WAV再生)">目標サウンド</button>
+                  <a href="/C5_s6_01.wav" download="target-sound-C5.wav" class="download-button" title="目標サウンドをダウンロード">DL</a>
+                  <button @click.prevent="playSound('eguitar', 'sampler')" title="DI音源を仮想アンプで加工した音">加工後DI</button>
+                  <button @click.prevent="playSound('eguitar', 'raw')" title="エフェクトを何も通していない、録音したままの音">原音DI</button>
+                </template>
+                <template v-else-if="instrument === 'ebass'">
+                  <button @click.prevent="playSound('target_ebass', 'target_sampler')" title="マスターが作成した新しいマルチサンプルベース音源">新Rock Bass</button>
+                  <button @click.prevent="playSound('ebass', 'sampler')" title="DI音源を仮想アンプで加工した音">加工後DI</button>
+                  <button @click.prevent="playSound('ebass', 'raw')" title="エフェクトを何も通していない、録音したままの音">原音DI</button>
                 </template>
                 <template v-else>
                   <button @click.prevent="playSound(instrument, 'sampler')">Sampler</button>
