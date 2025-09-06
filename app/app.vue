@@ -28,8 +28,6 @@ let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } }
 let diSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let targetSamplerMulti: { sampler: ToneType.Sampler, baseNote: string } | null = null;
-let attackEnhancer: ToneType.Player | null = null;
-let attackEnhancerVolume: ToneType.Volume | null = null;
 
 let rawSamplePlayers: ToneType.Players | null = null;
 let targetGuitarPlayer: ToneType.Player | null = null;
@@ -165,7 +163,7 @@ const initializeAudio = async () => {
     rockKick: 'rock-kick.wav', rockSnare: 'rock-snare.wav', crash: 'drum-crash.wav',
     tomHigh: 'tom-high.wav', tomMid: 'tom-mid.wav', tomFloor: 'tom-floor.wav',
     target_ebass: 'ebass-e1.wav',
-    target_eguitar: 'eguitar-dist-c4.wav', // Original mislabeled file for comparison
+    target_eguitar: 'eguitar-dist-c4.wav',
   };
   instrumentList.value = Object.keys(masterTunedParams).filter(k => !k.startsWith('target_'));
 
@@ -223,27 +221,26 @@ const initializeAudio = async () => {
     
     rideFilter = new Tone.Filter(10000, 'lowpass');
     
-    attackEnhancerVolume = new Tone.Volume(-6).connect(masterComp);
-    attackEnhancer = new Tone.Player('/pick_attack.wav').connect(attackEnhancerVolume);
-
-    targetGuitarPlayer = new Tone.Player('/eguitar-dist-E4.wav').toDestination();
+    targetGuitarPlayer = new Tone.Player('/C5_s6_01.wav').toDestination(); // Use one of the new samples for target
     targetBassPlayer = new Tone.Player('/ebass-e1.wav').toDestination();
 
-    await Promise.all([guitarCab.load, bassCab.load, targetGuitarPlayer.load, targetBassPlayer.load, attackEnhancer.load]);
+    await Promise.all([guitarCab.load, bassCab.load, targetGuitarPlayer.load, targetBassPlayer.load]);
     loadingMessage.value = '楽器を最終調整しています...';
 
+    // REFACTORED: Use the new multi-sample files
     const multiSampleUrls = {
-      'E2': 'eguitar-dist-E2.wav', 'A2': 'eguitar-dist-A2.wav',
-      'D3': 'eguitar-dist-D3.wav', 'G3': 'eguitar-dist-G3.wav',
-      'B3': 'eguitar-dist-B3.wav', 'E4': 'eguitar-dist-E4.wav',
+      'E2': 'E2_s1_02.wav', 'A2': 'A2_s2_02.wav',
+      'D3': 'D3_s3_02.wav', 'G3': 'G3_s4_01.wav',
+      'B3': 'B3_s5_02.wav', 'B4': 'B4_s6_02.wav',
+      'C5': 'C5_s6_01.wav'
     };
     const multiSampleParams = tuningParams.value['target_eguitar'];
     const loadedMultiSampler = new Tone.Sampler({
       urls: multiSampleUrls, baseUrl: "/",
       volume: multiSampleParams.volume, attack: multiSampleParams.attack, release: multiSampleParams.release
     });
-    targetSamplerMulti = { sampler: loadedMultiSampler, baseNote: 'E4' }; 
-    console.log("LOG: Multi-sampled guitar loaded with URLs:", multiSampleUrls);
+    targetSamplerMulti = { sampler: loadedMultiSampler, baseNote: 'E4' }; // Fallback baseNote
+    console.log("LOG: New multi-sampled guitar loaded with URLs:", multiSampleUrls);
 
     
     for (const name of Object.keys(allSamplePaths)) {
@@ -401,9 +398,8 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
   if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; } }
   
   if (type === 'target_sampler') {
-      if (instrumentName === 'target_eguitar' && targetSamplerMulti && attackEnhancer) {
+      if (instrumentName === 'target_eguitar' && targetSamplerMulti) {
         targetSamplerMulti.sampler.triggerAttackRelease('E4', '1n');
-        attackEnhancer.start();
       } else {
         const targetSampler = targetSamplers[instrumentName];
         if (targetSampler) targetSampler.sampler.triggerAttackRelease(targetSampler.baseNote, '1n');
@@ -564,10 +560,6 @@ const createRockSound = (rng: () => number): boolean => {
             const guitarPattern = role === ROLES.GUITAR_SOLO ? guitarSoloPatterns[Math.floor(rng() * guitarSoloPatterns.length)]! : guitarBackingPatterns[Math.floor(rng() * guitarSoloPatterns.length)]!;
             guitarPattern.forEach(noteEvent => {
                 const noteTime = time + Tone!.Time(noteEvent.time).toSeconds();
-                if (soundSourceSelection.value.eguitar === 'sampler' && attackEnhancer) {
-                    console.log(`LOG: Triggering Multi-Sampler (${noteEvent.note}) + Attack Enhancer`);
-                    attackEnhancer.start(noteTime);
-                }
                 eguitar.sampler.triggerAttackRelease(noteEvent.note, noteEvent.dur, noteTime, 0.9 + rng() * 0.1);
             });
 
