@@ -108,7 +108,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0 },
-  "target_ebass": { "volume": -9, "attack": 0.01, "release": 25.0 },
+  "target_ebass": { "volume": -12, "attack": 0.01, "release": 25.0 },
 };
 
 watch(tuningParams, (newParams) => {
@@ -228,7 +228,11 @@ const initializeAudio = async () => {
     bassDistortion = new Tone.Distortion(ebassP.drive); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
     bassMakeUpGain = new Tone.Volume(8);
-    bassPostComp = new Tone.Compressor({threshold: -24, ratio: 6, attack: 0.02, release: 0.2});
+    //
+    // --- GAIN-STAGING APPLIED ---
+    // More aggressive compression to create perceived loudness without clipping
+    bassPostComp = new Tone.Compressor({threshold: -30, ratio: 8, attack: 0.02, release: 0.2});
+    //
     bassSubFilter = new Tone.Filter(120, 'lowpass');
     bassSubGain = new Tone.Volume(0);
     
@@ -329,13 +333,8 @@ const initializeAudio = async () => {
         }
       }
       
-      //
-      // --- THIS IS THE CRITICAL FIX ---
-      // Correctly route the audio signal path for target_ebass
-      //
       for (const [name, { sampler }] of Object.entries(targetSamplers)) {
         if (name === 'target_ebass' && bassPostComp) {
-          // Route: sampler -> compressor -> (master bus AND reverb send)
           sampler.chain(bassPostComp).fan(masterComp, reverb);
           console.log(`LOG: Routing 'target_ebass' through Post Compressor correctly.`);
         } else {
