@@ -200,11 +200,11 @@
                     <input type="range" min="0" max="5" step="0.01" :value="tuningParams['target_' + instrument].release" @input="updateParam('target_' + instrument, 'release', $event)">
                     <span>{{ tuningParams['target_' + instrument].release.toFixed(2) }} s</span>
                   </div>
-                  <!-- ADDED: Detune slider for eguitar -->
+                  <!-- MODIFIED: Detune slider now correctly controls semitones -->
                   <div v-if="instrument === 'eguitar'" class="slider-container">
                     <label>Detune (音階)</label>
-                    <input type="range" min="-1200" max="1200" step="1" :value="tuningParams['target_eguitar'].detune" @input="updateParam('target_eguitar', 'detune', $event)">
-                    <span>{{ tuningParams['target_eguitar'].detune.toFixed(0) }} cents</span>
+                    <input type="range" min="-2" max="2" step="0.01" :value="tuningParams['target_eguitar'].detune" @input="updateParam('target_eguitar', 'detune', $event)">
+                    <span>{{ tuningParams['target_eguitar'].detune.toFixed(2) }} 半音</span>
                   </div>
                 </template>
               </template>
