@@ -17,7 +17,6 @@
             <summary class="instrument-summary">
               <span class="instrument-name">{{ instrument }}</span>
               <div class="play-buttons">
-                <!-- MODIFIED: Button layout changed to 4 buttons for clarity -->
                 <template v-if="instrument === 'eguitar' || instrument === 'ebass'">
                   <button @click.prevent="playSound('target_' + instrument, 'target_sampler')" title="目標サウンドから生成したSampler">目標Sampler</button>
                   <button @click.prevent="playSound(instrument, 'target')" title="最終的に目指すべき理想の音(WAV再生)">目標サウンド</button>
@@ -183,6 +182,8 @@
                 </template>
                 <!-- Sampler Sliders (Default) -->
                 <template v-else>
+                  <!-- FIX: Add explicit sub-header for clarity -->
+                  <div class="sub-header">{{ instrument === 'eguitar' ? 'マルチサンプル設定' : 'Sampler 設定' }}</div>
                   <div class="slider-container">
                     <label>Volume</label>
                     <input type="range" min="-40" max="6" step="0.1" :value="tuningParams['target_' + instrument].volume" @input="updateParam('target_' + instrument, 'volume', $event)">
