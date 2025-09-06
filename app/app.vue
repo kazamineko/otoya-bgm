@@ -108,7 +108,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0 },
-  "target_ebass": { "volume": -9, "attack": 0.01, "release": 1.0 },
+  "target_ebass": { "volume": -15, "attack": 0.01, "release": 0.5 },
 };
 
 watch(tuningParams, (newParams) => {
@@ -607,8 +607,7 @@ const createRockSound = (rng: () => number): boolean => {
     const mainPart = new Tone.Part(((time, value) => {
         if (!Tone) return;
 
-        /*
-        // --- Guitar Part (Temporarily Disabled for Debugging) ---
+        // --- Guitar Part ---
         const guitarRiff: PartPattern = [
             { time: "0:0", note: `${value.root}3`, dur: "8n" },
             { time: "0:1", note: `${value.root}3`, dur: "8n" },
@@ -620,7 +619,6 @@ const createRockSound = (rng: () => number): boolean => {
             eguitar.sampler.triggerAttack(noteEvent.note, startTime);
             eguitar.sampler.triggerRelease(noteEvent.note, stopTime);
         });
-        */
 
         // --- Bass Part ---
         const bassRiff: BassPattern = [
