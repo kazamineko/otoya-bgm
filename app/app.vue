@@ -104,7 +104,7 @@ const masterTunedParams: TuningParams = {
   "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": 0, "attack": 0.001, "release": 0.5 }, // FIX: Sharpen attack
+  "target_eguitar": { "volume": 0, "attack": 0.001, "release": 0.5 },
   "target_ebass": { "volume": 0, "attack": 0.01, "release": 1.0 },
 };
 
@@ -202,7 +202,6 @@ const initializeAudio = async () => {
     chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
     delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
     
-    // FIX: Vibrato does not have a .start() method.
     guitarVibrato = new Tone.Vibrato(5, 0.02);
     guitarEQ = new Tone.EQ3({ low: -6, mid: 0, high: 3 });
     
@@ -237,17 +236,22 @@ const initializeAudio = async () => {
     loadingMessage.value = '楽器を最終調整しています...';
 
     const multiSampleUrls = {
-      'E2': 'E2_s1_02.wav', 'A2': 'A2_s2_02.wav',
-      'D3': 'D3_s3_02.wav', 'G3': 'G3_s4_01.wav',
-      'B3': 'B3_s5_02.wav', 'B4': 'B4_s6_02.wav',
-      'C5': 'C5_s6_01.wav'
+      'E2':  'E2_s1_02.wav',  'F2':  'F2_s1_03.wav',
+      'A2':  'A2_s2_02.wav',
+      'D3':  'D3_s3_02.wav',
+      'G3':  'G3_s4_02.wav',
+      'B3':  'B3_s5_02.wav',
+      'E4':  'E4_s6_02.wav',  'G4': 'G4_s6_02.wav',
+      'B4':  'B4_s6_02.wav',
+      'C5':  'C5_s6_01.wav',  'F5': 'F5_s6_02.wav',
+      'G#5': 'G#5_s6_02.wav',
     };
     const multiSampleParams = tuningParams.value['target_eguitar'];
     const loadedMultiSampler = new Tone.Sampler({
       urls: multiSampleUrls, baseUrl: "/",
       volume: multiSampleParams.volume, attack: multiSampleParams.attack, release: multiSampleParams.release
     });
-    targetSamplerMulti = { sampler: loadedMultiSampler, baseNote: 'E4' }; 
+    targetSamplerMulti = { sampler: loadedMultiSampler, baseNote: 'G#5' }; 
     console.log("LOG: New multi-sampled guitar loaded with URLs:", multiSampleUrls);
 
     
@@ -408,7 +412,7 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
   
   if (type === 'target_sampler') {
       if (instrumentName === 'target_eguitar' && targetSamplerMulti) {
-        targetSamplerMulti.sampler.triggerAttackRelease('E4', '1n');
+        targetSamplerMulti.sampler.triggerAttackRelease('E5', '1n');
       } else {
         const targetSampler = targetSamplers[instrumentName];
         if (targetSampler) targetSampler.sampler.triggerAttackRelease(targetSampler.baseNote, '1n');
