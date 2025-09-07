@@ -107,7 +107,6 @@ watch(tuningParams, (newParams) => {
   // --- Guitar Nuance Engine Logic (incl. EQ) ---
   const eguitarTargetParams = newParams.target_eguitar;
   if (eguitarTargetParams) {
-      // ★★★ FINAL FIX: Revert to direct .value assignment, which is correct for Tone.js v15 ★★★
       if (guitarEQ) {
         console.log('[GEMINI_LOG_WATCHER] Watcher updating EQ with .value assignment for v15. New values:', {
             low: eguitarTargetParams.eqLow, mid: eguitarTargetParams.eqMid, high: eguitarTargetParams.eqHigh
@@ -301,8 +300,13 @@ const initializeAudio = async () => {
         samplers['eguitar'] = targetSamplerMulti;
       }
 
-      if(targetSamplerMulti) {
-        targetSamplerMulti.sampler.chain(guitarPitchShift, guitarVibrato, guitarEQ).fan(masterComp, reverb); 
+      // ★★★ FINAL FIX: Re-wire the signal path using explicit .connect() calls ★★★
+      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && masterComp && reverb) {
+        targetSamplerMulti.sampler.connect(guitarPitchShift);
+        guitarPitchShift.connect(guitarVibrato);
+        guitarVibrato.connect(guitarEQ);
+        guitarEQ.connect(masterComp);
+        guitarEQ.connect(reverb);
       }
 
       for (const [name, data] of Object.entries(samplers)) {
