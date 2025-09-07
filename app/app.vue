@@ -669,46 +669,54 @@ const createRockSound = (rng: () => number): boolean => {
     }
     scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
 
-    Tone.Transport.bpm.value = 130 + rng() * 20;
+    const bpm = 130 + rng() * 20;
+    Tone.Transport.bpm.value = bpm;
     Tone.Transport.swing = 0;
     const progression = ['E', 'G', 'A', 'A'];
-
-    const kickBassPattern = [1, 0, 0, 0, 1, 0, 0, 0];
-    
-    const bassSeq = new Tone.Sequence((time, noteOn) => {
-        if(noteOn && Tone){
-            const totalBeats = Math.floor(Tone.Transport.getTicksAtTime(time) / Tone.Transport.PPQ);
-            const measure = Math.floor(totalBeats / 4);
-            const rootNote = progression[measure % 4]!;
-            newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time);
-        }
-    }, kickBassPattern, "8n").start(0);
+    let leadInstrument: 'guitar' | 'synth' = 'guitar';
 
     const kickSeq = new Tone.Sequence((time, note) => {
         if(note) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time);
-    }, kickBassPattern, "8n").start(0);
+    }, [1, 0, 0, 0, 1, 0, 0, 0], "8n").start(0);
 
     const snareSeq = new Tone.Sequence((time, note) => {
         if(note) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, time);
     }, [0, 1, 0, 1], "4n").start(0);
+
+    const bassSeq = new Tone.Sequence((time, noteOn) => {
+        if(noteOn && Tone){
+            const measure = Math.floor(Tone.Transport.getTicksAtTime(time) / (Tone.Transport.PPQ * 4));
+            const rootNote = progression[measure % 4]!;
+            newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time);
+        }
+    }, [1, 1, 1, 1, 1, 1, 1, 1], "8n").start(0);
+    
+    // Switch lead instrument every 4 measures
+    const leadSwitchLoop = new Tone.Loop(time => {
+        leadInstrument = rng() > 0.5 ? 'guitar' : 'synth';
+        console.log(`DEBUG: Lead instrument switched to ${leadInstrument} at ${time}`);
+    }, '4m').start(0);
 
     const mainLoop = new Tone.Loop((time) => {
       if (!Tone) return;
       const totalBeats = Math.floor(Tone.Transport.getTicksAtTime(time) / Tone.Transport.PPQ);
       const measure = Math.floor(totalBeats / 4);
       const rootNote = progression[measure % 4]!;
-      const vel = 0.8 + rng() * 0.2;
+      const vel = 0.9 + rng() * 0.1;
       
-      if (totalBeats % 2 === 1) { 
-        samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '8n', time, vel);
+      if(leadInstrument === 'guitar') {
+        samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, vel);
+        newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '1m', time, vel * 0.6);
+      } else { // Synth is lead
+        newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`, `${rootNote}6`], '8n', time, vel);
+        if (totalBeats % 4 === 0) {
+            samplers.eguitar!.sampler.release = 0.05;
+            samplers.eguitar?.sampler.triggerAttackRelease(`${rootNote}3`, '8n', time, vel * 0.8);
+        }
       }
-      
-      if (totalBeats % 4 === 0) {
-        newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '1m', time, vel * 0.7);
-      }
-    }, "8n").start(0);
+    }, "4n").start(0);
     
-    scheduledEvents.push(kickSeq, snareSeq, bassSeq, mainLoop);
+    scheduledEvents.push(kickSeq, snareSeq, bassSeq, mainLoop, leadSwitchLoop);
     return true; 
 };
 </script>
