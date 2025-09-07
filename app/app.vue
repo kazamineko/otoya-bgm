@@ -56,22 +56,30 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
-// FINALIZED: All parameters returned to a stable, balanced state.
+// ★★★ MASTER TUNED PARAMETERS UPDATED ★★★
 const masterTunedParams: TuningParams = {
-  "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
-  "ride": { "volume": -12, "attack": 0.01, "release": 0.5 }, "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
-  "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
-  "snare": { "volume": -3, "attack": 0.01, "release": 0.2 }, "pad": { "volume": -6, "attack": 0.1, "release": 1 },
-  "sax": { "volume": -3, "attack": 0.01, "release": 1 }, "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-  "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 }, "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
-  "crash": { "volume": -12, "attack": 0.01, "release": 0.5 },
-  "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0, "eqHigh": 3 },
-  "target_ebass": { "volume": -6, "attack": 0.01, "release": 1.0 },
+  "piano": { "volume": 0, "attack": 0.01, "release": 1 },
+  "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
+  "ride": { "volume": -9, "attack": 0.01, "release": 0.5 },
+  "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
+  "epiano": { "volume": -3, "attack": 0.01, "release": 1 },
+  "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
+  "snare": { "volume": -3, "attack": 0.01, "release": 0.2 },
+  "pad": { "volume": -6, "attack": 0.1, "release": 1 },
+  "sax": { "volume": -3, "attack": 0.01, "release": 1 },
+  "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
+  "rockKick": { "volume": 4.6, "attack": 0.01, "release": 0.2 },
+  "rockSnare": { "volume": 5.4, "attack": 0.01, "release": 0.2 },
+  "crash": { "volume": 3.2, "attack": 0.01, "release": 0.5 },
+  "tomHigh": { "volume": 2.8, "attack": 0.01, "release": 0.4 },
+  "tomMid": { "volume": 3.9, "attack": 0.01, "release": 0.4 },
+  "tomFloor": { "volume": 3.3, "attack": 0.01, "release": 0.4 },
+  "target_eguitar": { "volume": -7.4, "attack": 0.001, "release": 1, "detune": 0, "eqHigh": 1.5 },
+  "target_ebass": { "volume": 0, "attack": 0.01, "release": 1 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
-  "eorgan": { "volume": -12, "attack": 0.05, "release": 1.0 },
+  "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
 };
+
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value || !Tone) return;
@@ -105,10 +113,12 @@ watch(tuningParams, (newParams) => {
       if (guitarPitchShift && eguitarTargetParams.detune !== undefined) {
           guitarPitchShift.pitch = eguitarTargetParams.detune;
       }
-      if (targetSamplerMulti) {
-          if(eguitarTargetParams.volume !== undefined) targetSamplerMulti.sampler.volume.value = eguitarTargetParams.volume;
-          if(eguitarTargetParams.attack !== undefined) targetSamplerMulti.sampler.attack = eguitarTargetParams.attack;
-          if(eguitarTargetParams.release !== undefined) targetSamplerMulti.sampler.release = eguitarTargetParams.release;
+      // Use samplers['eguitar'] to ensure we're updating the correct, active sampler
+      if (samplers['eguitar']) {
+          const eguitarSampler = samplers['eguitar'].sampler;
+          if(eguitarTargetParams.volume !== undefined) eguitarSampler.volume.value = eguitarTargetParams.volume;
+          if(eguitarTargetParams.attack !== undefined) eguitarSampler.attack = eguitarTargetParams.attack;
+          if(eguitarTargetParams.release !== undefined) eguitarSampler.release = eguitarTargetParams.release;
       }
   }
 
@@ -315,14 +325,6 @@ const initializeAudio = async () => {
     isAudioInitialized.value = true;
     loadingMessage.value = '準備ができました';
 
-    // ★★★ GEMINI LOG A: Log initial state of guitarEQ after initialization ★★★
-    if(guitarEQ) {
-      console.log('[GEMINI_LOG_A] Audio Initialized. Current guitarEQ state:', {
-        'high_value': guitarEQ.high.value,
-        'full_object': guitarEQ
-      });
-    }
-
   } catch (error: any) {
     loadingMessage.value = `エラーが発生しました: ${error.message}`;
     console.error("Error setting up Tone.js:", error);
@@ -390,16 +392,15 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
         return; 
       }
 
-      if (instrumentName === 'target_eguitar' && targetSamplerMulti && Tone && guitarVibrato && guitarEQ) {
-        const sampler = targetSamplerMulti.sampler;
+      // ★★★ BUG FIX: Changed reference from targetSamplerMulti to samplers['eguitar'] ★★★
+      if (instrumentName === 'target_eguitar' && samplers['eguitar'] && Tone) {
+        const sampler = samplers['eguitar'].sampler;
         const now = Tone.now();
-        const rng = Math.random;
-
-        guitarVibrato.frequency.value = 4 + rng() * 2;
         
-        // ★★★ GEMINI LOG B: Log state JUST BEFORE playing sound in soundcheck ★★★
-        console.log(`[GEMINI_LOG_B] Soundcheck playback. Current guitarEQ.high.value: ${guitarEQ.high.value}`);
-
+        if (guitarVibrato) {
+          guitarVibrato.frequency.value = 4 + Math.random() * 2;
+        }
+        
         sampler.triggerAttackRelease('E5', duration, now);
 
       } else {
@@ -543,19 +544,7 @@ const createRockSound = (rng: () => number): boolean => {
       const leadVelocity = isGhostNote ? vel * 0.3 : vel;
 
       const leadAction = {
-        'guitar': () => {
-          // ★★★ FIX: Added null check for Tone to resolve TS error ★★★
-          if (samplers.eguitar && guitarEQ && Tone) {
-            // ★★★ GEMINI LOG C: Log state JUST BEFORE playing sound in BGM loop ★★★
-            console.log(`[GEMINI_LOG_C] Rock Beat playback @ ${Tone.Transport.position}`, {
-              'eqHigh': guitarEQ.high.value,
-              'volume': samplers.eguitar.sampler.volume.value,
-              'attack': samplers.eguitar.sampler.attack,
-              'release': samplers.eguitar.sampler.release
-            });
-            samplers.eguitar.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity);
-          }
-        },
+        'guitar': () => samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity),
         'synth': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '8n', time, leadVelocity),
         'organ': () => newElecOrganSampler?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity * 0.8),
       };
