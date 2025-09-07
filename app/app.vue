@@ -292,7 +292,7 @@ const initializeAudio = async () => {
       }
 
       for (const [name, data] of Object.entries(samplers)) {
-        if (name === 'eguitar') continue; // ★★★ FIX: Prevent double-routing for eguitar ★★★
+        if (name === 'eguitar') continue; // FIX: Prevent double-routing for eguitar
 
         if (rockDrumKit.includes(name)) {
           if (name === 'ride') {
@@ -416,6 +416,9 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
   }
 };
 const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => {
+  // ★★★ GEMINI DEBUG LOG 1: Check received payload ★★★
+  console.log(`[GEMINI_DEBUG_1] handleUpdateParam received:`, { instrument: payload.instrument, param: payload.param, value: payload.value });
+
   if (tuningParams.value[payload.instrument]) {
     const updatedInstrumentParams = { ...tuningParams.value[payload.instrument] };
     updatedInstrumentParams[payload.param] = payload.value;
@@ -434,8 +437,14 @@ const handleUpdateParam = (payload: { instrument: string, param: string, value: 
         }
         break;
       case 'eqHigh':
+        // ★★★ GEMINI DEBUG LOG 2: Check before setting value ★★★
+        console.log(`[GEMINI_DEBUG_2] Action: Attempting to set guitarEQ.high.value to ${payload.value}`);
         if (guitarEQ) {
           guitarEQ.high.value = payload.value;
+          // ★★★ GEMINI DEBUG LOG 3: Check after setting value ★★★
+          console.log(`[GEMINI_DEBUG_3] Result: guitarEQ.high.value is now ${guitarEQ.high.value}`);
+        } else {
+          console.error('[GEMINI_DEBUG_ERROR] CRITICAL: guitarEQ object is null or undefined.');
         }
         break;
     }
@@ -672,7 +681,7 @@ const createRockSound = (rng: () => number): boolean => {
               <span class="menu-title">ロック・ビート</span>
               <span class="menu-description">魂を揺さぶる、力強いリズムと歪んだギターのブレンド。</span>
             </div>
-            <div v-if="selectedMenu === 'ロック・ビート' && isPlaying" class="active-indicator">
+            <div v-if="selectedMenu === 'ロック・ビター' && isPlaying" class="active-indicator">
               <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
             </div>
           </button>
