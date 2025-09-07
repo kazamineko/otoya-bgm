@@ -649,14 +649,26 @@ const createLiteStyleRock = (rng: () => number): boolean => {
         if (note) crash.triggerAttack(crashNote, time, 0.9);
     }, [1, 0, 0, 0], "1m");
 
-    const chorusGuitarRiff = new Tone.Sequence((time, note) => {
-        if (note) guitar.triggerAttackRelease(note, "8n", time, 1.0);
+    const chorusGuitarPart = new Tone.Part<{ time: string, note: string[], duration: string }>((time, value) => {
+        guitar.triggerAttackRelease(value.note, value.duration, time, 1.0);
     }, [
-        ['E4', 'B4'], ['G4', 'D5'], ['A4', 'E5'], ['B4', 'F#5'],
-        ['C5', 'G5'], ['B4', 'F#5'], ['A4', 'E5'], ['G4', 'D5'],
-        ['E4', 'B4'], ['G4', 'D5'], ['A4', 'E5'], ['G4', 'D5'],
-        ['E4', 'B4'], ['D4', 'A4'], ['B3', 'F#4'], null,
-    ], "8n");
+        { time: '0:0:0', note: ['E4', 'B4'], duration: '8n' },
+        { time: '0:0:2', note: ['G4', 'D5'], duration: '8n' },
+        { time: '0:1:0', note: ['A4', 'E5'], duration: '8n' },
+        { time: '0:1:2', note: ['B4', 'F#5'], duration: '8n' },
+        { time: '0:2:0', note: ['C5', 'G5'], duration: '8n' },
+        { time: '0:2:2', note: ['B4', 'F#5'], duration: '8n' },
+        { time: '0:3:0', note: ['A4', 'E5'], duration: '8n' },
+        { time: '0:3:2', note: ['G4', 'D5'], duration: '8n' },
+        
+        { time: '1:0:0', note: ['E4', 'B4'], duration: '8n' },
+        { time: '1:0:2', note: ['G4', 'D5'], duration: '8n' },
+        { time: '1:1:0', note: ['A4', 'E5'], duration: '8n' },
+        { time: '1:1:2', note: ['G4', 'D5'], duration: '8n' },
+        { time: '1:2:0', note: ['E4', 'B4'], duration: '2n.' }, // Sustained Note
+    ]);
+    chorusGuitarPart.loop = true;
+    chorusGuitarPart.loopEnd = '2m';
 
     // --- Section Control ---
     const sectionPart = new Tone.Part<{ time: string; value: Role }>((time, event) => {
@@ -670,12 +682,12 @@ const createLiteStyleRock = (rng: () => number): boolean => {
             chorusKickSeq.stop(time);
             chorusSnareSeq.stop(time);
             chorusCrashSeq.stop(time);
-            chorusGuitarRiff.stop(time);
+            chorusGuitarPart.stop(time);
         } else if (role === ROLES.CHORUS) {
             chorusKickSeq.start(time);
             chorusSnareSeq.start(time);
             chorusCrashSeq.start(time);
-            chorusGuitarRiff.start(time);
+            chorusGuitarPart.start(time);
 
             verseKickSeq.stop(time);
             verseSnareSeq.stop(time);
@@ -696,7 +708,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     scheduledEvents.push(
         sectionPart,
         verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff,
-        chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarRiff
+        chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart
     );
     
     return true;
