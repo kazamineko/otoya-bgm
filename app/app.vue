@@ -786,7 +786,4 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hir
 .seed-input-container button:disabled { background-color: #c5c5c5; cursor: not-allowed; }
 .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000; }
 .loading-text { color: white; font-size: 1.2em; }
-</style>```
-
----
-### **【Gitコマンド】**
+</style>
