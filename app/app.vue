@@ -56,7 +56,7 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
-// ★★★ MASTER TUNED PARAMETERS UPDATED ★★★
+// MASTER TUNED PARAMETERS (STABLE VERSION)
 const masterTunedParams: TuningParams = {
   "piano": { "volume": 0, "attack": 0.01, "release": 1 },
   "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
@@ -74,7 +74,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": 6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": 6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": 6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 1, "detune": 0, "eqHigh": 1.5 },
+  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 1, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 1.5 },
   "target_ebass": { "volume": 0, "attack": 0.01, "release": 1 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -107,8 +107,10 @@ watch(tuningParams, (newParams) => {
   // --- Guitar Nuance Engine Logic (incl. EQ) ---
   const eguitarTargetParams = newParams.target_eguitar;
   if (eguitarTargetParams) {
-      if (guitarEQ && eguitarTargetParams.eqHigh !== undefined) {
-          guitarEQ.high.value = eguitarTargetParams.eqHigh;
+      if (guitarEQ) {
+        if (eguitarTargetParams.eqLow !== undefined) guitarEQ.low.value = eguitarTargetParams.eqLow;
+        if (eguitarTargetParams.eqMid !== undefined) guitarEQ.mid.value = eguitarTargetParams.eqMid;
+        if (eguitarTargetParams.eqHigh !== undefined) guitarEQ.high.value = eguitarTargetParams.eqHigh;
       }
       if (guitarPitchShift && eguitarTargetParams.detune !== undefined) {
           guitarPitchShift.pitch = eguitarTargetParams.detune;
@@ -197,7 +199,11 @@ const initializeAudio = async () => {
     const eguitarTargetP = tuningParams.value.target_eguitar;
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
-    guitarEQ = new Tone.EQ3({ low: -6, mid: 0, high: eguitarTargetP.eqHigh });
+    guitarEQ = new Tone.EQ3({ 
+        low: eguitarTargetP.eqLow, 
+        mid: eguitarTargetP.eqMid, 
+        high: eguitarTargetP.eqHigh 
+    });
     bassEQNode = new Tone.EQ3({ low: 0, mid: 4, high: 0});
     
     loadingMessage.value = 'AI奏者を準備しています...';
