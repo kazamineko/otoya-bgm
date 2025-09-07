@@ -56,7 +56,7 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
-// ★★★ MASTER TUNED PARAMETERS UPDATED ★★★
+// MASTER TUNED PARAMETERS (STABLE VERSION)
 const masterTunedParams: TuningParams = {
   "piano": { "volume": 0, "attack": 0.01, "release": 1 },
   "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
@@ -113,7 +113,6 @@ watch(tuningParams, (newParams) => {
       if (guitarPitchShift && eguitarTargetParams.detune !== undefined) {
           guitarPitchShift.pitch = eguitarTargetParams.detune;
       }
-      // Use samplers['eguitar'] to ensure we're updating the correct, active sampler
       if (samplers['eguitar']) {
           const eguitarSampler = samplers['eguitar'].sampler;
           if(eguitarTargetParams.volume !== undefined) eguitarSampler.volume.value = eguitarTargetParams.volume;
@@ -348,6 +347,7 @@ const playMusic = async (menuName: string, seed?: string) => {
     case 'ジャズ・スペシャル': musicGenerated = createJazzSound(rng); break;
     case 'Lo-Fi・ビター': musicGenerated = createLoFiSound(rng); break;
     case 'ロック・ビート': musicGenerated = createRockSound(rng); break;
+    case 'LITE-Style・Post Rock': musicGenerated = createLiteStyleRock(rng); break;
   }
   if (musicGenerated && Tone) {
     currentSeed.value = newSeed; 
@@ -377,7 +377,7 @@ const handleVolumeChange = (event: Event) => { const newVolume = parseFloat((eve
 const openModal = () => { isModalVisible.value = true; };
 const closeModal = () => { isModalVisible.value = false; };
 const copySeed = () => { if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value); };
-const playFromSeed = async () => { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート']; if (menuName && seed && validMenus.includes(menuName)) { await playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } };
+const playFromSeed = async () => { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート', 'LITE-Style・Post Rock']; if (menuName && seed && validMenus.includes(menuName)) { await playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } };
 
 const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; };
 const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
@@ -392,7 +392,6 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
         return; 
       }
 
-      // ★★★ BUG FIX: Changed reference from targetSamplerMulti to samplers['eguitar'] ★★★
       if (instrumentName === 'target_eguitar' && samplers['eguitar'] && Tone) {
         const sampler = samplers['eguitar'].sampler;
         const now = Tone.now();
@@ -571,6 +570,37 @@ const createRockSound = (rng: () => number): boolean => {
     scheduledEvents.push(kickSeq, snareSeq, bassSeq, mainLoop, leadSwitchLoop);
     return true; 
 };
+
+const createLiteStyleRock = (rng: () => number): boolean => {
+    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !samplers.ride) {
+        return false;
+    }
+    scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
+    
+    Tone.Transport.bpm.value = 135;
+    Tone.Transport.swing = 0;
+
+    const hihatSeq = new Tone.Sequence((time, note) => {
+        if (note) samplers.ride?.sampler.triggerAttack(samplers.ride.baseNote, time, 0.7);
+    }, [1, 1, 1, 1, 1, 1, 1, 1], "8n").start(0);
+
+    const kickSeq = new Tone.Sequence((time, note) => {
+        if (note) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time);
+    }, [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0], "16n").start(0);
+
+    const snareSeq = new Tone.Sequence((time, note) => {
+        if (note) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, time);
+    }, [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], "16n").start(0);
+    
+    const guitarRiff = new Tone.Sequence((time, note) => {
+        if (note) samplers.eguitar?.sampler.triggerAttackRelease(note, "8n", time);
+    }, ['E4', null, 'G4', 'A4', null, 'G4', null, 'D4'], "8n").start(0);
+
+    guitarRiff.loop = true;
+    
+    scheduledEvents.push(hihatSeq, kickSeq, snareSeq, guitarRiff);
+    return true;
+};
 </script>
 
 <template>
@@ -625,6 +655,15 @@ const createRockSound = (rng: () => number): boolean => {
               <span class="menu-description">魂を揺さぶる、力強いリズムと歪んだギターのブレンド。</span>
             </div>
             <div v-if="selectedMenu === 'ロック・ビート' && isPlaying" class="active-indicator">
+              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            </div>
+          </button>
+          <button class="menu-button" @click="playMusic('LITE-Style・Post Rock')" :class="{ 'is-active': selectedMenu === 'LITE-Style・Post Rock' }">
+            <div class="menu-content">
+              <span class="menu-title">LITE-Style・Post Rock</span>
+              <span class="menu-description">反復と構築。ミニマルな骨格が生むグルーヴ。</span>
+            </div>
+            <div v-if="selectedMenu === 'LITE-Style・Post Rock' && isPlaying" class="active-indicator">
               <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
             </div>
           </button>
