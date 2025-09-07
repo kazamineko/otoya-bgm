@@ -75,28 +75,47 @@ const masterTunedParams: TuningParams = {
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value || !Tone) return;
-  
+
+  // --- Unique Instrument Logic ---
   if (newRockBassSampler && newParams.target_ebass) {
-      const rockBassParams = newParams.target_ebass;
-      if(rockBassParams.volume !== undefined) newRockBassSampler.sampler.volume.value = rockBassParams.volume;
-      if(rockBassParams.attack !== undefined) newRockBassSampler.sampler.attack = rockBassParams.attack;
-      if(rockBassParams.release !== undefined) newRockBassSampler.sampler.release = rockBassParams.release;
+      const p = newParams.target_ebass;
+      if(p.volume !== undefined) newRockBassSampler.sampler.volume.value = p.volume;
+      if(p.attack !== undefined) newRockBassSampler.sampler.attack = p.attack;
+      if(p.release !== undefined) newRockBassSampler.sampler.release = p.release;
   }
   if (newSynthPianoSampler && newParams.spiano) {
-      const spianoParams = newParams.spiano;
-      if(spianoParams.volume !== undefined) newSynthPianoSampler.sampler.volume.value = spianoParams.volume;
-      if(spianoParams.attack !== undefined) newSynthPianoSampler.sampler.attack = spianoParams.attack;
-      if(spianoParams.release !== undefined) newSynthPianoSampler.sampler.release = spianoParams.release;
+      const p = newParams.spiano;
+      if(p.volume !== undefined) newSynthPianoSampler.sampler.volume.value = p.volume;
+      if(p.attack !== undefined) newSynthPianoSampler.sampler.attack = p.attack;
+      if(p.release !== undefined) newSynthPianoSampler.sampler.release = p.release;
   }
   if (newElecOrganSampler && newParams.eorgan) {
-      const eorganParams = newParams.eorgan;
-      if(eorganParams.volume !== undefined) newElecOrganSampler.sampler.volume.value = eorganParams.volume;
-      if(eorganParams.attack !== undefined) newElecOrganSampler.sampler.attack = eorganParams.attack;
-      if(eorganParams.release !== undefined) newElecOrganSampler.sampler.release = eorganParams.release;
+      const p = newParams.eorgan;
+      if(p.volume !== undefined) newElecOrganSampler.sampler.volume.value = p.volume;
+      if(p.attack !== undefined) newElecOrganSampler.sampler.attack = p.attack;
+      if(p.release !== undefined) newElecOrganSampler.sampler.release = p.release;
   }
 
+  // --- Guitar Nuance Engine Logic (incl. EQ) ---
+  const eguitarTargetParams = newParams.target_eguitar;
+  if (eguitarTargetParams) {
+      if (guitarEQ && eguitarTargetParams.eqHigh !== undefined) {
+          guitarEQ.high.value = eguitarTargetParams.eqHigh;
+      }
+      if (guitarPitchShift && eguitarTargetParams.detune !== undefined) {
+          guitarPitchShift.pitch = eguitarTargetParams.detune;
+      }
+      if (targetSamplerMulti) {
+          if(eguitarTargetParams.volume !== undefined) targetSamplerMulti.sampler.volume.value = eguitarTargetParams.volume;
+          if(eguitarTargetParams.attack !== undefined) targetSamplerMulti.sampler.attack = eguitarTargetParams.attack;
+          if(eguitarTargetParams.release !== undefined) targetSamplerMulti.sampler.release = eguitarTargetParams.release;
+      }
+  }
+
+  // --- General Sampler Logic ---
   for (const instrumentName in newParams) {
-    if (instrumentName === 'target_ebass' || instrumentName === 'spiano' || instrumentName === 'eorgan') continue;
+    const exclusionList = ['target_ebass', 'spiano', 'eorgan', 'target_eguitar'];
+    if (exclusionList.includes(instrumentName)) continue;
 
     const activeSampler = samplers[instrumentName] || targetSamplers[instrumentName];
     if (activeSampler) {
@@ -129,14 +148,12 @@ const initializeAudio = async () => {
   if (!instrumentList.value.includes('eorgan')) {
     instrumentList.value.push('eorgan');
   }
-  // Add 'eguitar' and 'ebass' to the list for the modal, even though their DI params are gone
   if (!instrumentList.value.includes('eguitar')) {
     instrumentList.value.push('eguitar');
   }
   if (!instrumentList.value.includes('ebass')) {
     instrumentList.value.push('ebass');
   }
-
 
   const initialParams = JSON.parse(JSON.stringify(masterTunedParams)); 
   
@@ -159,7 +176,7 @@ const initializeAudio = async () => {
     limiter = new Tone.Limiter(-0.1).toDestination();
     masterComp = new Tone.Compressor({ threshold: -12, ratio: 3 }).connect(limiter);
     
-    drumBusVolume = new Tone.Volume(-3).connect(masterComp); // Boosted drum bus
+    drumBusVolume = new Tone.Volume(-3).connect(masterComp);
     drumBusComp = new Tone.Compressor({ threshold: -25, ratio: 5, attack: 0.01, release: 0.1 }).connect(drumBusVolume);
 
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
@@ -172,7 +189,7 @@ const initializeAudio = async () => {
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
     guitarEQ = new Tone.EQ3({ low: -6, mid: 0, high: eguitarTargetP.eqHigh });
-    bassEQNode = new Tone.EQ3({ low: 0, mid: 4, high: 0}); // Bass EQ
+    bassEQNode = new Tone.EQ3({ low: 0, mid: 4, high: 0});
     
     loadingMessage.value = 'AI奏者を準備しています...';
     
@@ -195,7 +212,6 @@ const initializeAudio = async () => {
       volume: multiSampleParams.volume, attack: multiSampleParams.attack, release: multiSampleParams.release
     });
     targetSamplerMulti = { sampler: loadedMultiSampler, baseNote: 'G#5' }; 
-    console.log("LOG: New multi-sampled guitar loaded with URLs:", multiSampleUrls);
     
     const newBassUrls = {
         'E1': 'ebass-new_E.wav', 'F1': 'ebass-new_F.wav', 'F#1': 'ebass-new_Fs.wav', 'G1': 'ebass-new_G.wav',
@@ -206,7 +222,6 @@ const initializeAudio = async () => {
     const newRockBassParams = tuningParams.value['target_ebass'];
     const loadedNewRockBassSampler = new Tone.Sampler({
         urls: newBassUrls, baseUrl: "/",
-        onload: () => console.log("LOG: New multi-sampled rock bass loaded successfully."),
         volume: newRockBassParams.volume, attack: newRockBassParams.attack, release: newRockBassParams.release
     });
     newRockBassSampler = { sampler: loadedNewRockBassSampler, baseNote: 'A1' };
@@ -222,7 +237,6 @@ const initializeAudio = async () => {
     const newSynthPianoParams = tuningParams.value['spiano'];
     const loadedNewSynthPianoSampler = new Tone.Sampler({
         urls: newSynthPianoUrls, baseUrl: "/",
-        onload: () => console.log("LOG: New synth piano sampler loaded successfully."),
         volume: newSynthPianoParams.volume, attack: newSynthPianoParams.attack, release: newSynthPianoParams.release
     });
     newSynthPianoSampler = { sampler: loadedNewSynthPianoSampler, baseNote: 'C4' };
@@ -239,7 +253,6 @@ const initializeAudio = async () => {
     const newElecOrganParams = tuningParams.value['eorgan'];
     const loadedNewElecOrganSampler = new Tone.Sampler({
         urls: newElecOrganUrls, baseUrl: "/",
-        onload: () => console.log("LOG: New elec organ sampler loaded successfully."),
         volume: newElecOrganParams.volume, attack: newElecOrganParams.attack, release: newElecOrganParams.release
     });
     newElecOrganSampler = { sampler: loadedNewElecOrganSampler, baseNote: 'C4' };
@@ -249,32 +262,16 @@ const initializeAudio = async () => {
     for (const name of Object.keys(allSamplePaths)) {
       const params = tuningParams.value[name];
       if (!params) continue;
-
-      const isTarget = name.startsWith('target_');
-      
-      const urls: Record<string, string> = {};
-      const filePath = allSamplePaths[name]!;
-      let baseNote = '';
-      
-      if (filePath.includes('-c3')) { baseNote = 'C3'; }
-      else if (filePath.includes('-e1')) { baseNote = 'C1'; } 
-      else { baseNote = 'C4'; }
-      urls[baseNote] = filePath;
-
-      const sampler = new Tone.Sampler({
-        urls, baseUrl: "/", 
-        volume: params.volume, attack: params.attack, release: params.release,
-      });
-
-      const samplerData = { sampler, baseNote };
-      
-      if (isTarget) { targetSamplers[name] = samplerData; }
-      else { samplers[name] = samplerData; }
+      const urls: Record<string, string> = { 'C4': allSamplePaths[name]! };
+      const sampler = new Tone.Sampler({ urls, baseUrl: "/", volume: params.volume, attack: params.attack, release: params.release });
+      if (name.startsWith('target_')) {
+        targetSamplers[name] = { sampler, baseNote: 'C4' };
+      } else {
+        samplers[name] = { sampler, baseNote: 'C4' };
+      }
     }
     
     if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler) {
-      console.log("LOG: All core audio nodes initialized successfully.");
-      
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
@@ -283,16 +280,14 @@ const initializeAudio = async () => {
 
       if (targetSamplerMulti) {
         samplers['eguitar'] = targetSamplerMulti;
-        console.log("LOG: 'targetSamplerMulti' is now the primary 'eguitar' sampler.");
       }
 
       if(targetSamplerMulti) {
         targetSamplerMulti.sampler.chain(guitarPitchShift, guitarVibrato, guitarEQ).fan(masterComp, reverb); 
-        console.log("LOG: Routing multi-sampled guitar through Nuance Engine to Master Bus.");
       }
 
       for (const [name, data] of Object.entries(samplers)) {
-        if (name === 'eguitar') continue; // FIX: Prevent double-routing for eguitar
+        if (name === 'eguitar') continue;
 
         if (rockDrumKit.includes(name)) {
           if (name === 'ride') {
@@ -301,22 +296,15 @@ const initializeAudio = async () => {
           } else {
             data.sampler.connect(drumBusComp);
           }
-          console.log(`LOG: Routing '${name}' to Drum Bus.`);
         } else {
            data.sampler.fan(masterComp, reverb, chorus, delay);
-           console.log(`LOG: Routing '${name}' to Master Bus.`);
         }
       }
       
       for (const [name, { sampler }] of Object.entries(targetSamplers)) {
-        if (name === 'target_ebass') {
-            // This is now an old path, keep it disconnected to avoid issues.
-        } else {
-          sampler.fan(masterComp, reverb);
-          console.log(`LOG: Routing '${name}' to Master Bus.`);
-        }
+        if (name === 'target_ebass') continue;
+        sampler.fan(masterComp, reverb);
       }
-
     }
 
     rawSamplePlayers = await new Promise<ToneType.Players>((resolve) => {
@@ -415,77 +403,20 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
       else if (type === 'target' && instrumentName === 'ebass' && targetBassPlayer) { targetBassPlayer.start(); }
   }
 };
-const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => {
-  // ★★★ GEMINI DEBUG LOG 1: Check received payload ★★★
-  console.log(`[GEMINI_DEBUG_1] handleUpdateParam received:`, { instrument: payload.instrument, param: payload.param, value: payload.value });
 
+const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => {
   if (tuningParams.value[payload.instrument]) {
     const updatedInstrumentParams = { ...tuningParams.value[payload.instrument] };
     updatedInstrumentParams[payload.param] = payload.value;
     tuningParams.value[payload.instrument] = updatedInstrumentParams;
   }
-  
-  if (payload.instrument === 'target_eguitar' && targetSamplerMulti) {
-    const sampler = targetSamplerMulti.sampler;
-    switch (payload.param) {
-      case 'volume': sampler.volume.value = payload.value; break;
-      case 'attack': sampler.attack = payload.value; break;
-      case 'release': sampler.release = payload.value; break;
-      case 'detune': 
-        if (guitarPitchShift) {
-          guitarPitchShift.pitch = payload.value;
-        }
-        break;
-      case 'eqHigh':
-        // ★★★ GEMINI DEBUG LOG 2: Check before setting value ★★★
-        console.log(`[GEMINI_DEBUG_2] Action: Attempting to set guitarEQ.high.value to ${payload.value}`);
-        if (guitarEQ) {
-          guitarEQ.high.value = payload.value;
-          // ★★★ GEMINI DEBUG LOG 3: Check after setting value ★★★
-          console.log(`[GEMINI_DEBUG_3] Result: guitarEQ.high.value is now ${guitarEQ.high.value}`);
-        } else {
-          console.error('[GEMINI_DEBUG_ERROR] CRITICAL: guitarEQ object is null or undefined.');
-        }
-        break;
-    }
-  }
 };
+
 const handleSaveParams = () => { try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(tuningParams.value)); alert('現在の設定をブラウザに保存しました。'); } catch (e) { alert('設定の保存に失敗しました。'); } };
 const handleExportParams = () => { console.clear(); console.log(JSON.stringify(tuningParams.value, null, 2)); alert('現在の設定を開発者コンソールに出力しました。'); };
 const handleResetParams = () => { 
   if (confirm('現在の調整を破棄し、全ての設定を初期値に戻します。よろしいですか？')) {
     tuningParams.value = JSON.parse(JSON.stringify(masterTunedParams)); 
-    if (targetSamplerMulti) {
-      const defaults = masterTunedParams['target_eguitar'];
-      targetSamplerMulti.sampler.volume.value = defaults.volume;
-      targetSamplerMulti.sampler.attack = defaults.attack;
-      targetSamplerMulti.sampler.release = defaults.release;
-      if (guitarPitchShift) {
-        guitarPitchShift.pitch = defaults.detune;
-      }
-      if (guitarEQ) {
-        guitarEQ.high.value = defaults.eqHigh;
-      }
-    }
-    if (newRockBassSampler) {
-        const defaults = masterTunedParams['target_ebass'];
-        newRockBassSampler.sampler.volume.value = defaults.volume;
-        newRockBassSampler.sampler.attack = defaults.attack;
-        newRockBassSampler.sampler.release = defaults.release;
-    }
-    if (newSynthPianoSampler) {
-        const defaults = masterTunedParams['spiano'];
-        newSynthPianoSampler.sampler.volume.value = defaults.volume;
-        newSynthPianoSampler.sampler.attack = defaults.attack;
-        newSynthPianoSampler.sampler.release = defaults.release;
-    }
-    if (newElecOrganSampler) {
-        const defaults = masterTunedParams['eorgan'];
-        newElecOrganSampler.sampler.volume.value = defaults.volume;
-        newElecOrganSampler.sampler.attack = defaults.attack;
-        newElecOrganSampler.sampler.release = defaults.release;
-    }
-    alert('設定を初期化しました。');
   }
 };
 
@@ -511,7 +442,6 @@ const createRelaxSound = (rng: () => number): boolean => {
     if (!samplers.pad) return false;
     scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
     const { sampler: padSampler, baseNote } = samplers.pad;
-    // Tone.Transport has to be started to schedule events
     Tone?.Transport.scheduleOnce(time => {
         padSampler.triggerAttack(baseNote, time);
     }, 0);
@@ -551,7 +481,6 @@ const createJazzSound = (rng: () => number): boolean => {
     return true; 
 };
 
-// --- The Stable "Rock Beat" (with Synth Piano) ---
 const createRockSound = (rng: () => number): boolean => {
     if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler) {
         return false;
@@ -560,7 +489,7 @@ const createRockSound = (rng: () => number): boolean => {
 
     const bpm = 130 + rng() * 20;
     Tone.Transport.bpm.value = bpm;
-    Tone.Transport.swing = 0.05; // Add a slight swing for groove
+    Tone.Transport.swing = 0.05;
     const progression = ['E', 'G', 'A', 'A'];
     let leadInstrument: 'guitar' | 'synth' | 'organ' = 'guitar';
 
@@ -576,7 +505,7 @@ const createRockSound = (rng: () => number): boolean => {
         if(noteOn && Tone){
             const measure = Math.floor(Tone.Transport.getTicksAtTime(time) / (Tone.Transport.PPQ * 4));
             const rootNote = progression[measure % 4]!;
-            const note = rng() < 0.1 ? `${rootNote}2` : `${rootNote}1`; // Add random octave jumps
+            const note = rng() < 0.1 ? `${rootNote}2` : `${rootNote}1`;
             newRockBassSampler?.sampler.triggerAttackRelease(note, '8n', time);
         }
     }, [1, 1, 1, 1, 1, 1, 1, 1], "8n").start(0);
@@ -617,9 +546,9 @@ const createRockSound = (rng: () => number): boolean => {
           'organ': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}5`], '2n', time, vel * 0.6)
       };
 
-      if (totalBeats % 4 === 0) { // On the downbeat
+      if (totalBeats % 4 === 0) {
         leadAction[leadInstrument]();
-      } else { // On other beats
+      } else {
         padAction[leadInstrument]();
       }
 
@@ -681,7 +610,7 @@ const createRockSound = (rng: () => number): boolean => {
               <span class="menu-title">ロック・ビート</span>
               <span class="menu-description">魂を揺さぶる、力強いリズムと歪んだギターのブレンド。</span>
             </div>
-            <div v-if="selectedMenu === 'ロック・ビター' && isPlaying" class="active-indicator">
+            <div v-if="selectedMenu === 'ロック・ビート' && isPlaying" class="active-indicator">
               <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
             </div>
           </button>
