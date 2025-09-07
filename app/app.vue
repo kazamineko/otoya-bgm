@@ -108,18 +108,9 @@ watch(tuningParams, (newParams) => {
   const eguitarTargetParams = newParams.target_eguitar;
   if (eguitarTargetParams) {
       if (guitarEQ) {
-        // ★★★ GEMINI LOG B: Log state changes within the watcher ★★★
-        console.log('[GEMINI_LOG_B] Watcher triggered for guitarEQ.', {
-            'Incoming Low': eguitarTargetParams.eqLow, 'Current Low': guitarEQ.low.value,
-            'Incoming Mid': eguitarTargetParams.eqMid, 'Current Mid': guitarEQ.mid.value,
-            'Incoming High': eguitarTargetParams.eqHigh, 'Current High': guitarEQ.high.value
-        });
         if (eguitarTargetParams.eqLow !== undefined) guitarEQ.low.value = eguitarTargetParams.eqLow;
         if (eguitarTargetParams.eqMid !== undefined) guitarEQ.mid.value = eguitarTargetParams.eqMid;
         if (eguitarTargetParams.eqHigh !== undefined) guitarEQ.high.value = eguitarTargetParams.eqHigh;
-        console.log('[GEMINI_LOG_B] Watcher finished. New guitarEQ values:', {
-            'Low': guitarEQ.low.value, 'Mid': guitarEQ.mid.value, 'High': guitarEQ.high.value
-        });
       }
       if (guitarPitchShift && eguitarTargetParams.detune !== undefined) {
           guitarPitchShift.pitch = eguitarTargetParams.detune;
@@ -339,13 +330,6 @@ const initializeAudio = async () => {
     isAudioInitialized.value = true;
     loadingMessage.value = '準備ができました';
 
-    // ★★★ GEMINI LOG A: Log initial state of guitarEQ after initialization ★★★
-    if(guitarEQ) {
-      console.log('[GEMINI_LOG_A] Audio Initialized. Current guitarEQ state:', {
-        'Low': guitarEQ.low.value, 'Mid': guitarEQ.mid.value, 'High': guitarEQ.high.value
-      });
-    }
-
   } catch (error: any) {
     loadingMessage.value = `エラーが発生しました: ${error.message}`;
     console.error("Error setting up Tone.js:", error);
@@ -422,13 +406,6 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
           guitarVibrato.frequency.value = 4 + Math.random() * 2;
         }
         
-        // ★★★ GEMINI LOG C: Log state JUST BEFORE playing sound in soundcheck ★★★
-        if (guitarEQ) {
-            console.log('[GEMINI_LOG_C] Soundcheck playback. Current guitarEQ state:', {
-                'Low': guitarEQ.low.value, 'Mid': guitarEQ.mid.value, 'High': guitarEQ.high.value
-            });
-        }
-
         sampler.triggerAttackRelease('E5', duration, now);
 
       } else {
@@ -522,7 +499,8 @@ const createJazzSound = (rng: () => number): boolean => {
 };
 
 const createRockSound = (rng: () => number): boolean => {
-    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler) {
+    // ★★★ FINAL FIX: Add '!guitarEQ' to the guard clause ★★★
+    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler || !guitarEQ) {
         return false;
     }
     scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
@@ -570,13 +548,6 @@ const createRockSound = (rng: () => number): boolean => {
       
       const isGhostNote = rng() < 0.15;
       const leadVelocity = isGhostNote ? vel * 0.3 : vel;
-
-      // ★★★ GEMINI LOG E: Log state JUST BEFORE playing sound in Rock Beat BGM loop ★★★
-      if (leadInstrument === 'guitar' && totalBeats % 4 === 0 && guitarEQ) {
-        console.log('[GEMINI_LOG_E] Rock Beat playback. Current guitarEQ state:', {
-            'Low': guitarEQ.low.value, 'Mid': guitarEQ.mid.value, 'High': guitarEQ.high.value
-        });
-      }
 
       const leadAction = {
         'guitar': () => samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity),
@@ -630,12 +601,6 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     
     const guitarRiff = new Tone.Sequence((time, note) => {
         if (note) {
-            // ★★★ GEMINI LOG D: Log state JUST BEFORE playing sound in LITE Style BGM loop ★★★
-            if (guitarEQ) {
-                console.log('[GEMINI_LOG_D] LITE-Style playback. Current guitarEQ state:', {
-                    'Low': guitarEQ.low.value, 'Mid': guitarEQ.mid.value, 'High': guitarEQ.high.value
-                });
-            }
             samplers.eguitar?.sampler.triggerAttackRelease(note, "8n", time);
         }
     }, ['E4', null, 'G4', 'A4', null, 'G4', null, 'D4'], "8n").start(0);
