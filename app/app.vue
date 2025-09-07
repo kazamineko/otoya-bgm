@@ -74,8 +74,8 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": 6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": 6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": 6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 1, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 1.5 },
-  "target_ebass": { "volume": 0, "attack": 0.01, "release": 1 },
+  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 1.5, "detune": 0, "eqLow": 0.5, "eqMid": -5, "eqHigh": 0.5 },
+  "target_ebass": { "volume": 0, "attack": 0.01, "release": 1, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
 };
@@ -90,6 +90,11 @@ watch(tuningParams, (newParams) => {
       if(p.volume !== undefined) newRockBassSampler.sampler.volume.value = p.volume;
       if(p.attack !== undefined) newRockBassSampler.sampler.attack = p.attack;
       if(p.release !== undefined) newRockBassSampler.sampler.release = p.release;
+      if(bassEQNode) {
+        if(p.eqLow !== undefined) bassEQNode.low.value = p.eqLow;
+        if(p.eqMid !== undefined) bassEQNode.mid.value = p.eqMid;
+        if(p.eqHigh !== undefined) bassEQNode.high.value = p.eqHigh;
+      }
   }
   if (newSynthPianoSampler && newParams.spiano) {
       const p = newParams.spiano;
@@ -108,9 +113,6 @@ watch(tuningParams, (newParams) => {
   const eguitarTargetParams = newParams.target_eguitar;
   if (eguitarTargetParams) {
       if (guitarEQ) {
-        console.log('[GEMINI_LOG_WATCHER] Watcher updating EQ with .value assignment for v15. New values:', {
-            low: eguitarTargetParams.eqLow, mid: eguitarTargetParams.eqMid, high: eguitarTargetParams.eqHigh
-        });
         if (eguitarTargetParams.eqLow !== undefined) guitarEQ.low.value = eguitarTargetParams.eqLow;
         if (eguitarTargetParams.eqMid !== undefined) guitarEQ.mid.value = eguitarTargetParams.eqMid;
         if (eguitarTargetParams.eqHigh !== undefined) guitarEQ.high.value = eguitarTargetParams.eqHigh;
@@ -207,7 +209,13 @@ const initializeAudio = async () => {
         mid: eguitarTargetP.eqMid, 
         high: eguitarTargetP.eqHigh 
     });
-    bassEQNode = new Tone.EQ3({ low: 0, mid: 4, high: 0});
+    
+    const ebassTargetP = tuningParams.value.target_ebass;
+    bassEQNode = new Tone.EQ3({
+        low: ebassTargetP.eqLow,
+        mid: ebassTargetP.eqMid,
+        high: ebassTargetP.eqHigh
+    });
     
     loadingMessage.value = 'AI奏者を準備しています...';
     
@@ -300,8 +308,7 @@ const initializeAudio = async () => {
         samplers['eguitar'] = targetSamplerMulti;
       }
 
-      // ★★★ FINAL FIX: Re-wire the signal path using explicit .connect() calls ★★★
-      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && masterComp && reverb) {
+      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ) {
         targetSamplerMulti.sampler.connect(guitarPitchShift);
         guitarPitchShift.connect(guitarVibrato);
         guitarVibrato.connect(guitarEQ);

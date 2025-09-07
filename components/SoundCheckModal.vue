@@ -72,6 +72,23 @@
                     <button @click.prevent="setExtremeEq('boost')">EQブースト (+12dB)</button>
                   </div>
                 </template>
+                <template v-if="instrument === 'ebass'">
+                  <div class="slider-container">
+                    <label>EQ Low</label>
+                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_ebass'].eqLow" @input="updateParam('target_ebass', 'eqLow', $event)">
+                    <span>{{ tuningParams['target_ebass'].eqLow.toFixed(1) }} dB</span>
+                  </div>
+                  <div class="slider-container">
+                    <label>EQ Mid</label>
+                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_ebass'].eqMid" @input="updateParam('target_ebass', 'eqMid', $event)">
+                    <span>{{ tuningParams['target_ebass'].eqMid.toFixed(1) }} dB</span>
+                  </div>
+                  <div class="slider-container">
+                    <label>EQ High</label>
+                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_ebass'].eqHigh" @input="updateParam('target_ebass', 'eqHigh', $event)">
+                    <span>{{ tuningParams['target_ebass'].eqHigh.toFixed(1) }} dB</span>
+                  </div>
+                </template>
               </template>
               <!-- Other Instruments -->
               <template v-else>
