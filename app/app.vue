@@ -111,7 +111,7 @@ const masterTunedParams: TuningParams = {
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0 },
   "target_ebass": { "volume": -6, "attack": 0.01, "release": 1.0 }, // This now controls the NEW rock bass
-  "spiano": { "volume": -12, "attack": 0.01, "release": 1.5 }, // Add new synth piano with adjusted volume
+  "spiano": { "volume": -9, "attack": 0.01, "release": 1.0 },
 };
 
 watch(tuningParams, (newParams) => {
@@ -439,6 +439,7 @@ const playMusic = async (menuName: string, seed?: string) => {
     case 'ジャズ・スペシャル': musicGenerated = createJazzSound(rng); break;
     case 'Lo-Fi・ビター': musicGenerated = createLoFiSound(rng); break;
     case 'ロック・ビート': musicGenerated = createRockSound(rng); break;
+    case 'キーボード・テスト': musicGenerated = createKeyboardTest(rng); break; // Add new test genre
   }
   if (musicGenerated && Tone) {
     currentSeed.value = newSeed; 
@@ -469,7 +470,7 @@ const handleVolumeChange = (event: Event) => { const newVolume = parseFloat((eve
 const openModal = () => { isModalVisible.value = true; };
 const closeModal = () => { isModalVisible.value = false; };
 const copySeed = () => { if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value); };
-const playFromSeed = async () => { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート']; if (menuName && seed && validMenus.includes(menuName)) { await playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } };
+const playFromSeed = async () => { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート', 'キーボード・テスト']; if (menuName && seed && validMenus.includes(menuName)) { await playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } };
 
 const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; };
 const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
@@ -668,59 +669,59 @@ const createJazzSound = (rng: () => number): boolean => {
     return true; 
 };
 
-// --- THE GRAND REBUILD OF "ROCK BEAT" ---
+// --- The Stable "Rock Beat" ---
 const createRockSound = (rng: () => number): boolean => {
-    console.log("DEBUG: Attempting to create Rock Sound...");
-    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !samplers.ride || !samplers.crash) {
-        console.error("DEBUG: Rock instruments not ready!", {
-            Tone: !!Tone, eguitar: !!samplers.eguitar, rockKick: !!samplers.rockKick, rockSnare: !!samplers.rockSnare, newRockBassSampler: !!newRockBassSampler
-        });
+    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler) {
         return false;
     }
-    
-    scheduledEvents.forEach(e => e.dispose());
-    scheduledEvents.length = 0;
-    console.log("DEBUG: Cleared previous events.");
+    scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
 
-    const bpm = 120 + rng() * 30;
-    Tone.Transport.bpm.value = bpm;
+    Tone.Transport.bpm.value = 130 + rng() * 20;
     Tone.Transport.swing = 0;
-
     const progression = ['E', 'G', 'A', 'A'];
 
-    // --- RHYTHM SECTION (Kick & Snare) ---
     const kickSeq = new Tone.Sequence((time, note) => {
         if(note) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time, 0.9 + rng() * 0.1);
     }, [1, 0, 0, 0, 1, 0, 0, 0], "8n").start(0);
 
     const snareSeq = new Tone.Sequence((time, note) => {
         if(note) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, time, 0.8 + rng() * 0.2);
-    }, [0, 0, 1, 0, 0, 0, 1, 0], "4n").start(0);
+    }, [0, 1, 0, 1], "4n").start(0);
 
-    // --- MELODY/HARMONY SECTION (Bass & Guitar) ---
     const mainLoop = new Tone.Loop((time) => {
       if (!Tone) return;
-
       const totalBeats = Math.floor(Tone.Transport.getTicksAtTime(time) / Tone.Transport.PPQ);
       const measure = Math.floor(totalBeats / 4);
       const rootNote = progression[measure % 4]!;
       const vel = 0.8 + rng() * 0.2;
-
-      console.log(`DEBUG: Time: ${time}, Measure: ${measure}, Root: ${rootNote}`);
-
-      // Bass plays on every beat
       newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time, vel);
-      
-      // Guitar plays on the first beat of the measure only
       if (totalBeats % 4 === 0) {
         samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, vel);
       }
-      
     }, "4n").start(0);
     
-    console.log("DEBUG: All sequences and loops created.");
     scheduledEvents.push(kickSeq, snareSeq, mainLoop);
     return true; 
+};
+
+// --- New "Keyboard Test" Genre ---
+const createKeyboardTest = (rng: () => number): boolean => {
+    if (!Tone || !newSynthPianoSampler) {
+        console.error("DEBUG: Synth Piano not ready!");
+        return false;
+    }
+    scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
+    console.log("DEBUG: Starting Keyboard Test...");
+
+    Tone.Transport.bpm.value = 120;
+    
+    const arpeggio = new Tone.Sequence((time, note) => {
+        console.log(`DEBUG: Playing note: ${note} at time: ${time}`);
+        newSynthPianoSampler?.sampler.triggerAttackRelease(note, '8n', time);
+    }, ['C4', 'E4', 'G4', 'B4'], '8n').start(0);
+    
+    scheduledEvents.push(arpeggio);
+    return true;
 };
 </script>
 
@@ -758,7 +759,7 @@ const createRockSound = (rng: () => number): boolean => {
               <span class="menu-description">夜の静寂に寄り添う、マスターこだわりの一杯。</span>
             </div>
             <div v-if="selectedMenu === 'ジャズ・スペシャル' && isPlaying" class="active-indicator">
-              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
+              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
           <button class="menu-button" @click="playMusic('Lo-Fi・ビター')" :class="{ 'is-active': selectedMenu === 'Lo-Fi・ビター' }">
@@ -777,6 +778,15 @@ const createRockSound = (rng: () => number): boolean => {
             </div>
             <div v-if="selectedMenu === 'ロック・ビート' && isPlaying" class="active-indicator">
               <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            </div>
+          </button>
+           <button class="menu-button" @click="playMusic('キーボード・テスト')" :class="{ 'is-active': selectedMenu === 'キーボード・テスト' }">
+            <div class="menu-content">
+              <span class="menu-title">キーボード・テスト</span>
+              <span class="menu-description">シンセピアノ単体の再生テスト用。</span>
+            </div>
+            <div v-if="selectedMenu === 'キーボード・テスト' && isPlaying" class="active-indicator">
+               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
             </div>
           </button>
         </div>
