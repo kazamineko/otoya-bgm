@@ -34,6 +34,9 @@ let guitarDistortion: ToneType.Distortion | null = null;
 let guitarCabinet: ToneType.Convolver | null = null;
 let bassEQNode: ToneType.EQ3 | null = null;
 
+// --- DIAGNOSTIC NODES ---
+let guitarTestSampler: ToneType.Sampler | null = null;
+
 
 let rawSamplePlayers: ToneType.Players | null = null;
 let targetGuitarPlayer: ToneType.Player | null = null;
@@ -194,6 +197,7 @@ const initializeAudio = async () => {
     console.log('[GEMINI_DEBUG_LOG] Tone.jsのインポートと開始...');
     Tone = await import('tone');
     await Tone.start();
+    if (!Tone) { throw new Error('Tone.js failed to load'); }
     console.log('[GEMINI_DEBUG_LOG] Tone.jsの準備完了');
     loadingMessage.value = '店内の響きを調整しています...';
     
@@ -241,16 +245,22 @@ const initializeAudio = async () => {
     targetGuitarPlayer = new Tone.Player('/C5_s6_01.wav').toDestination();
     targetBassPlayer = new Tone.Player('/ebass-e1.wav').toDestination();
 
-    console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み開始 (Players, Cabinet IR)...');
-    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, guitarCabinet.load]);
-    console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み完了');
-    loadingMessage.value = '楽器を最終調整しています...';
-
     const multiSampleUrls = {
       'E2': 'E2_s1_02.wav', 'F2': 'F2_s1_03.wav', 'A2': 'A2_s2_02.wav', 'D3': 'D3_s3_02.wav',
       'G3': 'G3_s4_02.wav', 'B3': 'B3_s5_02.wav', 'E4': 'E4_s6_02.wav', 'G4': 'G4_s6_02.wav',
       'B4': 'B4_s6_02.wav', 'C5': 'C5_s6_01.wav', 'F5': 'F5_s6_02.wav', 'G#5': 'Gs5_s6_02.wav',
     };
+
+    console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み開始 (Players, Cabinet IR, Test Sampler)...');
+    
+    const testSamplerPromise = new Promise<void>(resolve => {
+        guitarTestSampler = new Tone!.Sampler({ urls: multiSampleUrls, baseUrl: "/", onload: () => resolve() });
+    });
+
+    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, guitarCabinet.load, testSamplerPromise]);
+    console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み完了');
+    loadingMessage.value = '楽器を最終調整しています...';
+    
     const multiSampleParams = tuningParams.value['target_eguitar'];
     const loadedMultiSampler = new Tone.Sampler({
       urls: multiSampleUrls, baseUrl: "/",
@@ -337,7 +347,6 @@ const initializeAudio = async () => {
         guitarVibrato.connect(guitarDistortion);
         guitarDistortion.connect(guitarEQ);
         guitarEQ.connect(guitarCabinet);
-        
         guitarCabinet.connect(masterComp);
         guitarCabinet.connect(reverb);
         console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (手動配線)');
@@ -467,6 +476,36 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
       else if (type === 'target' && instrumentName === 'eguitar' && targetGuitarPlayer) { targetGuitarPlayer.start(); }
       else if (type === 'target' && instrumentName === 'ebass' && targetBassPlayer) { targetBassPlayer.start(); }
   }
+};
+
+const handlePlaySoundChainTest = (stage: 'sampler' | 'distortion' | 'eq' | 'cabinet' | 'final') => {
+    if (!guitarTestSampler || !limiter || !guitarDistortion || !guitarEQ || !guitarCabinet) {
+        console.error('[DIAGNOSTIC] Test nodes not ready.');
+        return;
+    }
+    console.log(`[DIAGNOSTIC] Testing stage: ${stage}`);
+    guitarTestSampler.disconnect();
+    
+    switch (stage) {
+        case 'sampler':
+            guitarTestSampler.connect(limiter);
+            break;
+        case 'distortion':
+            guitarTestSampler.chain(guitarDistortion, limiter);
+            break;
+        case 'eq':
+            guitarTestSampler.chain(guitarDistortion, guitarEQ, limiter);
+            break;
+        case 'cabinet':
+            guitarTestSampler.chain(guitarDistortion, guitarEQ, guitarCabinet, limiter);
+            break;
+        case 'final':
+             if(targetSamplerMulti) {
+                targetSamplerMulti.sampler.triggerAttackRelease("E4", "4n");
+             }
+            return;
+    }
+    guitarTestSampler.triggerAttackRelease("E4", "4n");
 };
 
 const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => {
@@ -847,6 +886,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       :tuningParams="tuningParams"
       @close="closeSoundCheckModal"
       @playSound="handlePlaySound"
+      @playSoundChainTest="handlePlaySoundChainTest"
       @update-param="handleUpdateParam"
       @save-params="handleSaveParams"
       @export-params="handleExportParams"

@@ -76,6 +76,14 @@
                     <button @click.prevent="setExtremeEq('cut')">EQカット (-12dB)</button>
                     <button @click.prevent="setExtremeEq('boost')">EQブースト (+12dB)</button>
                   </div>
+                   <div class="sub-header">シグナルチェーン診断</div>
+                   <div class="diagnostic-chain-buttons">
+                    <button @click.prevent="playSoundChainTest('sampler')">1. Sampler (Raw)</button>
+                    <button @click.prevent="playSoundChainTest('distortion')">2. -> Distortion</button>
+                    <button @click.prevent="playSoundChainTest('eq')">3. -> EQ</button>
+                    <button @click.prevent="playSoundChainTest('cabinet')">4. -> Cabinet</button>
+                    <button @click.prevent="playSoundChainTest('final')">5. -> Final Chain</button>
+                  </div>
                 </template>
                 <template v-if="instrument === 'ebass'">
                   <div class="slider-container">
@@ -138,7 +146,7 @@ defineProps<{
   tuningParams: Record<string, any>;
 }>();
 
-const emit = defineEmits(['close', 'playSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq']);
+const emit = defineEmits(['close', 'playSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq', 'playSoundChainTest']);
 
 const close = () => emit('close');
 const playSound = (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => emit('playSound', instrumentName, type);
@@ -146,6 +154,8 @@ const saveParams = () => emit('saveParams');
 const exportParams = () => emit('exportParams');
 const resetParams = () => emit('resetParams');
 const setExtremeEq = (type: 'cut' | 'boost') => emit('setExtremeEq', type);
+const playSoundChainTest = (stage: 'sampler' | 'distortion' | 'eq' | 'cabinet' | 'final') => emit('playSoundChainTest', stage);
+
 
 const updateParam = (instrument: string, param: string, event: Event) => {
   const value = parseFloat((event.target as HTMLInputElement).value);
@@ -241,6 +251,29 @@ const updateParam = (instrument: string, param: string, event: Event) => {
 }
 .diagnostic-buttons button:hover {
   background-color: #b33e3e;
+}
+.diagnostic-chain-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 15px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+.diagnostic-chain-buttons button {
+  background-color: #3066be;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-size: 11px;
+}
+.diagnostic-chain-buttons button:hover {
+  background-color: #2a5a9a;
 }
 .no-sounds-message { text-align: center; color: #7a7a7a; padding: 20px; }
 .sub-header {
