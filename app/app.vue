@@ -331,16 +331,16 @@ const initializeAudio = async () => {
       }
 
       if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion && guitarCabinet) {
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始...');
-        targetSamplerMulti.sampler.chain(
-            guitarPitchShift,
-            guitarVibrato,
-            guitarDistortion,
-            guitarEQ,
-            guitarCabinet
-        );
-        guitarCabinet.fan(masterComp, reverb);
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了');
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (手動配線)...');
+        targetSamplerMulti.sampler.connect(guitarPitchShift);
+        guitarPitchShift.connect(guitarVibrato);
+        guitarVibrato.connect(guitarDistortion);
+        guitarDistortion.connect(guitarEQ);
+        guitarEQ.connect(guitarCabinet);
+        
+        guitarCabinet.connect(masterComp);
+        guitarCabinet.connect(reverb);
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (手動配線)');
       } else {
          console.error('[GEMINI_DEBUG_LOG] ギターチェイン接続エラー: 必須ノードがnullです。');
       }
