@@ -399,6 +399,14 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
       }
 
       if (instrumentName === 'target_eguitar' && samplers['eguitar'] && Tone) {
+        
+        // ★★★ GEMINI LOG: Instance comparison ★★★
+        console.log(`[GEMINI_LOG] --- Soundcheck Instance Verification ---`);
+        console.log(`[GEMINI_LOG] Is samplers['eguitar'] the same as targetSamplerMulti?`, samplers['eguitar'] === targetSamplerMulti);
+        console.log(`[GEMINI_LOG] samplers['eguitar'] object:`, samplers['eguitar']);
+        console.log(`[GEMINI_LOG] targetSamplerMulti object:`, targetSamplerMulti);
+        console.log(`--- End Verification ---`);
+
         const sampler = samplers['eguitar'].sampler;
         const now = Tone.now();
         
@@ -499,7 +507,6 @@ const createJazzSound = (rng: () => number): boolean => {
 };
 
 const createRockSound = (rng: () => number): boolean => {
-    // ★★★ FINAL FIX: Add '!guitarEQ' to the guard clause ★★★
     if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler || !guitarEQ) {
         return false;
     }
