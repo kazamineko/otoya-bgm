@@ -17,15 +17,9 @@ const seedInput = ref<string>('');
 const isLoading = ref<boolean>(false);
 const loadingMessage = ref<string>('');
 
-const soundSourceSelection = ref<Record<'eguitar' | 'ebass', 'sampler' | 'di'>>({
-  eguitar: 'sampler',
-  ebass: 'sampler'
-});
-
 // --- 音声関連 ---
 let Tone: typeof ToneType | null = null;
 let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
-let diSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let targetSamplerMulti: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newRockBassSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
@@ -51,48 +45,12 @@ let limiter: ToneType.Limiter | null = null;
 let drumBusComp: ToneType.Compressor | null = null;
 let drumBusVolume: ToneType.Volume | null = null;
 
-// --- Virtual Amp Rig ---
-let guitarInputGain: ToneType.Volume | null = null; 
-let guitarPreDistComp: ToneType.Compressor | null = null;
-let guitarPreEQ: ToneType.Filter | null = null; 
-let guitarDistortion: ToneType.Distortion | null = null;
-let guitarPostEQ: ToneType.EQ3 | null = null;
-let guitarChorus: ToneType.Chorus | null = null;
-let guitarCab: ToneType.Convolver | null = null;
-let guitarMakeUpGain: ToneType.Volume | null = null;
-
-// --- Bass Parallel Processing Rig ---
-let bassInputGain: ToneType.Volume | null = null;
-let bassPreDistComp: ToneType.Compressor | null = null;
-let bassDistortion: ToneType.Distortion | null = null;
-let bassCab: ToneType.Convolver | null = null;
-let bassMakeUpGain: ToneType.Volume | null = null;
-let bassPostComp: ToneType.Compressor | null = null;
-let bassSubFilter: ToneType.Filter | null = null;
-let bassSubGain: ToneType.Volume | null = null;
-
 let rideFilter: ToneType.Filter | null = null;
 
 const scheduledEvents: (ToneType.Loop | ToneType.Part | ToneType.Sequence)[] = [];
 let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
-let targetSoundDuration = 0;
-
-type AmpParams = {
-  inputGain: number;
-  preCompThreshold: number; preCompRatio: number; preCompAttack: number; preCompRelease: number;
-  preEqFreq: number; preEqGain: number;
-  distortion: number;
-  postEqLow: number; postEqMid: number; postEqHigh: number;
-  chorusDepth: number; chorusRate: number;
-};
-type BassAmpParams = {
-  inputGain: number;
-  preCompThreshold: number; preCompRatio: number; preCompAttack: number; preCompRelease: number;
-  subBlend: number; drive: number;
-  eqLow: number; eqMid: number; eqHigh: number;
-};
 type TuningParams = Record<string, any>;
 
 const tuningParams = ref<TuningParams>({});
@@ -100,8 +58,6 @@ const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
 // FINALIZED: All parameters returned to a stable, balanced state.
 const masterTunedParams: TuningParams = {
-  "eguitar": { "inputGain": 12, "preCompThreshold": -24, "preCompRatio": 4, "preCompAttack": 0.01, "preCompRelease": 0.1, "preEqFreq": 700, "preEqGain": 6, "distortion": 0.8, "postEqLow": 2, "postEqMid": -2, "postEqHigh": -3, "chorusDepth": 0.1, "chorusRate": 1.5 },
-  "ebass": { "inputGain": 10, "preCompThreshold": -20, "preCompRatio": 4, "preCompAttack": 0.02, "preCompRelease": 0.2, "subBlend": 0.5, "drive": 0.3, "eqLow": 4, "eqMid": -2, "eqHigh": 2 },
   "piano": { "volume": 0, "attack": 0.01, "release": 1.0 }, "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
   "ride": { "volume": -12, "attack": 0.01, "release": 0.5 }, "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
   "epiano": { "volume": -3, "attack": 0.01, "release": 1 }, "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
@@ -139,43 +95,10 @@ watch(tuningParams, (newParams) => {
       if(eorganParams.release !== undefined) newElecOrganSampler.sampler.release = eorganParams.release;
   }
 
-  const eguitarParams = newParams.eguitar as AmpParams;
-  if (eguitarParams && guitarInputGain && guitarPreDistComp && guitarPreEQ && guitarDistortion && guitarPostEQ && guitarChorus) {
-    guitarInputGain.volume.value = eguitarParams.inputGain;
-    guitarPreDistComp.threshold.value = eguitarParams.preCompThreshold;
-    guitarPreDistComp.ratio.value = eguitarParams.preCompRatio;
-    guitarPreDistComp.attack.value = eguitarParams.preCompAttack;
-    guitarPreDistComp.release.value = eguitarParams.preCompRelease;
-    guitarPreEQ.frequency.value = eguitarParams.preEqFreq;
-    guitarPreEQ.gain.value = eguitarParams.preEqGain;
-    guitarDistortion.distortion = eguitarParams.distortion;
-    guitarPostEQ.low.value = eguitarParams.postEqLow;
-    guitarPostEQ.mid.value = eguitarParams.postEqMid;
-    guitarPostEQ.high.value = eguitarParams.postEqHigh;
-    guitarChorus.depth = eguitarParams.chorusDepth;
-    guitarChorus.frequency.value = eguitarParams.chorusRate;
-  }
-
-  const ebassParams = newParams.ebass as BassAmpParams;
-  if (ebassParams && bassInputGain && bassPreDistComp && bassSubGain && bassDistortion && bassEQNode && bassMakeUpGain) {
-      bassInputGain.volume.value = ebassParams.inputGain;
-      bassPreDistComp.threshold.value = ebassParams.preCompThreshold;
-      bassPreDistComp.ratio.value = ebassParams.preCompRatio;
-      bassPreDistComp.attack.value = ebassParams.preCompAttack;
-      bassPreDistComp.release.value = ebassParams.preCompRelease;
-      const diGain = 1.0 - ebassParams.subBlend;
-      bassMakeUpGain.volume.value = Tone.gainToDb(diGain * 16) + 8;
-      bassSubGain.volume.value = Tone.gainToDb(ebassParams.subBlend * 2);
-      bassDistortion.distortion = ebassParams.drive;
-      bassEQNode.low.value = ebassParams.eqLow;
-      bassEQNode.mid.value = ebassParams.eqMid;
-      bassEQNode.high.value = ebassParams.eqHigh;
-  }
-  
   for (const instrumentName in newParams) {
     if (instrumentName === 'target_ebass' || instrumentName === 'spiano' || instrumentName === 'eorgan') continue;
 
-    const activeSampler = samplers[instrumentName] || targetSamplers[instrumentName] || diSamplers[instrumentName];
+    const activeSampler = samplers[instrumentName] || targetSamplers[instrumentName];
     if (activeSampler) {
       const sampler = activeSampler.sampler;
       const params = newParams[instrumentName]!;
@@ -194,7 +117,6 @@ const initializeAudio = async () => {
     piano: 'piano-c4.wav', bass: 'bass-c1.wav', ride: 'drum-ride.wav', brush: 'drum-brush.wav',
     epiano: 'epiano-c4.wav', kick: 'drum-kick.wav', snare: 'drum-snare.wav', pad: 'pad-cmaj7.wav',
     sax: 'sax-c4.wav', trombone: 'trombone-c3.wav',
-    eguitar: 'eguitar-clean-c3.wav', ebass: 'ebass-di-e1.wav',
     rockKick: 'rock-kick.wav', rockSnare: 'rock-snare.wav', crash: 'drum-crash.wav',
     tomHigh: 'tom-high.wav', tomMid: 'tom-mid.wav', tomFloor: 'tom-floor.wav',
     target_ebass: 'ebass-e1.wav',
@@ -207,6 +129,13 @@ const initializeAudio = async () => {
   }
   if (!instrumentList.value.includes('eorgan')) {
     instrumentList.value.push('eorgan');
+  }
+  // Add 'eguitar' and 'ebass' to the list for the modal, even though their DI params are gone
+  if (!instrumentList.value.includes('eguitar')) {
+    instrumentList.value.push('eguitar');
+  }
+  if (!instrumentList.value.includes('ebass')) {
+    instrumentList.value.push('ebass');
   }
 
 
@@ -246,39 +175,15 @@ const initializeAudio = async () => {
     guitarEQ = new Tone.EQ3({ low: -6, mid: 0, high: 3 });
     bassEQNode = new Tone.EQ3({ low: 0, mid: 4, high: 0}); // Bass EQ
     
-    loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
-    const eguitarP = tuningParams.value.eguitar;
-    guitarInputGain = new Tone.Volume(eguitarP.inputGain);
-    guitarPreDistComp = new Tone.Compressor({ threshold: eguitarP.preCompThreshold, ratio: eguitarP.preCompRatio, attack: eguitarP.preCompAttack, release: eguitarP.preCompRelease });
-    guitarPreEQ = new Tone.Filter({ type: 'peaking', frequency: eguitarP.preEqFreq, gain: eguitarP.preEqGain });
-    guitarDistortion = new Tone.Distortion({ distortion: eguitarP.distortion, oversample: '4x' });
-    guitarPostEQ = new Tone.EQ3({ low: eguitarP.postEqLow, mid: eguitarP.postEqMid, high: eguitarP.postEqHigh });
-    guitarChorus = new Tone.Chorus(eguitarP.chorusRate, 0.3, eguitarP.chorusDepth).start();
-    guitarCab = new Tone.Convolver('/ir-guitar-cab.wav');
-    guitarMakeUpGain = new Tone.Volume(12);
-
-    const ebassP = tuningParams.value.ebass;
-    bassInputGain = new Tone.Volume(ebassP.inputGain);
-    bassPreDistComp = new Tone.Compressor({ threshold: ebassP.preCompThreshold, ratio: ebassP.preCompRatio, attack: ebassP.preCompAttack, release: ebassP.preCompRelease });
-    bassDistortion = new Tone.Distortion(ebassP.drive); 
-    bassCab = new Tone.Convolver('/ir-bass-cab.wav');
-    bassMakeUpGain = new Tone.Volume(8);
-    bassPostComp = new Tone.Compressor({threshold: -24, ratio: 6, attack: 0.02, release: 0.2});
-    bassSubFilter = new Tone.Filter(120, 'lowpass');
-    bassSubGain = new Tone.Volume(0);
+    loadingMessage.value = 'AI奏者を準備しています...';
     
     rideFilter = new Tone.Filter(10000, 'lowpass');
     
     targetGuitarPlayer = new Tone.Player('/C5_s6_01.wav').toDestination();
     targetBassPlayer = new Tone.Player('/ebass-e1.wav').toDestination();
 
-    await Promise.all([guitarCab.load, bassCab.load, targetGuitarPlayer.load, targetBassPlayer.load]);
+    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load]);
     loadingMessage.value = '楽器を最終調整しています...';
-
-    if (targetGuitarPlayer.loaded) {
-      targetSoundDuration = targetGuitarPlayer.buffer.duration;
-      console.log(`LOG: Target sound duration loaded: ${targetSoundDuration} seconds`);
-    }
 
     const multiSampleUrls = {
       'E2': 'E2_s1_02.wav', 'F2': 'F2_s1_03.wav', 'A2': 'A2_s2_02.wav', 'D3': 'D3_s3_02.wav',
@@ -346,7 +251,6 @@ const initializeAudio = async () => {
       const params = tuningParams.value[name];
       if (!params) continue;
 
-      const isDi = name === 'eguitar' || name === 'ebass';
       const isTarget = name.startsWith('target_');
       
       const urls: Record<string, string> = {};
@@ -366,34 +270,16 @@ const initializeAudio = async () => {
 
       const samplerData = { sampler, baseNote };
       
-      if (isDi) { diSamplers[name] = samplerData; } 
-      else if (isTarget) { targetSamplers[name] = samplerData; }
+      if (isTarget) { targetSamplers[name] = samplerData; }
       else { samplers[name] = samplerData; }
     }
     
-    if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && bassPostComp && newRockBassSampler) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler) {
       console.log("LOG: All core audio nodes initialized successfully.");
       
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
-
-
-      const eguitarDI = diSamplers['eguitar'];
-      if (eguitarDI) {
-        eguitarDI.sampler.connect(guitarInputGain);
-        guitarInputGain.chain(guitarPreDistComp, guitarPreEQ, guitarDistortion, guitarPostEQ, guitarChorus, guitarCab, guitarMakeUpGain);
-        guitarMakeUpGain.fan(masterComp, reverb);
-      }
-      
-      const ebassDI = diSamplers['ebass'];
-      if (ebassDI) {
-        ebassDI.sampler.connect(bassInputGain);
-        ebassDI.sampler.connect(bassSubFilter);
-        bassInputGain.chain(bassPreDistComp, bassEQNode, bassDistortion, bassCab, bassMakeUpGain, bassPostComp);
-        bassPostComp.fan(masterComp, reverb);
-        bassSubFilter.chain(bassSubGain, masterComp);
-      }
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
@@ -421,10 +307,9 @@ const initializeAudio = async () => {
         }
       }
 
-      if(targetSamplerMulti && guitarInputGain) {
-        targetSamplerMulti.sampler.chain(guitarPitchShift, guitarVibrato, guitarEQ);
-        guitarEQ.connect(guitarInputGain); 
-        console.log("LOG: Routing multi-sampled guitar through Nuance Engine AND Virtual Amp Rig.");
+      if(targetSamplerMulti) {
+        targetSamplerMulti.sampler.chain(guitarPitchShift, guitarVibrato, guitarEQ).fan(masterComp, reverb); 
+        console.log("LOG: Routing multi-sampled guitar through Nuance Engine to Master Bus.");
       }
 
       if (targetSamplerMulti) {
@@ -483,7 +368,6 @@ const stopMusic = () => {
   scheduledEvents.length = 0;
   if (noise) { noise.stop(0); noise.dispose(); noise = null; }
   Object.values(samplers).forEach(s => s.sampler.releaseAll());
-  Object.values(diSamplers).forEach(s => s.sampler.releaseAll());
   Object.values(targetSamplers).forEach(s => s.sampler.releaseAll());
   if(targetSamplerMulti) targetSamplerMulti.sampler.releaseAll();
   isPlaying.value = false;
@@ -524,7 +408,7 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
         if (targetSampler) targetSampler.sampler.triggerAttackRelease(targetSampler.baseNote, duration);
       }
   } else {
-      const samplerData = (instrumentName === 'eguitar' || instrumentName === 'ebass') ? diSamplers[instrumentName] : samplers[instrumentName];
+      const samplerData = samplers[instrumentName];
       if (type === 'sampler' && samplerData) { samplerData.sampler.triggerAttackRelease(samplerData.baseNote, duration); }
       else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) { rawSamplePlayers.player(instrumentName).start(); }
       else if (type === 'target' && instrumentName === 'eguitar' && targetGuitarPlayer) { targetGuitarPlayer.start(); }
@@ -585,55 +469,6 @@ const handleResetParams = () => {
         newElecOrganSampler.sampler.release = defaults.release;
     }
     alert('設定を初期化しました。');
-  }
-};
-const handleSoundSourceChange = (payload: { instrument: 'eguitar' | 'ebass', source: 'sampler' | 'di' }) => {
-  soundSourceSelection.value[payload.instrument] = payload.source;
-  const targetSampler = payload.instrument === 'eguitar' ? targetSamplerMulti : targetSamplers[`target_${payload.instrument}`];
-  const diSampler = diSamplers[payload.instrument];
-
-  if (payload.source === 'sampler' && targetSampler) {
-    samplers[payload.instrument] = targetSampler;
-  } else if (payload.source === 'di' && diSampler) {
-    samplers[payload.instrument] = diSampler;
-  }
-};
-
-const handleDownloadSampler = async () => {
-  if (!Tone || !targetSamplerMulti) {
-    alert('音源が初期化されていないため、録音を開始できません。');
-    return;
-  }
-  if (targetSoundDuration === 0) {
-    alert('目標音源の長さが取得できていません。');
-    return;
-  }
-
-  try {
-    const recorder = new Tone.Recorder();
-    targetSamplerMulti.sampler.connect(recorder);
-
-    await recorder.start();
-
-    targetSamplerMulti.sampler.triggerAttackRelease('C5', targetSoundDuration, Tone.now());
-
-    await new Promise(resolve => setTimeout(resolve, (targetSoundDuration * 1000) + 100));
-
-    const blob = await recorder.stop();
-    
-    targetSamplerMulti.sampler.disconnect(recorder);
-    recorder.dispose();
-
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.download = "shin-sampler-output-C5.wav";
-    anchor.href = url;
-    anchor.click();
-    URL.revokeObjectURL(url);
-
-  } catch (error) {
-    console.error("Failed to record sampler sound:", error);
-    alert("録音に失敗しました。詳細はコンソールを確認してください。");
   }
 };
 
@@ -862,15 +697,12 @@ const createRockSound = (rng: () => number): boolean => {
       :isVisible="isSoundCheckModalVisible" 
       :instruments="instrumentList"
       :tuningParams="tuningParams"
-      :soundSourceSelection="soundSourceSelection"
       @close="closeSoundCheckModal"
       @playSound="handlePlaySound"
       @update-param="handleUpdateParam"
       @save-params="handleSaveParams"
       @export-params="handleExportParams"
       @reset-params="handleResetParams"
-      @update-sound-source="handleSoundSourceChange"
-      @downloadSampler="handleDownloadSampler"
     />
   </div>
 </template>

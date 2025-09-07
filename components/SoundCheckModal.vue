@@ -19,16 +19,11 @@
               <div class="play-buttons">
                 <template v-if="instrument === 'eguitar'">
                   <button @click.prevent="playSound('target_eguitar', 'target_sampler')" title="新しいマルチサンプル音源">新Sampler</button>
-                  <button @click.prevent="downloadSampler" class="download-button">DL</button>
                   <button @click.prevent="playSound('eguitar', 'target')" title="最終的に目指すべき理想の音(WAV再生)">目標サウンド</button>
                   <a href="/C5_s6_01.wav" download="target-sound-C5.wav" class="download-button" title="目標サウンドをダウンロード">DL</a>
-                  <button @click.prevent="playSound('eguitar', 'sampler')" title="DI音源を仮想アンプで加工した音">加工後DI</button>
-                  <button @click.prevent="playSound('eguitar', 'raw')" title="エフェクトを何も通していない、録音したままの音">原音DI</button>
                 </template>
                 <template v-else-if="instrument === 'ebass'">
                   <button @click.prevent="playSound('target_ebass', 'target_sampler')" title="マスターが作成した新しいマルチサンプルベース音源">新Rock Bass</button>
-                  <button @click.prevent="playSound('ebass', 'sampler')" title="DI音源を仮想アンプで加工した音">加工後DI</button>
-                  <button @click.prevent="playSound('ebass', 'raw')" title="エフェクトを何も通していない、録音したままの音">原音DI</button>
                 </template>
                 <template v-else>
                   <button @click.prevent="playSound(instrument, 'sampler')">Sampler</button>
@@ -38,98 +33,24 @@
             </summary>
             
             <div class="sliders" v-if="tuningParams[instrument] || tuningParams['target_' + instrument]">
-              <!-- eGuitar & eBass Combined Logic -->
+              <!-- eGuitar & eBass Sampler Logic -->
               <template v-if="instrument === 'eguitar' || instrument === 'ebass'">
-                <div v-if="instrument === 'ebass'" class="source-selector">
-                  <div class="sub-header">音源ソース</div>
-                  <div class="radio-group">
-                    <label>
-                      <input type="radio" :value="'sampler'" :checked="soundSourceSelection[instrument] === 'sampler'" @change="updateSoundSource(instrument, 'sampler')">
-                      目標サウンド (Sampler)
-                    </label>
-                    <label>
-                      <input type="radio" :value="'di'" :checked="soundSourceSelection[instrument] === 'di'" @change="updateSoundSource(instrument, 'di')">
-                      加工後DI (凍結中)
-                    </label>
-                  </div>
+                <div class="sub-header">{{ instrument === 'eguitar' ? 'マルチサンプル設定' : 'Sampler 設定' }}</div>
+                <div class="slider-container">
+                  <label>Volume</label>
+                  <input type="range" min="-40" max="6" step="0.1" :value="tuningParams['target_' + instrument].volume" @input="updateParam('target_' + instrument, 'volume', $event)">
+                  <span>{{ tuningParams['target_' + instrument].volume.toFixed(1) }} dB</span>
                 </div>
-
-                <template v-if="soundSourceSelection[instrument] === 'di'">
-                  <template v-if="instrument === 'ebass'">
-                    <div class="sub-header">Input Gain (入力音量)</div>
-                    <div class="slider-container">
-                      <label>Gain</label>
-                      <input type="range" min="0" max="24" step="0.5" :value="tuningParams.ebass.inputGain" @input="updateParam('ebass', 'inputGain', $event)">
-                      <span>{{ tuningParams.ebass.inputGain.toFixed(1) }} dB</span>
-                    </div>
-                    <div class="sub-header">Pre-Dist Compressor</div>
-                    <div class="slider-container">
-                      <label>Threshold</label>
-                      <input type="range" min="-48" max="0" step="1" :value="tuningParams.ebass.preCompThreshold" @input="updateParam('ebass', 'preCompThreshold', $event)">
-                      <span>{{ tuningParams.ebass.preCompThreshold }} dB</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>Ratio</label>
-                      <input type="range" min="1" max="20" step="1" :value="tuningParams.ebass.preCompRatio" @input="updateParam('ebass', 'preCompRatio', $event)">
-                      <span>{{ tuningParams.ebass.preCompRatio }}:1</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>Attack</label>
-                      <input type="range" min="0.001" max="0.2" step="0.001" :value="tuningParams.ebass.preCompAttack" @input="updateParam('ebass', 'preCompAttack', $event)">
-                      <span>{{ tuningParams.ebass.preCompAttack.toFixed(3) }} s</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>Release</label>
-                      <input type="range" min="0.01" max="0.5" step="0.01" :value="tuningParams.ebass.preCompRelease" @input="updateParam('ebass', 'preCompRelease', $event)">
-                      <span>{{ tuningParams.ebass.preCompRelease.toFixed(2) }} s</span>
-                    </div>
-                    <div class="sub-header">Parallel Blend (サウンドの核)</div>
-                    <div class="slider-container">
-                      <label>Sub Blend</label>
-                      <input type="range" min="0" max="1" step="0.01" :value="tuningParams.ebass.subBlend" @input="updateParam('ebass', 'subBlend', $event)">
-                      <span>{{ (tuningParams.ebass.subBlend * 100).toFixed(0) }}%</span>
-                    </div>
-                    <div class="sub-header">DI Path (歪みのキャラクター)</div>
-                    <div class="slider-container">
-                      <label>Drive</label>
-                      <input type="range" min="0" max="1" step="0.01" :value="tuningParams.ebass.drive" @input="updateParam('ebass', 'drive', $event)">
-                      <span>{{ tuningParams.ebass.drive.toFixed(2) }}</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>EQ Low</label>
-                      <input type="range" min="-12" max="12" step="0.5" :value="tuningParams.ebass.eqLow" @input="updateParam('ebass', 'eqLow', $event)">
-                      <span>{{ tuningParams.ebass.eqLow.toFixed(1) }} dB</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>EQ Mid</label>
-                      <input type="range" min="-12" max="12" step="0.5" :value="tuningParams.ebass.eqMid" @input="updateParam('ebass', 'eqMid', $event)">
-                      <span>{{ tuningParams.ebass.eqMid.toFixed(1) }} dB</span>
-                    </div>
-                    <div class="slider-container">
-                      <label>EQ High</label>
-                      <input type="range" min="-12" max="12" step="0.5" :value="tuningParams.ebass.eqHigh" @input="updateParam('ebass', 'eqHigh', $event)">
-                      <span>{{ tuningParams.ebass.eqHigh.toFixed(1) }} dB</span>
-                    </div>
-                  </template>
-                </template>
-                <template v-else>
-                  <div class="sub-header">{{ instrument === 'eguitar' ? 'マルチサンプル設定' : 'Sampler 設定' }}</div>
-                  <div class="slider-container">
-                    <label>Volume</label>
-                    <input type="range" min="-40" max="6" step="0.1" :value="tuningParams['target_' + instrument].volume" @input="updateParam('target_' + instrument, 'volume', $event)">
-                    <span>{{ tuningParams['target_' + instrument].volume.toFixed(1) }} dB</span>
-                  </div>
-                  <div class="slider-container">
-                    <label>Attack</label>
-                    <input type="range" min="0" max="2" step="0.001" :value="tuningParams['target_' + instrument].attack" @input="updateParam('target_' + instrument, 'attack', $event)">
-                    <span>{{ tuningParams['target_' + instrument].attack.toFixed(3) }} s</span>
-                  </div>
-                  <div class="slider-container">
-                    <label>Release</label>
-                    <input type="range" min="0" max="30" step="0.1" :value="tuningParams['target_' + instrument].release" @input="updateParam('target_' + instrument, 'release', $event)">
-                    <span>{{ tuningParams['target_' + instrument].release.toFixed(2) }} s</span>
-                  </div>
-                </template>
+                <div class="slider-container">
+                  <label>Attack</label>
+                  <input type="range" min="0" max="2" step="0.001" :value="tuningParams['target_' + instrument].attack" @input="updateParam('target_' + instrument, 'attack', $event)">
+                  <span>{{ tuningParams['target_' + instrument].attack.toFixed(3) }} s</span>
+                </div>
+                <div class="slider-container">
+                  <label>Release</label>
+                  <input type="range" min="0" max="30" step="0.1" :value="tuningParams['target_' + instrument].release" @input="updateParam('target_' + instrument, 'release', $event)">
+                  <span>{{ tuningParams['target_' + instrument].release.toFixed(2) }} s</span>
+                </div>
               </template>
               <!-- Other Instruments -->
               <template v-else>
@@ -166,26 +87,21 @@ defineProps<{
   isVisible: boolean;
   instruments: string[];
   tuningParams: Record<string, any>;
-  soundSourceSelection: Record<string, 'sampler' | 'di'>;
 }>();
 
-const emit = defineEmits(['close', 'playSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'updateSoundSource', 'downloadSampler']);
+const emit = defineEmits(['close', 'playSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams']);
 
 const close = () => emit('close');
 const playSound = (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => emit('playSound', instrumentName, type);
 const saveParams = () => emit('saveParams');
 const exportParams = () => emit('exportParams');
 const resetParams = () => emit('resetParams');
-const downloadSampler = () => emit('downloadSampler');
 
 const updateParam = (instrument: string, param: string, event: Event) => {
   const value = parseFloat((event.target as HTMLInputElement).value);
   emit('updateParam', { instrument, param, value });
 };
 
-const updateSoundSource = (instrument: string, source: 'sampler' | 'di') => {
-  emit('updateSoundSource', { instrument, source });
-};
 </script>
 
 <style scoped>
