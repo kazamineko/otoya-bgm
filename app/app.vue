@@ -323,7 +323,7 @@ const initializeAudio = async () => {
     });
     newSynthPianoSampler = { sampler: loadedNewSynthPianoSampler, baseNote: 'C4' };
     samplers['spiano'] = newSynthPianoSampler;
-
+    
     const newElecOrganUrls = {
         'C2': 'eorgan-C2.wav', 'E2': 'eorgan-E2.wav', 'G#2': 'eorgan-Gs2.wav',
         'C3': 'eorgan-C3.wav', 'E3': 'eorgan-E3.wav', 'G#3': 'eorgan-Gs3.wav',
@@ -699,7 +699,7 @@ const createJazzSound = (rng: () => number): boolean => {
     return true; 
 };
 
-// --- THE FINAL VERSION OF "ROCK BEAT" ---
+// --- The Stable "Rock Beat" (with Synth Piano) ---
 const createRockSound = (rng: () => number): boolean => {
     if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler) {
         return false;
@@ -708,7 +708,7 @@ const createRockSound = (rng: () => number): boolean => {
 
     const bpm = 130 + rng() * 20;
     Tone.Transport.bpm.value = bpm;
-    Tone.Transport.swing = 0;
+    Tone.Transport.swing = 0.05; // Add a slight swing for groove
     const progression = ['E', 'G', 'A', 'A'];
     let leadInstrument: 'guitar' | 'synth' | 'organ' = 'guitar';
 
@@ -724,11 +724,11 @@ const createRockSound = (rng: () => number): boolean => {
         if(noteOn && Tone){
             const measure = Math.floor(Tone.Transport.getTicksAtTime(time) / (Tone.Transport.PPQ * 4));
             const rootNote = progression[measure % 4]!;
-            newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time);
+            const note = rng() < 0.1 ? `${rootNote}2` : `${rootNote}1`; // Add random octave jumps
+            newRockBassSampler?.sampler.triggerAttackRelease(note, '8n', time);
         }
     }, [1, 1, 1, 1, 1, 1, 1, 1], "8n").start(0);
     
-    // Switch lead instrument every 4 measures
     const leadSwitchLoop = new Tone.Loop(time => {
         const choice = rng();
         if (choice < 0.5) {
@@ -738,7 +738,6 @@ const createRockSound = (rng: () => number): boolean => {
         } else {
             leadInstrument = 'organ';
         }
-        console.log(`DEBUG: Lead instrument switched to ${leadInstrument} at ${time}`);
     }, '4m').start(0);
 
     const mainLoop = new Tone.Loop((time) => {
@@ -748,21 +747,27 @@ const createRockSound = (rng: () => number): boolean => {
       const rootNote = progression[measure % 4]!;
       const vel = 0.9 + rng() * 0.1;
       
+      const isGhostNote = rng() < 0.15;
+      const leadVelocity = isGhostNote ? vel * 0.3 : vel;
+
       const leadAction = {
-        'guitar': () => samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, vel),
-        'synth': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '8n', time, vel),
-        'organ': () => newElecOrganSampler?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, vel * 0.8),
+        'guitar': () => samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity),
+        'synth': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '8n', time, leadVelocity),
+        'organ': () => newElecOrganSampler?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity * 0.8),
       };
       
       const padAction = {
           'guitar': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`], '2n', time, vel * 0.6),
-          'synth': () => samplers.eguitar?.sampler.triggerAttackRelease(`${rootNote}3`, '8n', time, vel * 0.8),
+          'synth': () => {
+              samplers.eguitar!.sampler.release = 0.05;
+              samplers.eguitar?.sampler.triggerAttackRelease(`${rootNote}3`, '8n', time, vel * 0.8)
+          },
           'organ': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}5`], '2n', time, vel * 0.6)
       };
 
-      if (totalBeats % 4 === 0) {
+      if (totalBeats % 4 === 0) { // On the downbeat
         leadAction[leadInstrument]();
-      } else {
+      } else { // On other beats
         padAction[leadInstrument]();
       }
 
