@@ -111,7 +111,7 @@ const masterTunedParams: TuningParams = {
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0 },
   "target_ebass": { "volume": -6, "attack": 0.01, "release": 1.0 }, // This now controls the NEW rock bass
-  "spiano": { "volume": -9, "attack": 0.01, "release": 1.0 },
+  "spiano": { "volume": -12, "attack": 0.01, "release": 1.5 },
 };
 
 watch(tuningParams, (newParams) => {
@@ -269,15 +269,9 @@ const initializeAudio = async () => {
     }
 
     const multiSampleUrls = {
-      'E2':  'E2_s1_02.wav',  'F2':  'F2_s1_03.wav',
-      'A2':  'A2_s2_02.wav',
-      'D3':  'D3_s3_02.wav',
-      'G3':  'G3_s4_02.wav',
-      'B3':  'B3_s5_02.wav',
-      'E4':  'E4_s6_02.wav',  'G4': 'G4_s6_02.wav',
-      'B4':  'B4_s6_02.wav',
-      'C5':  'C5_s6_01.wav',  'F5': 'F5_s6_02.wav',
-      'G#5': 'G#5_s6_02.wav',
+      'E2': 'E2_s1_02.wav', 'F2': 'F2_s1_03.wav', 'A2': 'A2_s2_02.wav', 'D3': 'D3_s3_02.wav',
+      'G3': 'G3_s4_02.wav', 'B3': 'B3_s5_02.wav', 'E4': 'E4_s6_02.wav', 'G4': 'G4_s6_02.wav',
+      'B4': 'B4_s6_02.wav', 'C5': 'C5_s6_01.wav', 'F5': 'F5_s6_02.wav', 'G#5': 'Gs5_s6_02.wav',
     };
     const multiSampleParams = tuningParams.value['target_eguitar'];
     const loadedMultiSampler = new Tone.Sampler({
@@ -288,9 +282,9 @@ const initializeAudio = async () => {
     console.log("LOG: New multi-sampled guitar loaded with URLs:", multiSampleUrls);
     
     const newBassUrls = {
-        'E1': 'ebass-new_E.wav', 'F1': 'ebass-new_F.wav', 'F#1': 'ebass-new_F#.wav', 'G1': 'ebass-new_G.wav',
-        'G#1': 'ebass-new_G#.wav', 'A1': 'ebass-new_A.wav', 'A#1': 'ebass-new_A#.wav', 'B1': 'ebass-new_B.wav',
-        'C2': 'ebass-new_C.wav', 'C#2': 'ebass-new_C#.wav', 'D2': 'ebass-new_D.wav', 'D#2': 'ebass-new_D#.wav',
+        'E1': 'ebass-new_E.wav', 'F1': 'ebass-new_F.wav', 'F#1': 'ebass-new_Fs.wav', 'G1': 'ebass-new_G.wav',
+        'G#1': 'ebass-new_Gs.wav', 'A1': 'ebass-new_A.wav', 'A#1': 'ebass-new_As.wav', 'B1': 'ebass-new_B.wav',
+        'C2': 'ebass-new_C.wav', 'C#2': 'ebass-new_Cs.wav', 'D2': 'ebass-new_D.wav', 'D#2': 'ebass-new_Ds.wav',
         'E2': 'ebass-new_E2.wav',
     };
     const newRockBassParams = tuningParams.value['target_ebass'];
@@ -302,15 +296,13 @@ const initializeAudio = async () => {
     newRockBassSampler = { sampler: loadedNewRockBassSampler, baseNote: 'A1' };
 
     const newSynthPianoUrls = {
-        'C2': 'spiano-C2v100.wav', 'F#1': 'spiano-F_s_1v100.wav', // Renamed # to _s_
-        'C3': 'spiano-C3v100.wav', 'F#2': 'spiano-F_s_2v100.wav',
-        'C4': 'spiano-C4v100.wav', 'F#3': 'spiano-F_s_3v100.wav',
-        'C5': 'spiano-C5v100.wav', 'F#4': 'spiano-F_s_4v100.wav',
-        'C6': 'spiano-C6v100.wav', 'F#5': 'spiano-F_s_5v100.wav',
-        'C7': 'spiano-C7v100.wav', 'F#6': 'spiano-F_s_6v100.wav',
+        'C2': 'spiano-C2v100.wav', 'F#1': 'spiano-Fs1v100.wav',
+        'C3': 'spiano-C3v100.wav', 'F#2': 'spiano-Fs2v100.wav',
+        'C4': 'spiano-C4v100.wav', 'F#3': 'spiano-Fs3v100.wav',
+        'C5': 'spiano-C5v100.wav', 'F#4': 'spiano-Fs4v100.wav',
+        'C6': 'spiano-C6v100.wav', 'F#5': 'spiano-Fs5v100.wav',
+        'C7': 'spiano-C7v100.wav', 'F#6': 'spiano-Fs6v100.wav',
     };
-    // This is a placeholder; you'll need to rename the actual files on your server
-    // For now, this code assumes you've renamed spiano-F#1v100.wav to spiano-F_s_1v100.wav etc.
     const newSynthPianoParams = tuningParams.value['spiano'];
     const loadedNewSynthPianoSampler = new Tone.Sampler({
         urls: newSynthPianoUrls, baseUrl: "/",
@@ -441,7 +433,6 @@ const playMusic = async (menuName: string, seed?: string) => {
     case 'ジャズ・スペシャル': musicGenerated = createJazzSound(rng); break;
     case 'Lo-Fi・ビター': musicGenerated = createLoFiSound(rng); break;
     case 'ロック・ビート': musicGenerated = createRockSound(rng); break;
-    case 'キーボード・テスト': musicGenerated = createKeyboardTest(rng); break;
   }
   if (musicGenerated && Tone) {
     currentSeed.value = newSeed; 
@@ -472,7 +463,7 @@ const handleVolumeChange = (event: Event) => { const newVolume = parseFloat((eve
 const openModal = () => { isModalVisible.value = true; };
 const closeModal = () => { isModalVisible.value = false; };
 const copySeed = () => { if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value); };
-const playFromSeed = async () => { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート', 'キーボード・テスト']; if (menuName && seed && validMenus.includes(menuName)) { await playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } };
+const playFromSeed = async () => { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート']; if (menuName && seed && validMenus.includes(menuName)) { await playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } };
 
 const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; };
 const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
@@ -671,9 +662,9 @@ const createJazzSound = (rng: () => number): boolean => {
     return true; 
 };
 
-// --- The Stable "Rock Beat" ---
+// --- The Stable "Rock Beat" (with Synth Piano) ---
 const createRockSound = (rng: () => number): boolean => {
-    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler) {
+    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler) {
         return false;
     }
     scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
@@ -696,9 +687,12 @@ const createRockSound = (rng: () => number): boolean => {
       const measure = Math.floor(totalBeats / 4);
       const rootNote = progression[measure % 4]!;
       const vel = 0.8 + rng() * 0.2;
+      
       newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time, vel);
+      
       if (totalBeats % 4 === 0) {
         samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, vel);
+        newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '4n', time);
       }
     }, "4n").start(0);
     
@@ -706,25 +700,6 @@ const createRockSound = (rng: () => number): boolean => {
     return true; 
 };
 
-// --- New "Keyboard Test" Genre ---
-const createKeyboardTest = (rng: () => number): boolean => {
-    if (!Tone || !newSynthPianoSampler) {
-        console.error("DEBUG: Synth Piano not ready!");
-        return false;
-    }
-    scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
-    console.log("DEBUG: Starting Keyboard Test...");
-
-    Tone.Transport.bpm.value = 120;
-    
-    const arpeggio = new Tone.Sequence((time, note) => {
-        console.log(`DEBUG: Playing note: ${note} at time: ${time}`);
-        newSynthPianoSampler?.sampler.triggerAttackRelease(note, '8n', time);
-    }, ['C4', 'E4', 'G4', 'B4'], '8n').start(0);
-    
-    scheduledEvents.push(arpeggio);
-    return true;
-};
 </script>
 
 <template>
@@ -780,15 +755,6 @@ const createKeyboardTest = (rng: () => number): boolean => {
             </div>
             <div v-if="selectedMenu === 'ロック・ビート' && isPlaying" class="active-indicator">
               <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            </div>
-          </button>
-           <button class="menu-button" @click="playMusic('キーボード・テスト')" :class="{ 'is-active': selectedMenu === 'キーボード・テスト' }">
-            <div class="menu-content">
-              <span class="menu-title">キーボード・テスト</span>
-              <span class="menu-description">シンセピアノ単体の再生テスト用。</span>
-            </div>
-            <div v-if="selectedMenu === 'キーボード・テスト' && isPlaying" class="active-indicator">
-               <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
             </div>
           </button>
         </div>
