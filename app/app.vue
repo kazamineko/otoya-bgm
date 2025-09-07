@@ -438,6 +438,17 @@ const handleResetParams = () => {
   }
 };
 
+const handleSetExtremeEq = (type: 'cut' | 'boost') => {
+  const value = type === 'cut' ? -12 : 12;
+  const currentParams = tuningParams.value.target_eguitar;
+  tuningParams.value.target_eguitar = {
+    ...currentParams,
+    eqLow: value,
+    eqMid: value,
+    eqHigh: value,
+  };
+};
+
 // ---
 // SECTION: Music Generation Logic
 // ---
@@ -711,6 +722,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       @save-params="handleSaveParams"
       @export-params="handleExportParams"
       @reset-params="handleResetParams"
+      @set-extreme-eq="handleSetExtremeEq"
     />
   </div>
 </template>
