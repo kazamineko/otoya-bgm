@@ -479,7 +479,7 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
 };
 
 const handlePlaySoundChainTest = (stage: 'sampler' | 'distortion' | 'eq' | 'cabinet' | 'final') => {
-    if (!guitarTestSampler || !limiter || !guitarDistortion || !guitarEQ || !guitarCabinet) {
+    if (!guitarTestSampler || !limiter || !guitarDistortion || !guitarEQ || !guitarCabinet || !masterComp) {
         console.error('[DIAGNOSTIC] Test nodes not ready.');
         return;
     }
@@ -491,13 +491,22 @@ const handlePlaySoundChainTest = (stage: 'sampler' | 'distortion' | 'eq' | 'cabi
             guitarTestSampler.connect(limiter);
             break;
         case 'distortion':
-            guitarTestSampler.chain(guitarDistortion, limiter);
+            guitarTestSampler.disconnect();
+            guitarTestSampler.connect(guitarDistortion);
+            guitarDistortion.connect(limiter);
             break;
         case 'eq':
-            guitarTestSampler.chain(guitarDistortion, guitarEQ, limiter);
+            guitarTestSampler.disconnect();
+            guitarTestSampler.connect(guitarDistortion);
+            guitarDistortion.connect(guitarEQ);
+            guitarEQ.connect(limiter);
             break;
         case 'cabinet':
-            guitarTestSampler.chain(guitarDistortion, guitarEQ, guitarCabinet, limiter);
+            guitarTestSampler.disconnect();
+            guitarTestSampler.connect(guitarDistortion);
+            guitarDistortion.connect(guitarEQ);
+            guitarEQ.connect(guitarCabinet);
+            guitarCabinet.connect(limiter);
             break;
         case 'final':
              if(targetSamplerMulti) {
