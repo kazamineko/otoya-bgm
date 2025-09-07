@@ -296,27 +296,29 @@ const initializeAudio = async () => {
     const newRockBassParams = tuningParams.value['target_ebass'];
     const loadedNewRockBassSampler = new Tone.Sampler({
         urls: newBassUrls, baseUrl: "/",
+        onload: () => console.log("LOG: New multi-sampled rock bass loaded successfully."),
         volume: newRockBassParams.volume, attack: newRockBassParams.attack, release: newRockBassParams.release
     });
     newRockBassSampler = { sampler: loadedNewRockBassSampler, baseNote: 'A1' };
-    console.log("LOG: New multi-sampled rock bass loaded successfully.");
 
     const newSynthPianoUrls = {
-        'C2': 'spiano-C2v100.wav', //'F#1': 'spiano-F#1v100.wav', // Corrupted
-        'C3': 'spiano-C3v100.wav', //'F#2': 'spiano-F#2v100.wav', // Corrupted
-        'C4': 'spiano-C4v100.wav', //'F#3': 'spiano-F#3v100.wav', // Corrupted
-        'C5': 'spiano-C5v100.wav', //'F#4': 'spiano-F#4v100.wav', // Corrupted
-        'C6': 'spiano-C6v100.wav', //'F#5': 'spiano-F#5v100.wav', // Corrupted
-        'C7': 'spiano-C7v100.wav', //'F#6': 'spiano-F#6v100.wav', // Corrupted
+        'C2': 'spiano-C2v100.wav', 'F#1': 'spiano-F_s_1v100.wav', // Renamed # to _s_
+        'C3': 'spiano-C3v100.wav', 'F#2': 'spiano-F_s_2v100.wav',
+        'C4': 'spiano-C4v100.wav', 'F#3': 'spiano-F_s_3v100.wav',
+        'C5': 'spiano-C5v100.wav', 'F#4': 'spiano-F_s_4v100.wav',
+        'C6': 'spiano-C6v100.wav', 'F#5': 'spiano-F_s_5v100.wav',
+        'C7': 'spiano-C7v100.wav', 'F#6': 'spiano-F_s_6v100.wav',
     };
+    // This is a placeholder; you'll need to rename the actual files on your server
+    // For now, this code assumes you've renamed spiano-F#1v100.wav to spiano-F_s_1v100.wav etc.
     const newSynthPianoParams = tuningParams.value['spiano'];
     const loadedNewSynthPianoSampler = new Tone.Sampler({
         urls: newSynthPianoUrls, baseUrl: "/",
+        onload: () => console.log("LOG: New synth piano sampler loaded successfully."),
         volume: newSynthPianoParams.volume, attack: newSynthPianoParams.attack, release: newSynthPianoParams.release
     });
     newSynthPianoSampler = { sampler: loadedNewSynthPianoSampler, baseNote: 'C4' };
     samplers['spiano'] = newSynthPianoSampler;
-    console.log("LOG: New synth piano sampler loaded with only C notes to avoid errors.");
 
     for (const name of Object.keys(allSamplePaths)) {
       const params = tuningParams.value[name];
@@ -439,7 +441,7 @@ const playMusic = async (menuName: string, seed?: string) => {
     case 'ジャズ・スペシャル': musicGenerated = createJazzSound(rng); break;
     case 'Lo-Fi・ビター': musicGenerated = createLoFiSound(rng); break;
     case 'ロック・ビート': musicGenerated = createRockSound(rng); break;
-    case 'キーボード・テスト': musicGenerated = createKeyboardTest(rng); break; // Add new test genre
+    case 'キーボード・テスト': musicGenerated = createKeyboardTest(rng); break;
   }
   if (musicGenerated && Tone) {
     currentSeed.value = newSeed; 
@@ -669,7 +671,7 @@ const createJazzSound = (rng: () => number): boolean => {
     return true; 
 };
 
-// --- The Stable "Rock Beat" (Restored) ---
+// --- The Stable "Rock Beat" ---
 const createRockSound = (rng: () => number): boolean => {
     if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler) {
         return false;
@@ -750,7 +752,7 @@ const createKeyboardTest = (rng: () => number): boolean => {
               <span class="menu-description">心のコリをほぐす、優しい陽だまりのような音楽。</span>
             </div>
             <div v-if="selectedMenu === 'リラックス・デカフェ' && isPlaying" class="active-indicator">
-              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
+              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
           <button class="menu-button" @click="playMusic('ジャズ・スペシャル')" :class="{ 'is-active': selectedMenu === 'ジャズ・スペシャル' }">
@@ -759,7 +761,7 @@ const createKeyboardTest = (rng: () => number): boolean => {
               <span class="menu-description">夜の静寂に寄り添う、マスターこだわりの一杯。</span>
             </div>
             <div v-if="selectedMenu === 'ジャズ・スペシャル' && isPlaying" class="active-indicator">
-              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
+              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
           <button class="menu-button" @click="playMusic('Lo-Fi・ビター')" :class="{ 'is-active': selectedMenu === 'Lo-Fi・ビター' }">
