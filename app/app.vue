@@ -107,15 +107,14 @@ watch(tuningParams, (newParams) => {
   // --- Guitar Nuance Engine Logic (incl. EQ) ---
   const eguitarTargetParams = newParams.target_eguitar;
   if (eguitarTargetParams) {
-      if (guitarEQ && Tone) {
-        const now = Tone.now();
-        console.log('[GEMINI_LOG_WATCHER] Watcher updating EQ. New values:', {
+      // ★★★ FINAL FIX: Revert to direct .value assignment, which is correct for Tone.js v15 ★★★
+      if (guitarEQ) {
+        console.log('[GEMINI_LOG_WATCHER] Watcher updating EQ with .value assignment for v15. New values:', {
             low: eguitarTargetParams.eqLow, mid: eguitarTargetParams.eqMid, high: eguitarTargetParams.eqHigh
         });
-
-        if (eguitarTargetParams.eqLow !== undefined) guitarEQ.low.setValueAtTime(eguitarTargetParams.eqLow, now);
-        if (eguitarTargetParams.eqMid !== undefined) guitarEQ.mid.setValueAtTime(eguitarTargetParams.eqMid, now);
-        if (eguitarTargetParams.eqHigh !== undefined) guitarEQ.high.setValueAtTime(eguitarTargetParams.eqHigh, now);
+        if (eguitarTargetParams.eqLow !== undefined) guitarEQ.low.value = eguitarTargetParams.eqLow;
+        if (eguitarTargetParams.eqMid !== undefined) guitarEQ.mid.value = eguitarTargetParams.eqMid;
+        if (eguitarTargetParams.eqHigh !== undefined) guitarEQ.high.value = eguitarTargetParams.eqHigh;
       }
       if (guitarPitchShift && eguitarTargetParams.detune !== undefined) {
           guitarPitchShift.pitch = eguitarTargetParams.detune;
