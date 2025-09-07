@@ -638,20 +638,23 @@ const createLiteStyleRock = (rng: () => number): boolean => {
 
     // --- Chorus Patterns ---
     const chorusKickSeq = new Tone.Sequence((time, note) => {
-        if (note) kick.triggerAttack(kickNote, time, 1.1);
+        if (note) kick.triggerAttack(kickNote, time, 1.0);
     }, [1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0], "16n");
 
     const chorusSnareSeq = new Tone.Sequence((time, note) => {
-        if (note) snare.triggerAttack(snareNote, time, 1.1);
+        if (note) snare.triggerAttack(snareNote, time, 1.0);
     }, [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1], "16n");
 
     const chorusCrashSeq = new Tone.Sequence((time, note) => {
         if (note) crash.triggerAttack(crashNote, time, 0.9);
-    }, [1, 0, 0, 0], "1m"); // 1小節の頭で鳴らす
+    }, [1, 0, 0, 0], "1m");
 
     const chorusGuitarRiff = new Tone.Sequence((time, note) => {
-        if (note) guitar.triggerAttackRelease(note, "8n", time, 1.1);
-    }, ['E5', 'G5', 'A5', 'B5', 'A5', 'G5', 'D5', 'E5'], "8n");
+        if (note) guitar.triggerAttackRelease(note, "8n", time, 1.0);
+    }, [
+        ['E4', 'B4'], ['G4', 'D5'], ['A4', 'E5'], ['B4', 'F#5'],
+        ['A4', 'E5'], ['G4', 'D5'], ['D4', 'A4'], ['E4', 'B4']
+    ], "8n");
 
     // --- Section Control ---
     const sectionPart = new Tone.Part<{ time: string; value: Role }>((time, event) => {
