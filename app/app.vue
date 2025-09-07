@@ -605,7 +605,7 @@ const createRockSound = (rng: () => number): boolean => {
 };
 
 const createLiteStyleRock = (rng: () => number): boolean => {
-    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !samplers.ride) {
+    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash) {
         return false;
     }
     scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
@@ -613,27 +613,87 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     Tone.Transport.bpm.value = 135;
     Tone.Transport.swing = 0;
 
-    const hihatSeq = new Tone.Sequence((time, note) => {
-        if (note) samplers.ride?.sampler.triggerAttack(samplers.ride.baseNote, time, 0.7);
-    }, [1, 1, 1, 1, 1, 1, 1, 1], "8n").start(0);
+    const { sampler: guitar } = samplers.eguitar;
+    const { sampler: kick, baseNote: kickNote } = samplers.rockKick;
+    const { sampler: snare, baseNote: snareNote } = samplers.rockSnare;
+    const { sampler: ride, baseNote: rideNote } = samplers.ride;
+    const { sampler: crash, baseNote: crashNote } = samplers.crash;
 
-    const kickSeq = new Tone.Sequence((time, note) => {
-        if (note) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time);
-    }, [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0], "16n").start(0);
+    // --- Verse Patterns ---
+    const verseKickSeq = new Tone.Sequence((time, note) => {
+        if (note) kick.triggerAttack(kickNote, time);
+    }, [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0], "16n");
 
-    const snareSeq = new Tone.Sequence((time, note) => {
-        if (note) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, time);
-    }, [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], "16n").start(0);
+    const verseSnareSeq = new Tone.Sequence((time, note) => {
+        if (note) snare.triggerAttack(snareNote, time);
+    }, [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], "16n");
     
-    const guitarRiff = new Tone.Sequence((time, note) => {
-        if (note) {
-            samplers.eguitar?.sampler.triggerAttackRelease(note, "8n", time);
+    const verseRideSeq = new Tone.Sequence((time, note) => {
+        if (note) ride.triggerAttack(rideNote, time, 0.7);
+    }, [1, 1, 1, 1, 1, 1, 1, 1], "8n");
+
+    const verseGuitarRiff = new Tone.Sequence((time, note) => {
+        if (note) guitar.triggerAttackRelease(note, "8n", time);
+    }, ['E4', null, 'G4', 'A4', null, 'G4', null, 'D4'], "8n");
+
+    // --- Chorus Patterns ---
+    const chorusKickSeq = new Tone.Sequence((time, note) => {
+        if (note) kick.triggerAttack(kickNote, time, 1.1);
+    }, [1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0], "16n");
+
+    const chorusSnareSeq = new Tone.Sequence((time, note) => {
+        if (note) snare.triggerAttack(snareNote, time, 1.1);
+    }, [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1], "16n");
+
+    const chorusCrashSeq = new Tone.Sequence((time, note) => {
+        if (note) crash.triggerAttack(crashNote, time, 0.9);
+    }, [1, 0, 0, 0], "1m"); // 1小節の頭で鳴らす
+
+    const chorusGuitarRiff = new Tone.Sequence((time, note) => {
+        if (note) guitar.triggerAttackRelease(note, "8n", time, 1.1);
+    }, ['E5', 'G5', 'A5', 'B5', 'A5', 'G5', 'D5', 'E5'], "8n");
+
+    // --- Section Control ---
+    const sectionPart = new Tone.Part<{ time: string; value: Role }>((time, event) => {
+        const role = event.value;
+        if (role === ROLES.VERSE) {
+            verseKickSeq.start(time);
+            verseSnareSeq.start(time);
+            verseRideSeq.start(time);
+            verseGuitarRiff.start(time);
+
+            chorusKickSeq.stop(time);
+            chorusSnareSeq.stop(time);
+            chorusCrashSeq.stop(time);
+            chorusGuitarRiff.stop(time);
+        } else if (role === ROLES.CHORUS) {
+            chorusKickSeq.start(time);
+            chorusSnareSeq.start(time);
+            chorusCrashSeq.start(time);
+            chorusGuitarRiff.start(time);
+
+            verseKickSeq.stop(time);
+            verseSnareSeq.stop(time);
+            verseRideSeq.stop(time);
+            verseGuitarRiff.stop(time);
         }
-    }, ['E4', null, 'G4', 'A4', null, 'G4', null, 'D4'], "8n").start(0);
+    }, [
+        { time: '0m', value: ROLES.VERSE },
+        { time: '8m', value: ROLES.CHORUS },
+        { time: '16m', value: ROLES.VERSE },
+        { time: '24m', value: ROLES.CHORUS }
+    ]).start(0);
 
-    guitarRiff.loop = true;
+    sectionPart.loopEnd = '32m';
+    sectionPart.loop = true;
     
-    scheduledEvents.push(hihatSeq, kickSeq, snareSeq, guitarRiff);
+    // Manage all sequences for cleanup
+    scheduledEvents.push(
+        sectionPart,
+        verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff,
+        chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarRiff
+    );
+    
     return true;
 };
 </script>
