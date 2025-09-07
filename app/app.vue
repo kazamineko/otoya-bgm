@@ -109,6 +109,10 @@ watch(tuningParams, (newParams) => {
   if (eguitarTargetParams) {
       if (guitarEQ && Tone) {
         const now = Tone.now();
+        console.log('[GEMINI_LOG_WATCHER] Watcher updating EQ. New values:', {
+            low: eguitarTargetParams.eqLow, mid: eguitarTargetParams.eqMid, high: eguitarTargetParams.eqHigh
+        });
+
         if (eguitarTargetParams.eqLow !== undefined) guitarEQ.low.setValueAtTime(eguitarTargetParams.eqLow, now);
         if (eguitarTargetParams.eqMid !== undefined) guitarEQ.mid.setValueAtTime(eguitarTargetParams.eqMid, now);
         if (eguitarTargetParams.eqHigh !== undefined) guitarEQ.high.setValueAtTime(eguitarTargetParams.eqHigh, now);
@@ -440,6 +444,7 @@ const handleResetParams = () => {
 
 const handleSetExtremeEq = (type: 'cut' | 'boost') => {
   const value = type === 'cut' ? -12 : 12;
+  console.log(`[GEMINI_LOG_BUTTON] Diagnostic button clicked: ${type}. Setting all EQ bands to ${value}.`);
   const currentParams = tuningParams.value.target_eguitar;
   tuningParams.value.target_eguitar = {
     ...currentParams,
