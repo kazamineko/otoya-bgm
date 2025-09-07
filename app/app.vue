@@ -74,7 +74,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 1.5, "detune": 0, "eqLow": 0.5, "eqMid": -5, "eqHigh": 0.5 },
+  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 0.3, "detune": 0, "eqLow": 0.5, "eqMid": -5, "eqHigh": 0.5 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0.5, "eqMid": 2.5, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -653,7 +653,9 @@ const createLiteStyleRock = (rng: () => number): boolean => {
         if (note) guitar.triggerAttackRelease(note, "8n", time, 1.0);
     }, [
         ['E4', 'B4'], ['G4', 'D5'], ['A4', 'E5'], ['B4', 'F#5'],
-        ['A4', 'E5'], ['G4', 'D5'], ['D4', 'A4'], ['E4', 'B4']
+        ['C5', 'G5'], ['B4', 'F#5'], ['A4', 'E5'], ['G4', 'D5'],
+        ['E4', 'B4'], ['G4', 'D5'], ['A4', 'E5'], ['G4', 'D5'],
+        ['E4', 'B4'], ['D4', 'A4'], ['B3', 'F#4'], null,
     ], "8n");
 
     // --- Section Control ---
