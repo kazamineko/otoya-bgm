@@ -484,25 +484,36 @@ const handlePlaySoundChainTest = (stage: 'sampler' | 'distortion' | 'eq' | 'cabi
         return;
     }
     console.log(`[DIAGNOSTIC] Testing stage: ${stage}`);
+
+    // Reset parameters to current tuning before each test
+    const params = tuningParams.value.target_eguitar;
+    guitarDistortion.distortion = params.distortion;
+    guitarEQ.low.value = params.eqLow;
+    guitarEQ.mid.value = params.eqMid;
+    guitarEQ.high.value = params.eqHigh;
+
     guitarTestSampler.disconnect();
+    guitarDistortion.disconnect();
+    guitarEQ.disconnect();
+    guitarCabinet.disconnect();
     
     switch (stage) {
         case 'sampler':
             guitarTestSampler.connect(limiter);
             break;
         case 'distortion':
-            guitarTestSampler.disconnect();
+            guitarDistortion.distortion = 1; // Extreme value
             guitarTestSampler.connect(guitarDistortion);
             guitarDistortion.connect(limiter);
             break;
         case 'eq':
-            guitarTestSampler.disconnect();
+            guitarEQ.mid.value = -12; // Extreme value
+            guitarEQ.high.value = 12; // Extreme value
             guitarTestSampler.connect(guitarDistortion);
             guitarDistortion.connect(guitarEQ);
             guitarEQ.connect(limiter);
             break;
         case 'cabinet':
-            guitarTestSampler.disconnect();
             guitarTestSampler.connect(guitarDistortion);
             guitarDistortion.connect(guitarEQ);
             guitarEQ.connect(guitarCabinet);
