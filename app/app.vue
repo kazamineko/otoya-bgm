@@ -302,12 +302,12 @@ const initializeAudio = async () => {
     console.log("LOG: New multi-sampled rock bass loaded successfully.");
 
     const newSynthPianoUrls = {
-        'C2': 'spiano-C2v100.wav', 'F#1': 'spiano-F#1v100.wav',
-        'C3': 'spiano-C3v100.wav', 'F#2': 'spiano-F#2v100.wav',
-        'C4': 'spiano-C4v100.wav', 'F#3': 'spiano-F#3v100.wav',
-        'C5': 'spiano-C5v100.wav', 'F#4': 'spiano-F#4v100.wav',
-        'C6': 'spiano-C6v100.wav', 'F#5': 'spiano-F#5v100.wav',
-        'C7': 'spiano-C7v100.wav', 'F#6': 'spiano-F#6v100.wav',
+        'C2': 'spiano-C2v100.wav', //'F#1': 'spiano-F#1v100.wav', // Corrupted
+        'C3': 'spiano-C3v100.wav', //'F#2': 'spiano-F#2v100.wav', // Corrupted
+        'C4': 'spiano-C4v100.wav', //'F#3': 'spiano-F#3v100.wav', // Corrupted
+        'C5': 'spiano-C5v100.wav', //'F#4': 'spiano-F#4v100.wav', // Corrupted
+        'C6': 'spiano-C6v100.wav', //'F#5': 'spiano-F#5v100.wav', // Corrupted
+        'C7': 'spiano-C7v100.wav', //'F#6': 'spiano-F#6v100.wav', // Corrupted
     };
     const newSynthPianoParams = tuningParams.value['spiano'];
     const loadedNewSynthPianoSampler = new Tone.Sampler({
@@ -316,7 +316,7 @@ const initializeAudio = async () => {
     });
     newSynthPianoSampler = { sampler: loadedNewSynthPianoSampler, baseNote: 'C4' };
     samplers['spiano'] = newSynthPianoSampler;
-    console.log("LOG: New synth piano sampler loaded successfully.");
+    console.log("LOG: New synth piano sampler loaded with only C notes to avoid errors.");
 
     for (const name of Object.keys(allSamplePaths)) {
       const params = tuningParams.value[name];
@@ -669,7 +669,7 @@ const createJazzSound = (rng: () => number): boolean => {
     return true; 
 };
 
-// --- The Stable "Rock Beat" ---
+// --- The Stable "Rock Beat" (Restored) ---
 const createRockSound = (rng: () => number): boolean => {
     if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler) {
         return false;
@@ -750,7 +750,7 @@ const createKeyboardTest = (rng: () => number): boolean => {
               <span class="menu-description">心のコリをほぐす、優しい陽だまりのような音楽。</span>
             </div>
             <div v-if="selectedMenu === 'リラックス・デカフェ' && isPlaying" class="active-indicator">
-              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
+              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
           <button class="menu-button" @click="playMusic('ジャズ・スペシャル')" :class="{ 'is-active': selectedMenu === 'ジャズ・スペシャル' }">
@@ -786,7 +786,7 @@ const createKeyboardTest = (rng: () => number): boolean => {
               <span class="menu-description">シンセピアノ単体の再生テスト用。</span>
             </div>
             <div v-if="selectedMenu === 'キーボード・テスト' && isPlaying" class="active-indicator">
-               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+               <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
             </div>
           </button>
         </div>
