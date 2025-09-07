@@ -51,7 +51,6 @@
                   <input type="range" min="0" max="30" step="0.1" :value="tuningParams['target_' + instrument].release" @input="updateParam('target_' + instrument, 'release', $event)">
                   <span>{{ tuningParams['target_' + instrument].release.toFixed(2) }} s</span>
                 </div>
-                <!-- Only show EQ for eguitar -->
                 <template v-if="instrument === 'eguitar'">
                   <div class="slider-container">
                     <label>EQ High</label>
@@ -64,7 +63,13 @@
               <template v-else>
                 <div class="slider-container">
                   <label>Volume</label>
-                  <input type="range" min="-40" max="6" step="0.1" :value="tuningParams[instrument].volume" @input="updateParam(instrument, 'volume', $event)">
+                  <input 
+                    type="range" 
+                    min="-40" 
+                    :max="['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor'].includes(instrument) ? 12 : 6" 
+                    step="0.1" 
+                    :value="tuningParams[instrument].volume" 
+                    @input="updateParam(instrument, 'volume', $event)">
                   <span>{{ tuningParams[instrument].volume.toFixed(1) }} dB</span>
                 </div>
                 <div class="slider-container">
@@ -158,7 +163,7 @@ const updateParam = (instrument: string, param: string, event: Event) => {
 }
 .play-buttons button:hover { background-color: #555; }
 .download-button {
-  background-color: #238636; /* Green color */
+  background-color: #238636;
   color: white;
   border: none;
   border-radius: 4px;
@@ -166,8 +171,8 @@ const updateParam = (instrument: string, param: string, event: Event) => {
   cursor: pointer;
   transition: background-color 0.2s ease;
   font-size: 12px;
-  text-decoration: none; /* For the <a> tag */
-  display: inline-block; /* For the <a> tag */
+  text-decoration: none;
+  display: inline-block;
   font-family: inherit;
 }
 .download-button:hover {
@@ -190,20 +195,5 @@ const updateParam = (instrument: string, param: string, event: Event) => {
   background-color: #eee;
   padding: 5px;
   border-radius: 4px;
-}
-.source-selector {
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  margin-bottom: 20px;
-  background-color: #fff;
-}
-.radio-group {
-  display: flex;
-  justify-content: center;
-  gap: 20px;
-  padding: 10px;
-}
-.radio-group label {
-  cursor: pointer;
 }
 </style>

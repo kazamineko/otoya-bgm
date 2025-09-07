@@ -56,7 +56,7 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
-// MASTER TUNED PARAMETERS (STABLE VERSION)
+// ★★★ MASTER TUNED PARAMETERS UPDATED ★★★
 const masterTunedParams: TuningParams = {
   "piano": { "volume": 0, "attack": 0.01, "release": 1 },
   "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
@@ -68,13 +68,13 @@ const masterTunedParams: TuningParams = {
   "pad": { "volume": -6, "attack": 0.1, "release": 1 },
   "sax": { "volume": -3, "attack": 0.01, "release": 1 },
   "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-  "rockKick": { "volume": 4.6, "attack": 0.01, "release": 0.2 },
-  "rockSnare": { "volume": 5.4, "attack": 0.01, "release": 0.2 },
-  "crash": { "volume": 3.2, "attack": 0.01, "release": 0.5 },
-  "tomHigh": { "volume": 2.8, "attack": 0.01, "release": 0.4 },
-  "tomMid": { "volume": 3.9, "attack": 0.01, "release": 0.4 },
-  "tomFloor": { "volume": 3.3, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -7.4, "attack": 0.001, "release": 1, "detune": 0, "eqHigh": 1.5 },
+  "rockKick": { "volume": 6, "attack": 0.01, "release": 0.2 },
+  "rockSnare": { "volume": 6, "attack": 0.01, "release": 0.2 },
+  "crash": { "volume": 6, "attack": 0.01, "release": 0.5 },
+  "tomHigh": { "volume": 6, "attack": 0.01, "release": 0.4 },
+  "tomMid": { "volume": 6, "attack": 0.01, "release": 0.4 },
+  "tomFloor": { "volume": 6, "attack": 0.01, "release": 0.4 },
+  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 1, "detune": 0, "eqHigh": 1.5 },
   "target_ebass": { "volume": 0, "attack": 0.01, "release": 1 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
