@@ -111,7 +111,7 @@ const masterTunedParams: TuningParams = {
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0 },
   "target_ebass": { "volume": -6, "attack": 0.01, "release": 1.0 }, // This now controls the NEW rock bass
-  "spiano": { "volume": -9, "attack": 0.01, "release": 1.0 }, // Add new synth piano
+  "spiano": { "volume": -12, "attack": 0.01, "release": 1.5 }, // Add new synth piano with adjusted volume
 };
 
 watch(tuningParams, (newParams) => {
@@ -440,9 +440,9 @@ const playMusic = async (menuName: string, seed?: string) => {
     case 'Lo-Fi・ビター': musicGenerated = createLoFiSound(rng); break;
     case 'ロック・ビート': musicGenerated = createRockSound(rng); break;
   }
-  if (musicGenerated) {
+  if (musicGenerated && Tone) {
     currentSeed.value = newSeed; 
-    Tone!.Transport.start(); 
+    Tone.Transport.start(); 
     isPlaying.value = true; 
     selectedMenu.value = menuName;
   } else if (!seed) { 
@@ -615,8 +615,9 @@ type Role = typeof ROLES[keyof typeof ROLES];
 
 const createConcentrationSound = (rng: () => number): boolean => { 
     if (!Tone || !masterComp) return false;
+    scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
     if (noise) { noise.stop(0); noise.dispose(); noise = null; }
-    noise = new Tone.Noise("pink").start();
+    noise = new Tone.Noise("pink").start(0);
     const filter = new Tone.Filter(800, "lowpass").connect(masterComp);
     noise.connect(filter);
     const loop = new Tone.Loop((time) => { filter.frequency.rampTo(600 + rng() * 400, 4, time); }, "4m").start(0);
@@ -625,12 +626,17 @@ const createConcentrationSound = (rng: () => number): boolean => {
 };
 const createRelaxSound = (rng: () => number): boolean => {
     if (!samplers.pad) return false;
+    scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
     const { sampler: padSampler, baseNote } = samplers.pad;
-    padSampler.triggerAttack(baseNote);
+    // Tone.Transport has to be started to schedule events
+    Tone?.Transport.scheduleOnce(time => {
+        padSampler.triggerAttack(baseNote, time);
+    }, 0);
     return true; 
 };
 const createLoFiSound = (rng: () => number): boolean => {
     if (!Tone || !samplers.epiano || !samplers.kick || !samplers.snare) return false;
+    scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
     const kickSeq = new Tone.Sequence((time, note) => { if(note && samplers.kick) samplers.kick.sampler.triggerAttackRelease(samplers.kick.baseNote, '8n', time, 0.9 + rng() * 0.1); }, [1,0,1,0,1,0,1,0], "8n").start(0);
     const snareSeq = new Tone.Sequence((time, note) => { if(note && samplers.snare) samplers.snare.sampler.triggerAttackRelease(samplers.snare.baseNote, '8n', time, 0.8 + rng() * 0.2); }, [0,1,0,1], "4n").start(0);
     const chordLoop = new Tone.Loop((time) => {
@@ -643,6 +649,7 @@ const createLoFiSound = (rng: () => number): boolean => {
 };
 const createJazzSound = (rng: () => number): boolean => {
     if (!Tone || !samplers.piano || !samplers.bass || !samplers.ride || !samplers.sax) return false;
+    scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
     const { sampler: piano } = samplers.piano;
     const { sampler: bass } = samplers.bass;
     const { sampler: ride, baseNote: rideNote } = samplers.ride;
@@ -665,9 +672,7 @@ const createJazzSound = (rng: () => number): boolean => {
 const createRockSound = (rng: () => number): boolean => {
     if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !samplers.ride || !samplers.crash || !newSynthPianoSampler) return false;
     
-    // Cleanup previous rock track events before starting new ones
-    scheduledEvents.forEach(event => { event.stop(0); event.dispose(); });
-    scheduledEvents.length = 0;
+    scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
 
     const bpm = 120 + rng() * 30;
     Tone.Transport.bpm.value = bpm;
@@ -680,21 +685,20 @@ const createRockSound = (rng: () => number): boolean => {
         { role: ROLES.CHORUS, duration: 8 },
     ];
     const progression = ['E', 'G', 'A', 'A'];
-    let currentRole: Role = ROLES.VERSE;
     
-    // --- MAIN LOOP ---
+    // --- MAIN LOOP USING TONE.LOOP FOR ROBUSTNESS ---
     const mainLoop = new Tone.Loop((time) => {
         if (!Tone) return;
 
         const totalMeasures = Math.floor(Tone.Transport.getTicksAtTime(time) / (Tone.Transport.PPQ * 4));
         
+        let currentRole: Role = ROLES.VERSE;
         let cumulativeDuration = 0;
-        for (let i = 0; i < songBlueprint.length; i++) {
-            const section = songBlueprint[i]!;
-            const nextDuration = cumulativeDuration + section.duration;
-            const totalBlueprintDuration = songBlueprint.reduce((sum, s) => sum + s.duration, 0);
-            const loopRelativeMeasures = totalMeasures % totalBlueprintDuration;
+        const totalBlueprintDuration = songBlueprint.reduce((sum, s) => sum + s.duration, 0);
+        const loopRelativeMeasures = totalMeasures % totalBlueprintDuration;
 
+        for (const section of songBlueprint) {
+            const nextDuration = cumulativeDuration + section.duration;
             if (loopRelativeMeasures < nextDuration) {
                 currentRole = section.role;
                 break;
@@ -705,6 +709,10 @@ const createRockSound = (rng: () => number): boolean => {
         const rootNote = progression[totalMeasures % 4]!;
         const vel = 0.8 + rng() * 0.2;
 
+        // --- DRUMS ---
+        createRockDrums(rng, currentRole, bpm, time, totalMeasures);
+        
+        // --- BASS & GUITAR ---
         if (currentRole === ROLES.VERSE) {
             samplers.eguitar!.sampler.release = 0.05;
             newRockBassSampler!.sampler.release = 0.05;
@@ -713,32 +721,42 @@ const createRockSound = (rng: () => number): boolean => {
         } else { // CHORUS
             samplers.eguitar!.sampler.release = 1.0;
             newRockBassSampler!.sampler.release = 1.0;
-            samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, vel);
-            newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time, vel);
-            // Add synth piano arpeggio in chorus
-            const arpeggio = [`${rootNote}4`, `${rootNote}5`, `${rootNote}6`];
-            const noteToPlay = arpeggio[Math.floor(rng() * 3)]!;
-            newSynthPianoSampler?.sampler.triggerAttackRelease(noteToPlay, '16n', time + Tone.Time('8n').toSeconds());
+            samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '2n', time, vel);
+            newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '4n', time, vel);
+            
+            // --- SYNTH PIANO (Playing chords in mid-range) ---
+            const pianoChord = [`${rootNote}4`, `${progression[(totalMeasures + 1) % 4]!}4`];
+            newSynthPianoSampler?.sampler.triggerAttackRelease(pianoChord, '8n', time + Tone.Time('8n').toSeconds());
         }
 
     }, "4n").start(0);
 
-    // --- DYNAMIC DRUM LOOP ---
-    const drumLoop = new Tone.Loop(time => {
-        createRockDrums(rng, currentRole, bpm, time);
-    }, '1m').start(0);
-
-
-    scheduledEvents.push(mainLoop, drumLoop);
+    scheduledEvents.push(mainLoop);
     return true; 
 };
 
-const createRockDrums = (rng: () => number, role: Role, bpm: number, time: number) => {
-    if (!Tone || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash) return;
+const createRockDrums = (rng: () => number, role: Role, bpm: number, time: number, measure: number) => {
+    if (!Tone || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash || !samplers.tomMid || !samplers.tomFloor) return;
 
     const use16thBeat = bpm >= 135;
     const subdivision = use16thBeat ? "16n" : "8n";
     const steps = use16thBeat ? 16 : 8;
+    const stepDuration = Tone.Time(subdivision).toSeconds();
+    
+    const isFillMeasure = measure % 8 === 7;
+
+    if (isFillMeasure) {
+        const fillPattern = [
+            { time: 0, note: samplers.rockSnare!.baseNote, dur: '16n' },
+            { time: 1, note: samplers.rockSnare!.baseNote, dur: '16n' },
+            { time: 2, note: samplers.tomMid!.baseNote, dur: '16n' },
+            { time: 3, note: samplers.tomFloor!.baseNote, dur: '16n' },
+        ];
+        fillPattern.forEach(fill => {
+             samplers.rockSnare?.sampler.triggerAttackRelease(fill.note, fill.dur, time + fill.time * stepDuration);
+        });
+        return;
+    }
 
     let kickPattern, snarePattern, ridePattern;
     if (role === ROLES.VERSE) {
@@ -756,17 +774,16 @@ const createRockDrums = (rng: () => number, role: Role, bpm: number, time: numbe
         snarePattern = snarePattern.flatMap(v => [v, 0]);
         ridePattern = ridePattern.flatMap(v => [v, 1]);
     }
-    
-    const stepDuration = Tone.Time(subdivision).toSeconds();
+
     for (let i = 0; i < steps; i++) {
         const stepTime = time + i * stepDuration;
-        if (kickPattern[i]) samplers.rockKick.sampler.triggerAttack(samplers.rockKick.baseNote, stepTime, 0.9 + rng() * 0.1);
-        if (snarePattern[i]) samplers.rockSnare.sampler.triggerAttack(samplers.rockSnare.baseNote, stepTime, 0.8 + rng() * 0.2);
-        if (ridePattern[i]) samplers.ride.sampler.triggerAttack(samplers.ride.baseNote, stepTime, 0.5 + rng() * 0.4);
+        if (kickPattern[i]) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, stepTime, 0.9 + rng() * 0.1);
+        if (snarePattern[i]) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, stepTime, 0.8 + rng() * 0.2);
+        if (ridePattern[i]) samplers.ride?.sampler.triggerAttack(samplers.ride.baseNote, stepTime, 0.5 + rng() * 0.4);
     }
     
     if (role === ROLES.CHORUS) {
-        samplers.crash.sampler.triggerAttack(samplers.crash.baseNote, time);
+        samplers.crash?.sampler.triggerAttack(samplers.crash.baseNote, time);
     }
 };
 </script>
