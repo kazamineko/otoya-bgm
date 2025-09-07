@@ -74,7 +74,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 0.3, "detune": 0, "eqLow": 0.5, "eqMid": -5, "eqHigh": 0.5 },
+  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 0.3, "detune": 0, "eqLow": 6.5, "eqMid": 3.5, "eqHigh": 0.5 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0.5, "eqMid": 2.5, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -652,23 +652,27 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     const chorusGuitarPart = new Tone.Part<{ time: string, note: string[], duration: string }>((time, value) => {
         guitar.triggerAttackRelease(value.note, value.duration, time, 1.0);
     }, [
-        { time: '0:0:0', note: ['E4', 'B4'], duration: '8n' },
-        { time: '0:0:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '0:1:0', note: ['A4', 'E5'], duration: '8n' },
-        { time: '0:1:2', note: ['B4', 'F#5'], duration: '8n' },
-        { time: '0:2:0', note: ['C5', 'G5'], duration: '8n' },
-        { time: '0:2:2', note: ['B4', 'F#5'], duration: '8n' },
-        { time: '0:3:0', note: ['A4', 'E5'], duration: '8n' },
-        { time: '0:3:2', note: ['G4', 'D5'], duration: '8n' },
+        { time: '0:0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '0:0:2', note: ['G4', 'D5'], duration: '8n' },
+        { time: '0:1:0', note: ['A4', 'E5'], duration: '8n' }, { time: '0:1:2', note: ['B4', 'F#5'], duration: '8n' },
+        { time: '0:2:0', note: ['C5', 'G5'], duration: '8n' }, { time: '0:2:2', note: ['B4', 'F#5'], duration: '8n' },
+        { time: '0:3:0', note: ['A4', 'E5'], duration: '8n' }, { time: '0:3:2', note: ['G4', 'D5'], duration: '8n' },
         
-        { time: '1:0:0', note: ['E4', 'B4'], duration: '8n' },
-        { time: '1:0:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '1:1:0', note: ['A4', 'E5'], duration: '8n' },
-        { time: '1:1:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '1:2:0', note: ['E4', 'B4'], duration: '2n.' }, // Sustained Note
+        { time: '1:0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '1:0:2', note: ['G4', 'D5'], duration: '8n' },
+        { time: '1:1:0', note: ['A4', 'E5'], duration: '8n' }, { time: '1:1:2', note: ['G4', 'D5'], duration: '8n' },
+        { time: '1:2:0', note: ['E4', 'B4'], duration: '2n.' },
+        
+        { time: '2:0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '2:0:2', note: ['G4', 'D5'], duration: '8n' },
+        { time: '2:1:0', note: ['A4', 'E5'], duration: '8n' }, { time: '2:1:2', note: ['B4', 'F#5'], duration: '8n' },
+        { time: '2:2:0', note: ['C5', 'G5'], duration: '8n' }, { time: '2:2:2', note: ['B4', 'F#5'], duration: '8n' },
+        { time: '2:3:0', note: ['A4', 'E5'], duration: '8n' }, { time: '2:3:2', note: ['G4', 'D5'], duration: '8n' },
+
+        { time: '3:0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '3:0:2', note: ['G4', 'D5'], duration: '8n' },
+        { time: '3:1:0', note: ['A4', 'E5'], duration: '8n' }, { time: '3:1:2', note: ['G4', 'D5'], duration: '8n' },
+        { time: '3:2:0', note: ['B4', 'F#5'], duration: '2n.' },
     ]);
     chorusGuitarPart.loop = true;
-    chorusGuitarPart.loopEnd = '2m';
+    chorusGuitarPart.loopEnd = '4m';
+
 
     // --- Section Control ---
     const sectionPart = new Tone.Part<{ time: string; value: Role }>((time, event) => {
