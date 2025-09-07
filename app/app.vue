@@ -30,10 +30,13 @@ let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: stri
 let targetSamplerMulti: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newRockBassSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newSynthPianoSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
+let newElecOrganSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
+
 
 let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
+let bassEQNode: ToneType.EQ3 | null = null;
 
 
 let rawSamplePlayers: ToneType.Players | null = null;
@@ -61,7 +64,6 @@ let guitarMakeUpGain: ToneType.Volume | null = null;
 // --- Bass Parallel Processing Rig ---
 let bassInputGain: ToneType.Volume | null = null;
 let bassPreDistComp: ToneType.Compressor | null = null;
-let bassEQ: ToneType.EQ3 | null = null;
 let bassDistortion: ToneType.Distortion | null = null;
 let bassCab: ToneType.Convolver | null = null;
 let bassMakeUpGain: ToneType.Volume | null = null;
@@ -110,8 +112,9 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0 },
-  "target_ebass": { "volume": -6, "attack": 0.01, "release": 1.0 }, // This now controls the NEW rock bass
-  "spiano": { "volume": -12, "attack": 0.01, "release": 1.5 },
+  "target_ebass": { "volume": -6, "attack": 0.01, "release": 1.0 },
+  "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
+  "eorgan": { "volume": -12, "attack": 0.05, "release": 1.0 },
 };
 
 watch(tuningParams, (newParams) => {
@@ -128,6 +131,12 @@ watch(tuningParams, (newParams) => {
       if(spianoParams.volume !== undefined) newSynthPianoSampler.sampler.volume.value = spianoParams.volume;
       if(spianoParams.attack !== undefined) newSynthPianoSampler.sampler.attack = spianoParams.attack;
       if(spianoParams.release !== undefined) newSynthPianoSampler.sampler.release = spianoParams.release;
+  }
+  if (newElecOrganSampler && newParams.eorgan) {
+      const eorganParams = newParams.eorgan;
+      if(eorganParams.volume !== undefined) newElecOrganSampler.sampler.volume.value = eorganParams.volume;
+      if(eorganParams.attack !== undefined) newElecOrganSampler.sampler.attack = eorganParams.attack;
+      if(eorganParams.release !== undefined) newElecOrganSampler.sampler.release = eorganParams.release;
   }
 
   const eguitarParams = newParams.eguitar as AmpParams;
@@ -148,7 +157,7 @@ watch(tuningParams, (newParams) => {
   }
 
   const ebassParams = newParams.ebass as BassAmpParams;
-  if (ebassParams && bassInputGain && bassPreDistComp && bassSubGain && bassDistortion && bassEQ && bassMakeUpGain) {
+  if (ebassParams && bassInputGain && bassPreDistComp && bassSubGain && bassDistortion && bassEQNode && bassMakeUpGain) {
       bassInputGain.volume.value = ebassParams.inputGain;
       bassPreDistComp.threshold.value = ebassParams.preCompThreshold;
       bassPreDistComp.ratio.value = ebassParams.preCompRatio;
@@ -158,13 +167,13 @@ watch(tuningParams, (newParams) => {
       bassMakeUpGain.volume.value = Tone.gainToDb(diGain * 16) + 8;
       bassSubGain.volume.value = Tone.gainToDb(ebassParams.subBlend * 2);
       bassDistortion.distortion = ebassParams.drive;
-      bassEQ.low.value = ebassParams.eqLow;
-      bassEQ.mid.value = ebassParams.eqMid;
-      bassEQ.high.value = ebassParams.eqHigh;
+      bassEQNode.low.value = ebassParams.eqLow;
+      bassEQNode.mid.value = ebassParams.eqMid;
+      bassEQNode.high.value = ebassParams.eqHigh;
   }
   
   for (const instrumentName in newParams) {
-    if (instrumentName === 'target_ebass' || instrumentName === 'spiano') continue;
+    if (instrumentName === 'target_ebass' || instrumentName === 'spiano' || instrumentName === 'eorgan') continue;
 
     const activeSampler = samplers[instrumentName] || targetSamplers[instrumentName] || diSamplers[instrumentName];
     if (activeSampler) {
@@ -196,6 +205,9 @@ const initializeAudio = async () => {
   if (!instrumentList.value.includes('spiano')) {
     instrumentList.value.push('spiano');
   }
+  if (!instrumentList.value.includes('eorgan')) {
+    instrumentList.value.push('eorgan');
+  }
 
 
   const initialParams = JSON.parse(JSON.stringify(masterTunedParams)); 
@@ -219,8 +231,8 @@ const initializeAudio = async () => {
     limiter = new Tone.Limiter(-0.1).toDestination();
     masterComp = new Tone.Compressor({ threshold: -12, ratio: 3 }).connect(limiter);
     
-    drumBusVolume = new Tone.Volume(-6).connect(masterComp);
-    drumBusComp = new Tone.Compressor({ threshold: -20, ratio: 4, attack: 0.01, release: 0.1 }).connect(drumBusVolume);
+    drumBusVolume = new Tone.Volume(-3).connect(masterComp); // Boosted drum bus
+    drumBusComp = new Tone.Compressor({ threshold: -25, ratio: 5, attack: 0.01, release: 0.1 }).connect(drumBusVolume);
 
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
 
@@ -232,6 +244,7 @@ const initializeAudio = async () => {
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
     guitarEQ = new Tone.EQ3({ low: -6, mid: 0, high: 3 });
+    bassEQNode = new Tone.EQ3({ low: 0, mid: 4, high: 0}); // Bass EQ
     
     loadingMessage.value = '仮想アンプとAI奏者を準備しています...';
     const eguitarP = tuningParams.value.eguitar;
@@ -247,7 +260,6 @@ const initializeAudio = async () => {
     const ebassP = tuningParams.value.ebass;
     bassInputGain = new Tone.Volume(ebassP.inputGain);
     bassPreDistComp = new Tone.Compressor({ threshold: ebassP.preCompThreshold, ratio: ebassP.preCompRatio, attack: ebassP.preCompAttack, release: ebassP.preCompRelease });
-    bassEQ = new Tone.EQ3({ low: ebassP.eqLow, mid: ebassP.eqMid, high: ebassP.eqHigh });
     bassDistortion = new Tone.Distortion(ebassP.drive); 
     bassCab = new Tone.Convolver('/ir-bass-cab.wav');
     bassMakeUpGain = new Tone.Volume(8);
@@ -312,6 +324,24 @@ const initializeAudio = async () => {
     newSynthPianoSampler = { sampler: loadedNewSynthPianoSampler, baseNote: 'C4' };
     samplers['spiano'] = newSynthPianoSampler;
 
+    const newElecOrganUrls = {
+        'C2': 'eorgan-C2.wav', 'E2': 'eorgan-E2.wav', 'G#2': 'eorgan-Gs2.wav',
+        'C3': 'eorgan-C3.wav', 'E3': 'eorgan-E3.wav', 'G#3': 'eorgan-Gs3.wav',
+        'C4': 'eorgan-C4.wav', 'E4': 'eorgan-E4.wav', 'G#4': 'eorgan-Gs4.wav',
+        'C5': 'eorgan-C5.wav', 'E5': 'eorgan-E5.wav', 'G#5': 'eorgan-Gs5.wav',
+        'C6': 'eorgan-C6.wav', 'E6': 'eorgan-E6.wav', 'G#6': 'eorgan-Gs6.wav',
+        'C7': 'eorgan-C7.wav'
+    };
+    const newElecOrganParams = tuningParams.value['eorgan'];
+    const loadedNewElecOrganSampler = new Tone.Sampler({
+        urls: newElecOrganUrls, baseUrl: "/",
+        onload: () => console.log("LOG: New elec organ sampler loaded successfully."),
+        volume: newElecOrganParams.volume, attack: newElecOrganParams.attack, release: newElecOrganParams.release
+    });
+    newElecOrganSampler = { sampler: loadedNewElecOrganSampler, baseNote: 'C4' };
+    samplers['eorgan'] = newElecOrganSampler;
+
+
     for (const name of Object.keys(allSamplePaths)) {
       const params = tuningParams.value[name];
       if (!params) continue;
@@ -341,11 +371,12 @@ const initializeAudio = async () => {
       else { samplers[name] = samplerData; }
     }
     
-    if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter && drumBusComp && guitarVibrato && guitarEQ && guitarPitchShift && bassPostComp && newRockBassSampler) {
+    if (masterComp && reverb && chorus && delay && rideFilter && guitarInputGain && bassInputGain && bassSubFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && bassPostComp && newRockBassSampler) {
       console.log("LOG: All core audio nodes initialized successfully.");
       
-      newRockBassSampler.sampler.connect(drumBusComp);
+      newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
+      newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
 
 
       const eguitarDI = diSamplers['eguitar'];
@@ -359,7 +390,7 @@ const initializeAudio = async () => {
       if (ebassDI) {
         ebassDI.sampler.connect(bassInputGain);
         ebassDI.sampler.connect(bassSubFilter);
-        bassInputGain.chain(bassPreDistComp, bassEQ, bassDistortion, bassCab, bassMakeUpGain, bassPostComp);
+        bassInputGain.chain(bassPreDistComp, bassEQNode, bassDistortion, bassCab, bassMakeUpGain, bassPostComp);
         bassPostComp.fan(masterComp, reverb);
         bassSubFilter.chain(bassSubGain, masterComp);
       }
@@ -547,6 +578,12 @@ const handleResetParams = () => {
         newSynthPianoSampler.sampler.attack = defaults.attack;
         newSynthPianoSampler.sampler.release = defaults.release;
     }
+    if (newElecOrganSampler) {
+        const defaults = masterTunedParams['eorgan'];
+        newElecOrganSampler.sampler.volume.value = defaults.volume;
+        newElecOrganSampler.sampler.attack = defaults.attack;
+        newElecOrganSampler.sampler.release = defaults.release;
+    }
     alert('設定を初期化しました。');
   }
 };
@@ -662,9 +699,9 @@ const createJazzSound = (rng: () => number): boolean => {
     return true; 
 };
 
-// --- The Stable "Rock Beat" (with Synth Piano) ---
+// --- THE FINAL VERSION OF "ROCK BEAT" ---
 const createRockSound = (rng: () => number): boolean => {
-    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler) {
+    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler) {
         return false;
     }
     scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
@@ -673,7 +710,7 @@ const createRockSound = (rng: () => number): boolean => {
     Tone.Transport.bpm.value = bpm;
     Tone.Transport.swing = 0;
     const progression = ['E', 'G', 'A', 'A'];
-    let leadInstrument: 'guitar' | 'synth' = 'guitar';
+    let leadInstrument: 'guitar' | 'synth' | 'organ' = 'guitar';
 
     const kickSeq = new Tone.Sequence((time, note) => {
         if(note) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time);
@@ -693,7 +730,14 @@ const createRockSound = (rng: () => number): boolean => {
     
     // Switch lead instrument every 4 measures
     const leadSwitchLoop = new Tone.Loop(time => {
-        leadInstrument = rng() > 0.5 ? 'guitar' : 'synth';
+        const choice = rng();
+        if (choice < 0.5) {
+            leadInstrument = 'guitar';
+        } else if (choice < 0.75) {
+            leadInstrument = 'synth';
+        } else {
+            leadInstrument = 'organ';
+        }
         console.log(`DEBUG: Lead instrument switched to ${leadInstrument} at ${time}`);
     }, '4m').start(0);
 
@@ -704,16 +748,24 @@ const createRockSound = (rng: () => number): boolean => {
       const rootNote = progression[measure % 4]!;
       const vel = 0.9 + rng() * 0.1;
       
-      if(leadInstrument === 'guitar') {
-        samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, vel);
-        newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '1m', time, vel * 0.6);
-      } else { // Synth is lead
-        newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`, `${rootNote}6`], '8n', time, vel);
-        if (totalBeats % 4 === 0) {
-            samplers.eguitar!.sampler.release = 0.05;
-            samplers.eguitar?.sampler.triggerAttackRelease(`${rootNote}3`, '8n', time, vel * 0.8);
-        }
+      const leadAction = {
+        'guitar': () => samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, vel),
+        'synth': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '8n', time, vel),
+        'organ': () => newElecOrganSampler?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, vel * 0.8),
+      };
+      
+      const padAction = {
+          'guitar': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`], '2n', time, vel * 0.6),
+          'synth': () => samplers.eguitar?.sampler.triggerAttackRelease(`${rootNote}3`, '8n', time, vel * 0.8),
+          'organ': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}5`], '2n', time, vel * 0.6)
+      };
+
+      if (totalBeats % 4 === 0) {
+        leadAction[leadInstrument]();
+      } else {
+        padAction[leadInstrument]();
       }
+
     }, "4n").start(0);
     
     scheduledEvents.push(kickSeq, snareSeq, bassSeq, mainLoop, leadSwitchLoop);
