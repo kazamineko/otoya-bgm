@@ -604,7 +604,7 @@ const handleDownloadSampler = async () => {
 // SECTION: Music Generation Logic
 // ---
 
-const ROLES = { VERSE: 'verse', CHORUS: 'chorus', BRIDGE: 'bridge' } as const;
+const ROLES = { VERSE: 'verse', CHORUS: 'chorus' } as const;
 type Role = typeof ROLES[keyof typeof ROLES];
 
 const createConcentrationSound = (rng: () => number): boolean => { 
@@ -662,7 +662,7 @@ const createJazzSound = (rng: () => number): boolean => {
     return true; 
 };
 
-// --- The Stable "Rock Beat" ---
+// --- The Stable "Rock Beat" (with Synth Piano) ---
 const createRockSound = (rng: () => number): boolean => {
     if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler) {
         return false;
@@ -673,12 +673,23 @@ const createRockSound = (rng: () => number): boolean => {
     Tone.Transport.swing = 0;
     const progression = ['E', 'G', 'A', 'A'];
 
+    const kickBassPattern = [1, 0, 0, 0, 1, 0, 0, 0];
+    
+    const bassSeq = new Tone.Sequence((time, noteOn) => {
+        if(noteOn && Tone){
+            const totalBeats = Math.floor(Tone.Transport.getTicksAtTime(time) / Tone.Transport.PPQ);
+            const measure = Math.floor(totalBeats / 4);
+            const rootNote = progression[measure % 4]!;
+            newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time);
+        }
+    }, kickBassPattern, "8n").start(0);
+
     const kickSeq = new Tone.Sequence((time, note) => {
-        if(note) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time, 0.9 + rng() * 0.1);
-    }, [1, 0, 0, 0, 1, 0, 0, 0], "8n").start(0);
+        if(note) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time);
+    }, kickBassPattern, "8n").start(0);
 
     const snareSeq = new Tone.Sequence((time, note) => {
-        if(note) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, time, 0.8 + rng() * 0.2);
+        if(note) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, time);
     }, [0, 1, 0, 1], "4n").start(0);
 
     const mainLoop = new Tone.Loop((time) => {
@@ -688,15 +699,16 @@ const createRockSound = (rng: () => number): boolean => {
       const rootNote = progression[measure % 4]!;
       const vel = 0.8 + rng() * 0.2;
       
-      newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time, vel);
+      if (totalBeats % 2 === 1) { 
+        samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '8n', time, vel);
+      }
       
       if (totalBeats % 4 === 0) {
-        samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, vel);
-        newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '4n', time, vel * 0.7);
+        newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '1m', time, vel * 0.7);
       }
-    }, "4n").start(0);
+    }, "8n").start(0);
     
-    scheduledEvents.push(kickSeq, snareSeq, mainLoop);
+    scheduledEvents.push(kickSeq, snareSeq, bassSeq, mainLoop);
     return true; 
 };
 </script>
