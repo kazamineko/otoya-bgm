@@ -67,6 +67,10 @@
                     <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqHigh" @input="updateParam('target_eguitar', 'eqHigh', $event)">
                     <span>{{ tuningParams['target_eguitar'].eqHigh.toFixed(1) }} dB</span>
                   </div>
+                  <div class="diagnostic-buttons">
+                    <button @click.prevent="setExtremeEq('cut')">EQカット (-12dB)</button>
+                    <button @click.prevent="setExtremeEq('boost')">EQブースト (+12dB)</button>
+                  </div>
                 </template>
               </template>
               <!-- Other Instruments -->
@@ -112,13 +116,14 @@ defineProps<{
   tuningParams: Record<string, any>;
 }>();
 
-const emit = defineEmits(['close', 'playSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams']);
+const emit = defineEmits(['close', 'playSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq']);
 
 const close = () => emit('close');
 const playSound = (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => emit('playSound', instrumentName, type);
 const saveParams = () => emit('saveParams');
 const exportParams = () => emit('exportParams');
 const resetParams = () => emit('resetParams');
+const setExtremeEq = (type: 'cut' | 'boost') => emit('setExtremeEq', type);
 
 const updateParam = (instrument: string, param: string, event: Event) => {
   const value = parseFloat((event.target as HTMLInputElement).value);
@@ -196,6 +201,25 @@ const updateParam = (instrument: string, param: string, event: Event) => {
 .slider-container label { text-align: right; font-size: 0.9em; }
 .slider-container input[type="range"] { width: 100%; }
 .slider-container span { font-family: monospace; font-size: 0.9em; text-align: left; }
+.diagnostic-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 15px;
+}
+.diagnostic-buttons button {
+  background-color: #c74848;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-size: 12px;
+}
+.diagnostic-buttons button:hover {
+  background-color: #b33e3e;
+}
 .no-sounds-message { text-align: center; color: #7a7a7a; padding: 20px; }
 .sub-header {
   font-weight: bold;

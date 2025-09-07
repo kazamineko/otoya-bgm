@@ -399,14 +399,6 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
       }
 
       if (instrumentName === 'target_eguitar' && samplers['eguitar'] && Tone) {
-        
-        // ★★★ GEMINI LOG: Instance comparison ★★★
-        console.log(`[GEMINI_LOG] --- Soundcheck Instance Verification ---`);
-        console.log(`[GEMINI_LOG] Is samplers['eguitar'] the same as targetSamplerMulti?`, samplers['eguitar'] === targetSamplerMulti);
-        console.log(`[GEMINI_LOG] samplers['eguitar'] object:`, samplers['eguitar']);
-        console.log(`[GEMINI_LOG] targetSamplerMulti object:`, targetSamplerMulti);
-        console.log(`--- End Verification ---`);
-
         const sampler = samplers['eguitar'].sampler;
         const now = Tone.now();
         
@@ -443,6 +435,17 @@ const handleResetParams = () => {
   if (confirm('現在の調整を破棄し、全ての設定を初期値に戻します。よろしいですか？')) {
     tuningParams.value = JSON.parse(JSON.stringify(masterTunedParams)); 
   }
+};
+
+const handleSetExtremeEq = (type: 'cut' | 'boost') => {
+  const value = type === 'cut' ? -12 : 12;
+  const currentParams = tuningParams.value.target_eguitar;
+  tuningParams.value.target_eguitar = {
+    ...currentParams,
+    eqLow: value,
+    eqMid: value,
+    eqHigh: value,
+  };
 };
 
 // ---
@@ -718,6 +721,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       @save-params="handleSaveParams"
       @export-params="handleExportParams"
       @reset-params="handleResetParams"
+      @set-extreme-eq="handleSetExtremeEq"
     />
   </div>
 </template>
