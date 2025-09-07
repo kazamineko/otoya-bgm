@@ -29,6 +29,7 @@ let diSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string }
 let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 let targetSamplerMulti: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newRockBassSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
+let newSynthPianoSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 
 let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
@@ -110,17 +111,23 @@ const masterTunedParams: TuningParams = {
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0 },
   "target_ebass": { "volume": -6, "attack": 0.01, "release": 1.0 }, // This now controls the NEW rock bass
+  "spiano": { "volume": -9, "attack": 0.01, "release": 1.0 }, // Add new synth piano
 };
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value || !Tone) return;
   
-  // This watcher will now also control the new rock bass sampler via "target_ebass" key
   if (newRockBassSampler && newParams.target_ebass) {
       const rockBassParams = newParams.target_ebass;
       if(rockBassParams.volume !== undefined) newRockBassSampler.sampler.volume.value = rockBassParams.volume;
       if(rockBassParams.attack !== undefined) newRockBassSampler.sampler.attack = rockBassParams.attack;
       if(rockBassParams.release !== undefined) newRockBassSampler.sampler.release = rockBassParams.release;
+  }
+  if (newSynthPianoSampler && newParams.spiano) {
+      const spianoParams = newParams.spiano;
+      if(spianoParams.volume !== undefined) newSynthPianoSampler.sampler.volume.value = spianoParams.volume;
+      if(spianoParams.attack !== undefined) newSynthPianoSampler.sampler.attack = spianoParams.attack;
+      if(spianoParams.release !== undefined) newSynthPianoSampler.sampler.release = spianoParams.release;
   }
 
   const eguitarParams = newParams.eguitar as AmpParams;
@@ -157,8 +164,7 @@ watch(tuningParams, (newParams) => {
   }
   
   for (const instrumentName in newParams) {
-    // Exclude target_ebass as it's handled separately now
-    if (instrumentName === 'target_ebass') continue;
+    if (instrumentName === 'target_ebass' || instrumentName === 'spiano') continue;
 
     const activeSampler = samplers[instrumentName] || targetSamplers[instrumentName] || diSamplers[instrumentName];
     if (activeSampler) {
@@ -186,6 +192,11 @@ const initializeAudio = async () => {
     target_eguitar: 'eguitar-dist-c4.wav',
   };
   instrumentList.value = Object.keys(masterTunedParams).filter(k => !k.startsWith('target_'));
+  
+  if (!instrumentList.value.includes('spiano')) {
+    instrumentList.value.push('spiano');
+  }
+
 
   const initialParams = JSON.parse(JSON.stringify(masterTunedParams)); 
   
@@ -290,6 +301,23 @@ const initializeAudio = async () => {
     newRockBassSampler = { sampler: loadedNewRockBassSampler, baseNote: 'A1' };
     console.log("LOG: New multi-sampled rock bass loaded successfully.");
 
+    const newSynthPianoUrls = {
+        'C2': 'spiano-C2v100.wav', 'F#1': 'spiano-F#1v100.wav',
+        'C3': 'spiano-C3v100.wav', 'F#2': 'spiano-F#2v100.wav',
+        'C4': 'spiano-C4v100.wav', 'F#3': 'spiano-F#3v100.wav',
+        'C5': 'spiano-C5v100.wav', 'F#4': 'spiano-F#4v100.wav',
+        'C6': 'spiano-C6v100.wav', 'F#5': 'spiano-F#5v100.wav',
+        'C7': 'spiano-C7v100.wav', 'F#6': 'spiano-F#6v100.wav',
+    };
+    const newSynthPianoParams = tuningParams.value['spiano'];
+    const loadedNewSynthPianoSampler = new Tone.Sampler({
+        urls: newSynthPianoUrls, baseUrl: "/",
+        volume: newSynthPianoParams.volume, attack: newSynthPianoParams.attack, release: newSynthPianoParams.release
+    });
+    newSynthPianoSampler = { sampler: loadedNewSynthPianoSampler, baseNote: 'C4' };
+    samplers['spiano'] = newSynthPianoSampler;
+    console.log("LOG: New synth piano sampler loaded successfully.");
+
     for (const name of Object.keys(allSamplePaths)) {
       const params = tuningParams.value[name];
       if (!params) continue;
@@ -323,6 +351,8 @@ const initializeAudio = async () => {
       console.log("LOG: All core audio nodes initialized successfully.");
       
       newRockBassSampler.sampler.connect(drumBusComp);
+      newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
+
 
       const eguitarDI = diSamplers['eguitar'];
       if (eguitarDI) {
@@ -517,6 +547,12 @@ const handleResetParams = () => {
         newRockBassSampler.sampler.attack = defaults.attack;
         newRockBassSampler.sampler.release = defaults.release;
     }
+    if (newSynthPianoSampler) {
+        const defaults = masterTunedParams['spiano'];
+        newSynthPianoSampler.sampler.volume.value = defaults.volume;
+        newSynthPianoSampler.sampler.attack = defaults.attack;
+        newSynthPianoSampler.sampler.release = defaults.release;
+    }
     alert('設定を初期化しました。');
   }
 };
@@ -627,7 +663,7 @@ const createJazzSound = (rng: () => number): boolean => {
 
 // --- THE GRAND REBUILD OF "ROCK BEAT" ---
 const createRockSound = (rng: () => number): boolean => {
-    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !samplers.ride || !samplers.crash) return false;
+    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !samplers.ride || !samplers.crash || !newSynthPianoSampler) return false;
     
     // Cleanup previous rock track events before starting new ones
     scheduledEvents.forEach(event => { event.stop(0); event.dispose(); });
@@ -656,7 +692,10 @@ const createRockSound = (rng: () => number): boolean => {
         for (let i = 0; i < songBlueprint.length; i++) {
             const section = songBlueprint[i]!;
             const nextDuration = cumulativeDuration + section.duration;
-            if (totalMeasures < nextDuration) {
+            const totalBlueprintDuration = songBlueprint.reduce((sum, s) => sum + s.duration, 0);
+            const loopRelativeMeasures = totalMeasures % totalBlueprintDuration;
+
+            if (loopRelativeMeasures < nextDuration) {
                 currentRole = section.role;
                 break;
             }
@@ -676,6 +715,10 @@ const createRockSound = (rng: () => number): boolean => {
             newRockBassSampler!.sampler.release = 1.0;
             samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, vel);
             newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time, vel);
+            // Add synth piano arpeggio in chorus
+            const arpeggio = [`${rootNote}4`, `${rootNote}5`, `${rootNote}6`];
+            const noteToPlay = arpeggio[Math.floor(rng() * 3)]!;
+            newSynthPianoSampler?.sampler.triggerAttackRelease(noteToPlay, '16n', time + Tone.Time('8n').toSeconds());
         }
 
     }, "4n").start(0);
