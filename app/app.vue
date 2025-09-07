@@ -150,6 +150,7 @@ watch(tuningParams, (newParams) => {
 }, { deep: true });
 
 const initializeAudio = async () => {
+  console.log('[GEMINI_DEBUG_LOG] initializeAudio: 開始');
   isLoading.value = true;
   loadingMessage.value = '喫茶店の準備をしています...';
 
@@ -190,8 +191,10 @@ const initializeAudio = async () => {
   tuningParams.value = initialParams;
 
   try {
+    console.log('[GEMINI_DEBUG_LOG] Tone.jsのインポートと開始...');
     Tone = await import('tone');
     await Tone.start();
+    console.log('[GEMINI_DEBUG_LOG] Tone.jsの準備完了');
     loadingMessage.value = '店内の響きを調整しています...';
     
     limiter = new Tone.Limiter(-0.1).toDestination();
@@ -206,16 +209,22 @@ const initializeAudio = async () => {
     chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
     delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
     
+    console.log('[GEMINI_DEBUG_LOG] ギターエフェクトの初期化開始');
     const eguitarTargetP = tuningParams.value.target_eguitar;
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
+    console.log('[GEMINI_DEBUG_LOG] guitarPitchShift 作成完了:', guitarPitchShift);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
+    console.log('[GEMINI_DEBUG_LOG] guitarVibrato 作成完了:', guitarVibrato);
     guitarDistortion = new Tone.Distortion(eguitarTargetP.distortion);
+    console.log('[GEMINI_DEBUG_LOG] guitarDistortion 作成完了:', guitarDistortion);
     guitarCabinet = new Tone.Convolver("/irs/guitar-cab.wav");
+    console.log('[GEMINI_DEBUG_LOG] guitarCabinet (Convolver) 作成完了:', guitarCabinet);
     guitarEQ = new Tone.EQ3({ 
         low: eguitarTargetP.eqLow, 
         mid: eguitarTargetP.eqMid, 
         high: eguitarTargetP.eqHigh 
     });
+    console.log('[GEMINI_DEBUG_LOG] guitarEQ 作成完了:', guitarEQ);
     
     const ebassTargetP = tuningParams.value.target_ebass;
     bassEQNode = new Tone.EQ3({
@@ -223,6 +232,7 @@ const initializeAudio = async () => {
         mid: ebassTargetP.eqMid,
         high: ebassTargetP.eqHigh
     });
+    console.log('[GEMINI_DEBUG_LOG] 全てのエフェクトノードをインスタンス化完了');
     
     loadingMessage.value = 'AI奏者を準備しています...';
     
@@ -231,7 +241,9 @@ const initializeAudio = async () => {
     targetGuitarPlayer = new Tone.Player('/C5_s6_01.wav').toDestination();
     targetBassPlayer = new Tone.Player('/ebass-e1.wav').toDestination();
 
+    console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み開始 (Players, Cabinet IR)...');
     await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, guitarCabinet.load]);
+    console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み完了');
     loadingMessage.value = '楽器を最終調整しています...';
 
     const multiSampleUrls = {
@@ -245,6 +257,7 @@ const initializeAudio = async () => {
       volume: multiSampleParams.volume, attack: multiSampleParams.attack, release: multiSampleParams.release
     });
     targetSamplerMulti = { sampler: loadedMultiSampler, baseNote: 'G#5' }; 
+    console.log('[GEMINI_DEBUG_LOG] targetSamplerMulti 作成完了');
     
     const newBassUrls = {
         'E1': 'ebass-new_E.wav', 'F1': 'ebass-new_F.wav', 'F#1': 'ebass-new_Fs.wav', 'G1': 'ebass-new_G.wav',
@@ -304,7 +317,9 @@ const initializeAudio = async () => {
       }
     }
     
+    console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
     if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler && guitarDistortion && guitarCabinet) {
+      console.log('[GEMINI_DEBUG_LOG] 全てのオーディオノードが有効です。接続処理を実行します。');
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
@@ -316,6 +331,7 @@ const initializeAudio = async () => {
       }
 
       if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion && guitarCabinet) {
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始...');
         targetSamplerMulti.sampler.chain(
             guitarPitchShift,
             guitarVibrato,
@@ -324,6 +340,9 @@ const initializeAudio = async () => {
             guitarCabinet
         );
         guitarCabinet.fan(masterComp, reverb);
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了');
+      } else {
+         console.error('[GEMINI_DEBUG_LOG] ギターチェイン接続エラー: 必須ノードがnullです。');
       }
 
       for (const [name, data] of Object.entries(samplers)) {
@@ -345,6 +364,9 @@ const initializeAudio = async () => {
         if (name === 'target_ebass') continue;
         sampler.fan(masterComp, reverb);
       }
+      console.log('[GEMINI_DEBUG_LOG] 全てのシグナルチェーン接続完了');
+    } else {
+        console.error('[GEMINI_DEBUG_LOG] シグナルチェーン接続エラー: 必須となるオーディオノードがnullです。');
     }
 
     rawSamplePlayers = await new Promise<ToneType.Players>((resolve) => {
@@ -354,10 +376,11 @@ const initializeAudio = async () => {
     await Tone.loaded();
     isAudioInitialized.value = true;
     loadingMessage.value = '準備ができました';
+    console.log('[GEMINI_DEBUG_LOG] initializeAudio: 正常終了');
 
   } catch (error: any) {
     loadingMessage.value = `エラーが発生しました: ${error.message}`;
-    console.error("Error setting up Tone.js:", error);
+    console.error("[GEMINI_DEBUG_LOG] initializeAudioで致命的なエラーが発生:", error);
   } finally {
     isLoading.value = false;
   }

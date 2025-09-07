@@ -52,6 +52,11 @@
                   <span>{{ tuningParams['target_' + instrument].release.toFixed(2) }} s</span>
                 </div>
                 <template v-if="instrument === 'eguitar'">
+                   <div class="slider-container">
+                    <label>Distortion</label>
+                    <input type="range" min="0" max="1" step="0.05" :value="tuningParams['target_eguitar'].distortion" @input="updateParam('target_eguitar', 'distortion', $event)">
+                    <span>{{ tuningParams['target_eguitar'].distortion.toFixed(2) }}</span>
+                  </div>
                   <div class="slider-container">
                     <label>EQ Low</label>
                     <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqLow" @input="updateParam('target_eguitar', 'eqLow', $event)">
