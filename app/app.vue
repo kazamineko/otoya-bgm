@@ -670,121 +670,57 @@ const createJazzSound = (rng: () => number): boolean => {
 
 // --- THE GRAND REBUILD OF "ROCK BEAT" ---
 const createRockSound = (rng: () => number): boolean => {
-    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !samplers.ride || !samplers.crash || !newSynthPianoSampler) return false;
+    console.log("DEBUG: Attempting to create Rock Sound...");
+    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !samplers.ride || !samplers.crash) {
+        console.error("DEBUG: Rock instruments not ready!", {
+            Tone: !!Tone, eguitar: !!samplers.eguitar, rockKick: !!samplers.rockKick, rockSnare: !!samplers.rockSnare, newRockBassSampler: !!newRockBassSampler
+        });
+        return false;
+    }
     
-    scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
+    scheduledEvents.forEach(e => e.dispose());
+    scheduledEvents.length = 0;
+    console.log("DEBUG: Cleared previous events.");
 
     const bpm = 120 + rng() * 30;
     Tone.Transport.bpm.value = bpm;
     Tone.Transport.swing = 0;
 
-    const songBlueprint = [
-        { role: ROLES.VERSE, duration: 8 },
-        { role: ROLES.CHORUS, duration: 8 },
-        { role: ROLES.VERSE, duration: 8 },
-        { role: ROLES.CHORUS, duration: 8 },
-    ];
     const progression = ['E', 'G', 'A', 'A'];
-    
-    // --- MAIN LOOP USING TONE.LOOP FOR ROBUSTNESS ---
+
+    // --- RHYTHM SECTION (Kick & Snare) ---
+    const kickSeq = new Tone.Sequence((time, note) => {
+        if(note) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time, 0.9 + rng() * 0.1);
+    }, [1, 0, 0, 0, 1, 0, 0, 0], "8n").start(0);
+
+    const snareSeq = new Tone.Sequence((time, note) => {
+        if(note) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, time, 0.8 + rng() * 0.2);
+    }, [0, 0, 1, 0, 0, 0, 1, 0], "4n").start(0);
+
+    // --- MELODY/HARMONY SECTION (Bass & Guitar) ---
     const mainLoop = new Tone.Loop((time) => {
-        if (!Tone) return;
+      if (!Tone) return;
 
-        const totalMeasures = Math.floor(Tone.Transport.getTicksAtTime(time) / (Tone.Transport.PPQ * 4));
-        
-        let currentRole: Role = ROLES.VERSE;
-        let cumulativeDuration = 0;
-        const totalBlueprintDuration = songBlueprint.reduce((sum, s) => sum + s.duration, 0);
-        const loopRelativeMeasures = totalMeasures % totalBlueprintDuration;
+      const totalBeats = Math.floor(Tone.Transport.getTicksAtTime(time) / Tone.Transport.PPQ);
+      const measure = Math.floor(totalBeats / 4);
+      const rootNote = progression[measure % 4]!;
+      const vel = 0.8 + rng() * 0.2;
 
-        for (const section of songBlueprint) {
-            const nextDuration = cumulativeDuration + section.duration;
-            if (loopRelativeMeasures < nextDuration) {
-                currentRole = section.role;
-                break;
-            }
-            cumulativeDuration = nextDuration;
-        }
-        
-        const rootNote = progression[totalMeasures % 4]!;
-        const vel = 0.8 + rng() * 0.2;
+      console.log(`DEBUG: Time: ${time}, Measure: ${measure}, Root: ${rootNote}`);
 
-        // --- DRUMS ---
-        createRockDrums(rng, currentRole, bpm, time, totalMeasures);
-        
-        // --- BASS & GUITAR ---
-        if (currentRole === ROLES.VERSE) {
-            samplers.eguitar!.sampler.release = 0.05;
-            newRockBassSampler!.sampler.release = 0.05;
-            samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '8n', time, vel);
-            newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time, vel);
-        } else { // CHORUS
-            samplers.eguitar!.sampler.release = 1.0;
-            newRockBassSampler!.sampler.release = 1.0;
-            samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '2n', time, vel);
-            newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '4n', time, vel);
-            
-            // --- SYNTH PIANO (Playing chords in mid-range) ---
-            const pianoChord = [`${rootNote}4`, `${progression[(totalMeasures + 1) % 4]!}4`];
-            newSynthPianoSampler?.sampler.triggerAttackRelease(pianoChord, '8n', time + Tone.Time('8n').toSeconds());
-        }
-
+      // Bass plays on every beat
+      newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time, vel);
+      
+      // Guitar plays on the first beat of the measure only
+      if (totalBeats % 4 === 0) {
+        samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, vel);
+      }
+      
     }, "4n").start(0);
-
-    scheduledEvents.push(mainLoop);
+    
+    console.log("DEBUG: All sequences and loops created.");
+    scheduledEvents.push(kickSeq, snareSeq, mainLoop);
     return true; 
-};
-
-const createRockDrums = (rng: () => number, role: Role, bpm: number, time: number, measure: number) => {
-    if (!Tone || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash || !samplers.tomMid || !samplers.tomFloor) return;
-
-    const use16thBeat = bpm >= 135;
-    const subdivision = use16thBeat ? "16n" : "8n";
-    const steps = use16thBeat ? 16 : 8;
-    const stepDuration = Tone.Time(subdivision).toSeconds();
-    
-    const isFillMeasure = measure % 8 === 7;
-
-    if (isFillMeasure) {
-        const fillPattern = [
-            { time: 0, note: samplers.rockSnare!.baseNote, dur: '16n' },
-            { time: 1, note: samplers.rockSnare!.baseNote, dur: '16n' },
-            { time: 2, note: samplers.tomMid!.baseNote, dur: '16n' },
-            { time: 3, note: samplers.tomFloor!.baseNote, dur: '16n' },
-        ];
-        fillPattern.forEach(fill => {
-             samplers.rockSnare?.sampler.triggerAttackRelease(fill.note, fill.dur, time + fill.time * stepDuration);
-        });
-        return;
-    }
-
-    let kickPattern, snarePattern, ridePattern;
-    if (role === ROLES.VERSE) {
-        kickPattern = [1, 0, 0, 0, 1, 0, 0, 0];
-        snarePattern = [0, 0, 1, 0, 0, 0, 1, 0];
-        ridePattern = [1, 0, 1, 0, 1, 0, 1, 0];
-    } else { // CHORUS
-        kickPattern = [1, 0, 1, 0, 1, 0, 1, 0];
-        snarePattern = [0, 0, 1, 0, 0, 0, 1, 0];
-        ridePattern = [1, 1, 1, 1, 1, 1, 1, 1];
-    }
-    
-    if (use16thBeat) {
-        kickPattern = kickPattern.flatMap(v => [v, 0]);
-        snarePattern = snarePattern.flatMap(v => [v, 0]);
-        ridePattern = ridePattern.flatMap(v => [v, 1]);
-    }
-
-    for (let i = 0; i < steps; i++) {
-        const stepTime = time + i * stepDuration;
-        if (kickPattern[i]) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, stepTime, 0.9 + rng() * 0.1);
-        if (snarePattern[i]) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, stepTime, 0.8 + rng() * 0.2);
-        if (ridePattern[i]) samplers.ride?.sampler.triggerAttack(samplers.ride.baseNote, stepTime, 0.5 + rng() * 0.4);
-    }
-    
-    if (role === ROLES.CHORUS) {
-        samplers.crash?.sampler.triggerAttack(samplers.crash.baseNote, time);
-    }
 };
 </script>
 
@@ -804,7 +740,7 @@ const createRockDrums = (rng: () => number, role: Role, bpm: number, time: numbe
               <span class="menu-description">思考を妨げない、静かな雨音のような音楽。</span>
             </div>
             <div v-if="selectedMenu === '集中ブレンド' && isPlaying" class="active-indicator">
-              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
+              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
           <button class="menu-button" @click="playMusic('リラックス・デカフェ')" :class="{ 'is-active': selectedMenu === 'リラックス・デカフェ' }">
@@ -813,7 +749,7 @@ const createRockDrums = (rng: () => number, role: Role, bpm: number, time: numbe
               <span class="menu-description">心のコリをほぐす、優しい陽だまりのような音楽。</span>
             </div>
             <div v-if="selectedMenu === 'リラックス・デカフェ' && isPlaying" class="active-indicator">
-              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
+              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
           <button class="menu-button" @click="playMusic('ジャズ・スペシャル')" :class="{ 'is-active': selectedMenu === 'ジャズ・スペシャル' }">
@@ -822,7 +758,7 @@ const createRockDrums = (rng: () => number, role: Role, bpm: number, time: numbe
               <span class="menu-description">夜の静寂に寄り添う、マスターこだわりの一杯。</span>
             </div>
             <div v-if="selectedMenu === 'ジャズ・スペシャル' && isPlaying" class="active-indicator">
-              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
+              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
           <button class="menu-button" @click="playMusic('Lo-Fi・ビター')" :class="{ 'is-active': selectedMenu === 'Lo-Fi・ビター' }">
