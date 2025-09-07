@@ -315,6 +315,14 @@ const initializeAudio = async () => {
     isAudioInitialized.value = true;
     loadingMessage.value = '準備ができました';
 
+    // ★★★ GEMINI LOG A: Log initial state of guitarEQ after initialization ★★★
+    if(guitarEQ) {
+      console.log('[GEMINI_LOG_A] Audio Initialized. Current guitarEQ state:', {
+        'high_value': guitarEQ.high.value,
+        'full_object': guitarEQ
+      });
+    }
+
   } catch (error: any) {
     loadingMessage.value = `エラーが発生しました: ${error.message}`;
     console.error("Error setting up Tone.js:", error);
@@ -389,6 +397,9 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
 
         guitarVibrato.frequency.value = 4 + rng() * 2;
         
+        // ★★★ GEMINI LOG B: Log state JUST BEFORE playing sound in soundcheck ★★★
+        console.log(`[GEMINI_LOG_B] Soundcheck playback. Current guitarEQ.high.value: ${guitarEQ.high.value}`);
+
         sampler.triggerAttackRelease('E5', duration, now);
 
       } else {
@@ -532,7 +543,19 @@ const createRockSound = (rng: () => number): boolean => {
       const leadVelocity = isGhostNote ? vel * 0.3 : vel;
 
       const leadAction = {
-        'guitar': () => samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity),
+        'guitar': () => {
+          // ★★★ FIX: Added null check for Tone to resolve TS error ★★★
+          if (samplers.eguitar && guitarEQ && Tone) {
+            // ★★★ GEMINI LOG C: Log state JUST BEFORE playing sound in BGM loop ★★★
+            console.log(`[GEMINI_LOG_C] Rock Beat playback @ ${Tone.Transport.position}`, {
+              'eqHigh': guitarEQ.high.value,
+              'volume': samplers.eguitar.sampler.volume.value,
+              'attack': samplers.eguitar.sampler.attack,
+              'release': samplers.eguitar.sampler.release
+            });
+            samplers.eguitar.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity);
+          }
+        },
         'synth': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '8n', time, leadVelocity),
         'organ': () => newElecOrganSampler?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity * 0.8),
       };
@@ -540,8 +563,10 @@ const createRockSound = (rng: () => number): boolean => {
       const padAction = {
           'guitar': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`], '2n', time, vel * 0.6),
           'synth': () => {
-              samplers.eguitar!.sampler.release = 0.05;
-              samplers.eguitar?.sampler.triggerAttackRelease(`${rootNote}3`, '8n', time, vel * 0.8)
+              if (samplers.eguitar) {
+                samplers.eguitar.sampler.release = 0.05;
+                samplers.eguitar.sampler.triggerAttackRelease(`${rootNote}3`, '8n', time, vel * 0.8)
+              }
           },
           'organ': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}5`], '2n', time, vel * 0.6)
       };
