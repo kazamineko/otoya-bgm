@@ -281,7 +281,19 @@ const initializeAudio = async () => {
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
+      if (targetSamplerMulti) {
+        samplers['eguitar'] = targetSamplerMulti;
+        console.log("LOG: 'targetSamplerMulti' is now the primary 'eguitar' sampler.");
+      }
+
+      if(targetSamplerMulti) {
+        targetSamplerMulti.sampler.chain(guitarPitchShift, guitarVibrato, guitarEQ).fan(masterComp, reverb); 
+        console.log("LOG: Routing multi-sampled guitar through Nuance Engine to Master Bus.");
+      }
+
       for (const [name, data] of Object.entries(samplers)) {
+        if (name === 'eguitar') continue; // ★★★ FIX: Prevent double-routing for eguitar ★★★
+
         if (rockDrumKit.includes(name)) {
           if (name === 'ride') {
             data.sampler.connect(rideFilter);
@@ -305,15 +317,6 @@ const initializeAudio = async () => {
         }
       }
 
-      if(targetSamplerMulti) {
-        targetSamplerMulti.sampler.chain(guitarPitchShift, guitarVibrato, guitarEQ).fan(masterComp, reverb); 
-        console.log("LOG: Routing multi-sampled guitar through Nuance Engine to Master Bus.");
-      }
-
-      if (targetSamplerMulti) {
-        samplers['eguitar'] = targetSamplerMulti;
-        console.log("LOG: 'targetSamplerMulti' is now the primary 'eguitar' sampler.");
-      }
     }
 
     rawSamplePlayers = await new Promise<ToneType.Players>((resolve) => {
