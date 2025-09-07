@@ -210,7 +210,7 @@ const initializeAudio = async () => {
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
     guitarDistortion = new Tone.Distortion(eguitarTargetP.distortion);
-    guitarCabinet = new Tone.Convolver("/irs/guitar-cab.wav").connect(masterComp);
+    guitarCabinet = new Tone.Convolver("/irs/guitar-cab.wav");
     guitarEQ = new Tone.EQ3({ 
         low: eguitarTargetP.eqLow, 
         mid: eguitarTargetP.eqMid, 
@@ -315,16 +315,15 @@ const initializeAudio = async () => {
         samplers['eguitar'] = targetSamplerMulti;
       }
 
-      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ) {
+      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion && guitarCabinet) {
         targetSamplerMulti.sampler.chain(
             guitarPitchShift,
             guitarVibrato,
             guitarDistortion,
             guitarEQ,
-            guitarCabinet,
-            masterComp
+            guitarCabinet
         );
-        guitarCabinet.connect(reverb);
+        guitarCabinet.fan(masterComp, reverb);
       }
 
       for (const [name, data] of Object.entries(samplers)) {
