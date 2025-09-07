@@ -30,6 +30,8 @@ let newElecOrganSampler: { sampler: ToneType.Sampler, baseNote: string } | null 
 let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
+let guitarDistortion: ToneType.Distortion | null = null;
+let guitarCabinet: ToneType.Convolver | null = null;
 let bassEQNode: ToneType.EQ3 | null = null;
 
 
@@ -74,7 +76,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 0.3, "detune": 0, "eqLow": 6.5, "eqMid": 3.5, "eqHigh": 0.5 },
+  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 0.3, "detune": 0, "eqLow": 6.5, "eqMid": 3.5, "eqHigh": 0.5, "distortion": 0.2 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0.5, "eqMid": 2.5, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -116,6 +118,9 @@ watch(tuningParams, (newParams) => {
         if (eguitarTargetParams.eqLow !== undefined) guitarEQ.low.value = eguitarTargetParams.eqLow;
         if (eguitarTargetParams.eqMid !== undefined) guitarEQ.mid.value = eguitarTargetParams.eqMid;
         if (eguitarTargetParams.eqHigh !== undefined) guitarEQ.high.value = eguitarTargetParams.eqHigh;
+      }
+      if (guitarDistortion && eguitarTargetParams.distortion !== undefined) {
+          guitarDistortion.distortion = eguitarTargetParams.distortion;
       }
       if (guitarPitchShift && eguitarTargetParams.detune !== undefined) {
           guitarPitchShift.pitch = eguitarTargetParams.detune;
@@ -204,6 +209,8 @@ const initializeAudio = async () => {
     const eguitarTargetP = tuningParams.value.target_eguitar;
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
+    guitarDistortion = new Tone.Distortion(eguitarTargetP.distortion);
+    guitarCabinet = new Tone.Convolver("/irs/guitar-cab.wav").connect(masterComp);
     guitarEQ = new Tone.EQ3({ 
         low: eguitarTargetP.eqLow, 
         mid: eguitarTargetP.eqMid, 
@@ -224,7 +231,7 @@ const initializeAudio = async () => {
     targetGuitarPlayer = new Tone.Player('/C5_s6_01.wav').toDestination();
     targetBassPlayer = new Tone.Player('/ebass-e1.wav').toDestination();
 
-    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load]);
+    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, guitarCabinet.load]);
     loadingMessage.value = '楽器を最終調整しています...';
 
     const multiSampleUrls = {
@@ -297,7 +304,7 @@ const initializeAudio = async () => {
       }
     }
     
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler && guitarDistortion && guitarCabinet) {
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
@@ -309,11 +316,15 @@ const initializeAudio = async () => {
       }
 
       if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ) {
-        targetSamplerMulti.sampler.connect(guitarPitchShift);
-        guitarPitchShift.connect(guitarVibrato);
-        guitarVibrato.connect(guitarEQ);
-        guitarEQ.connect(masterComp);
-        guitarEQ.connect(reverb);
+        targetSamplerMulti.sampler.chain(
+            guitarPitchShift,
+            guitarVibrato,
+            guitarDistortion,
+            guitarEQ,
+            guitarCabinet,
+            masterComp
+        );
+        guitarCabinet.connect(reverb);
       }
 
       for (const [name, data] of Object.entries(samplers)) {
