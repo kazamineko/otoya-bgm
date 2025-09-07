@@ -67,7 +67,7 @@ const masterTunedParams: TuningParams = {
   "crash": { "volume": -12, "attack": 0.01, "release": 0.5 },
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 }, "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0 },
+  "target_eguitar": { "volume": -3, "attack": 0.001, "release": 1.0, "detune": 0, "eqHigh": 3 },
   "target_ebass": { "volume": -6, "attack": 0.01, "release": 1.0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1.0 },
@@ -120,7 +120,6 @@ const initializeAudio = async () => {
     rockKick: 'rock-kick.wav', rockSnare: 'rock-snare.wav', crash: 'drum-crash.wav',
     tomHigh: 'tom-high.wav', tomMid: 'tom-mid.wav', tomFloor: 'tom-floor.wav',
     target_ebass: 'ebass-e1.wav',
-    target_eguitar: 'eguitar-dist-c4.wav',
   };
   instrumentList.value = Object.keys(masterTunedParams).filter(k => !k.startsWith('target_'));
   
@@ -172,7 +171,7 @@ const initializeAudio = async () => {
     const eguitarTargetP = tuningParams.value.target_eguitar;
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
-    guitarEQ = new Tone.EQ3({ low: -6, mid: 0, high: 3 });
+    guitarEQ = new Tone.EQ3({ low: -6, mid: 0, high: eguitarTargetP.eqHigh });
     bassEQNode = new Tone.EQ3({ low: 0, mid: 4, high: 0}); // Bass EQ
     
     loadingMessage.value = 'AI奏者を準備しています...';
@@ -257,8 +256,7 @@ const initializeAudio = async () => {
       const filePath = allSamplePaths[name]!;
       let baseNote = '';
       
-      if (name === 'target_eguitar') { baseNote = 'G#3'; }
-      else if (filePath.includes('-c3')) { baseNote = 'C3'; }
+      if (filePath.includes('-c3')) { baseNote = 'C3'; }
       else if (filePath.includes('-e1')) { baseNote = 'C1'; } 
       else { baseNote = 'C4'; }
       urls[baseNote] = filePath;
@@ -399,7 +397,6 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
         const rng = Math.random;
 
         guitarVibrato.frequency.value = 4 + rng() * 2;
-        guitarEQ.high.value = 2 + rng() * 2;
         
         sampler.triggerAttackRelease('E5', duration, now);
 
@@ -433,6 +430,11 @@ const handleUpdateParam = (payload: { instrument: string, param: string, value: 
           guitarPitchShift.pitch = payload.value;
         }
         break;
+      case 'eqHigh':
+        if (guitarEQ) {
+          guitarEQ.high.value = payload.value;
+        }
+        break;
     }
   }
 };
@@ -448,6 +450,9 @@ const handleResetParams = () => {
       targetSamplerMulti.sampler.release = defaults.release;
       if (guitarPitchShift) {
         guitarPitchShift.pitch = defaults.detune;
+      }
+      if (guitarEQ) {
+        guitarEQ.high.value = defaults.eqHigh;
       }
     }
     if (newRockBassSampler) {
@@ -647,7 +652,7 @@ const createRockSound = (rng: () => number): boolean => {
               <span class="menu-description">夜の静寂に寄り添う、マスターこだわりの一杯。</span>
             </div>
             <div v-if="selectedMenu === 'ジャズ・スペシャル' && isPlaying" class="active-indicator">
-              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
+              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
           <button class="menu-button" @click="playMusic('Lo-Fi・ビター')" :class="{ 'is-active': selectedMenu === 'Lo-Fi・ビター' }">
@@ -656,7 +661,7 @@ const createRockSound = (rng: () => number): boolean => {
               <span class="menu-description">懐かしいレコードに針を落とす、あの感覚をあなたに。</span>
             </div>
             <div v-if="selectedMenu === 'Lo-Fi・ビター' && isPlaying" class="active-indicator">
-              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
+              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg>
             </div>
           </button>
           <button class="menu-button" @click="playMusic('ロック・ビート')" :class="{ 'is-active': selectedMenu === 'ロック・ビート' }">
@@ -665,7 +670,7 @@ const createRockSound = (rng: () => number): boolean => {
               <span class="menu-description">魂を揺さぶる、力強いリズムと歪んだギターのブレンド。</span>
             </div>
             <div v-if="selectedMenu === 'ロック・ビート' && isPlaying" class="active-indicator">
-              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
             </div>
           </button>
         </div>

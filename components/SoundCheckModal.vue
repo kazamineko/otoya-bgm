@@ -51,6 +51,14 @@
                   <input type="range" min="0" max="30" step="0.1" :value="tuningParams['target_' + instrument].release" @input="updateParam('target_' + instrument, 'release', $event)">
                   <span>{{ tuningParams['target_' + instrument].release.toFixed(2) }} s</span>
                 </div>
+                <!-- Only show EQ for eguitar -->
+                <template v-if="instrument === 'eguitar'">
+                  <div class="slider-container">
+                    <label>EQ High</label>
+                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqHigh" @input="updateParam('target_eguitar', 'eqHigh', $event)">
+                    <span>{{ tuningParams['target_eguitar'].eqHigh.toFixed(1) }} dB</span>
+                  </div>
+                </template>
               </template>
               <!-- Other Instruments -->
               <template v-else>
