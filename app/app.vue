@@ -376,8 +376,6 @@ const initializeAudio = async () => {
         samplers['eguitar'] = targetSamplerMulti;
         console.log("LOG: 'targetSamplerMulti' is now the primary 'eguitar' sampler.");
       }
-      // The old 'target_ebass' is no longer the primary 'ebass' sampler.
-      // samplers['ebass'] = targetSamplers['target_ebass']; // This line is removed.
     }
 
     rawSamplePlayers = await new Promise<ToneType.Players>((resolve) => {
@@ -451,12 +449,9 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
   const duration = '2n';
 
   if (type === 'target_sampler') {
-      //
-      // --- 3. Route the "New Rock Bass" button to the correct sampler ---
-      //
       if (instrumentName === 'target_ebass' && newRockBassSampler) {
         newRockBassSampler.sampler.triggerAttackRelease(newRockBassSampler.baseNote, duration);
-        return; // Important: exit here to prevent playing the old sampler
+        return; 
       }
 
       if (instrumentName === 'target_eguitar' && targetSamplerMulti && Tone && guitarVibrato && guitarEQ) {
@@ -516,6 +511,12 @@ const handleResetParams = () => {
         guitarPitchShift.pitch = defaults.detune;
       }
     }
+    if (newRockBassSampler) {
+        const defaults = masterTunedParams['target_ebass'];
+        newRockBassSampler.sampler.volume.value = defaults.volume;
+        newRockBassSampler.sampler.attack = defaults.attack;
+        newRockBassSampler.sampler.release = defaults.release;
+    }
     alert('設定を初期化しました。');
   }
 };
@@ -569,13 +570,12 @@ const handleDownloadSampler = async () => {
   }
 };
 
+// ---
+// SECTION: Music Generation Logic
+// ---
 
-const ROLES = { BACKING: 'backing', GUITAR_SOLO: 'guitar_solo', DRUM_BREAK: 'drum_break' } as const;
+const ROLES = { VERSE: 'verse', CHORUS: 'chorus', BRIDGE: 'bridge' } as const;
 type Role = typeof ROLES[keyof typeof ROLES];
-type PartEvent = { time: string, note: string, dur: ToneType.Unit.Time };
-type PartPattern = PartEvent[];
-type BassPattern = { time: string, note: string, dur: ToneType.Unit.Time }[];
-type Section = { role: Role; duration: number; };
 
 const createConcentrationSound = (rng: () => number): boolean => { 
     if (!Tone || !masterComp) return false;
@@ -625,35 +625,106 @@ const createJazzSound = (rng: () => number): boolean => {
     return true; 
 };
 
+// --- THE GRAND REBUILD OF "ROCK BEAT" ---
 const createRockSound = (rng: () => number): boolean => {
-    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler) return false;
+    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !samplers.ride || !samplers.crash) return false;
     
-    Tone.Transport.bpm.value = 130 + rng() * 20;
+    // Cleanup previous rock track events before starting new ones
+    scheduledEvents.forEach(event => { event.stop(0); event.dispose(); });
+    scheduledEvents.length = 0;
+
+    const bpm = 120 + rng() * 30;
+    Tone.Transport.bpm.value = bpm;
     Tone.Transport.swing = 0;
 
+    const songBlueprint = [
+        { role: ROLES.VERSE, duration: 8 },
+        { role: ROLES.CHORUS, duration: 8 },
+        { role: ROLES.VERSE, duration: 8 },
+        { role: ROLES.CHORUS, duration: 8 },
+    ];
     const progression = ['E', 'G', 'A', 'A'];
+    let currentRole: Role = ROLES.VERSE;
+    
+    // --- MAIN LOOP ---
+    const mainLoop = new Tone.Loop((time) => {
+        if (!Tone) return;
 
-    const kickSeq = new Tone.Sequence((time, note) => {
-        if(note) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time, 0.9 + rng() * 0.1);
-    }, [1, 0, 1, 0, 1, 0, 1, 0], "8n").start(0);
+        const totalMeasures = Math.floor(Tone.Transport.getTicksAtTime(time) / (Tone.Transport.PPQ * 4));
+        
+        let cumulativeDuration = 0;
+        for (let i = 0; i < songBlueprint.length; i++) {
+            const section = songBlueprint[i]!;
+            const nextDuration = cumulativeDuration + section.duration;
+            if (totalMeasures < nextDuration) {
+                currentRole = section.role;
+                break;
+            }
+            cumulativeDuration = nextDuration;
+        }
+        
+        const rootNote = progression[totalMeasures % 4]!;
+        const vel = 0.8 + rng() * 0.2;
 
-    const snareSeq = new Tone.Sequence((time, note) => {
-        if(note) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, time, 0.8 + rng() * 0.2);
-    }, [0, 1, 0, 1], "4n").start(0);
-
-    const riffLoop = new Tone.Loop((time) => {
-      if (!Tone) return;
-
-      const measure = Math.floor(Tone.Transport.getTicksAtTime(time) / (Tone.Transport.PPQ * 4)) % 4;
-      const rootNote = progression[measure]!;
-      
-      samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time);
-      newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time);
+        if (currentRole === ROLES.VERSE) {
+            samplers.eguitar!.sampler.release = 0.05;
+            newRockBassSampler!.sampler.release = 0.05;
+            samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '8n', time, vel);
+            newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time, vel);
+        } else { // CHORUS
+            samplers.eguitar!.sampler.release = 1.0;
+            newRockBassSampler!.sampler.release = 1.0;
+            samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, vel);
+            newRockBassSampler?.sampler.triggerAttackRelease(`${rootNote}1`, '8n', time, vel);
+        }
 
     }, "4n").start(0);
 
-    scheduledEvents.push(kickSeq, snareSeq, riffLoop);
+    // --- DYNAMIC DRUM LOOP ---
+    const drumLoop = new Tone.Loop(time => {
+        createRockDrums(rng, currentRole, bpm, time);
+    }, '1m').start(0);
+
+
+    scheduledEvents.push(mainLoop, drumLoop);
     return true; 
+};
+
+const createRockDrums = (rng: () => number, role: Role, bpm: number, time: number) => {
+    if (!Tone || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash) return;
+
+    const use16thBeat = bpm >= 135;
+    const subdivision = use16thBeat ? "16n" : "8n";
+    const steps = use16thBeat ? 16 : 8;
+
+    let kickPattern, snarePattern, ridePattern;
+    if (role === ROLES.VERSE) {
+        kickPattern = [1, 0, 0, 0, 1, 0, 0, 0];
+        snarePattern = [0, 0, 1, 0, 0, 0, 1, 0];
+        ridePattern = [1, 0, 1, 0, 1, 0, 1, 0];
+    } else { // CHORUS
+        kickPattern = [1, 0, 1, 0, 1, 0, 1, 0];
+        snarePattern = [0, 0, 1, 0, 0, 0, 1, 0];
+        ridePattern = [1, 1, 1, 1, 1, 1, 1, 1];
+    }
+    
+    if (use16thBeat) {
+        kickPattern = kickPattern.flatMap(v => [v, 0]);
+        snarePattern = snarePattern.flatMap(v => [v, 0]);
+        ridePattern = ridePattern.flatMap(v => [v, 1]);
+    }
+    
+    const stepDuration = Tone.Time(subdivision).toSeconds();
+    for (let i = 0; i < steps; i++) {
+        const stepTime = time + i * stepDuration;
+        if (kickPattern[i]) samplers.rockKick.sampler.triggerAttack(samplers.rockKick.baseNote, stepTime, 0.9 + rng() * 0.1);
+        if (snarePattern[i]) samplers.rockSnare.sampler.triggerAttack(samplers.rockSnare.baseNote, stepTime, 0.8 + rng() * 0.2);
+        if (ridePattern[i]) samplers.ride.sampler.triggerAttack(samplers.ride.baseNote, stepTime, 0.5 + rng() * 0.4);
+    }
+    
+    if (role === ROLES.CHORUS) {
+        samplers.crash.sampler.triggerAttack(samplers.crash.baseNote, time);
+    }
 };
 </script>
 
