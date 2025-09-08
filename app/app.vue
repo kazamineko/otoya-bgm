@@ -33,9 +33,11 @@ let guitarVibrato: ToneType.Vibrato | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
 let guitarDistortion: ToneType.Distortion | null = null;
 let guitarCabinetIR: ToneType.Convolver | null = null;
+let guitarPostCabVolume: ToneType.Volume | null = null; // NEW: Volume compensation
 let guitarComp: ToneType.Compressor | null = null;
 let bassEQNode: ToneType.EQ3 | null = null;
 let bassCabinetIR: ToneType.Convolver | null = null;
+let bassPostCabVolume: ToneType.Volume | null = null; // NEW: Volume compensation
 
 
 let rawSamplePlayers: ToneType.Players | null = null;
@@ -79,8 +81,10 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 1.5, "detune": 0, "eqLow": 6.5, "eqMid": 3.5, "eqHigh": 0.5, "distortion": 0.2 },
-  "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0.5, "eqMid": 2.5, "eqHigh": 0 },
+  // RESET: EQ and Distortion values are flattened to 0 for a clean slate with the new IR.
+  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 1.5, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0 },
+  // RESET: EQ values are flattened to 0.
+  "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
 };
@@ -224,6 +228,7 @@ const initializeAudio = async () => {
         high: eguitarTargetP.eqHigh 
     });
     guitarCabinetIR = new Tone.Convolver("/ir-guitar-cab.wav");
+    guitarPostCabVolume = new Tone.Volume(12); // NEW: Compensate for IR volume loss
     guitarComp = new Tone.Compressor(-20, 3);
     
     const ebassTargetP = tuningParams.value.target_ebass;
@@ -233,6 +238,7 @@ const initializeAudio = async () => {
         high: ebassTargetP.eqHigh
     });
     bassCabinetIR = new Tone.Convolver("/ir-bass-cab.wav");
+    bassPostCabVolume = new Tone.Volume(12); // NEW: Compensate for IR volume loss
     console.log('[GEMINI_DEBUG_LOG] 全てのエフェクトノードをインスタンス化完了');
     
     loadingMessage.value = 'AI奏者を準備しています...';
@@ -323,9 +329,9 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler && guitarDistortion && guitarCabinetIR && guitarComp && bassCabinetIR) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler && guitarDistortion && guitarCabinetIR && guitarComp && bassCabinetIR && guitarPostCabVolume && bassPostCabVolume) {
       console.log('[GEMINI_DEBUG_LOG] 全てのオーディオノードが有効です。接続処理を実行します。');
-      newRockBassSampler.sampler.chain(bassEQNode, bassCabinetIR, drumBusComp);
+      newRockBassSampler.sampler.chain(bassEQNode, bassCabinetIR, bassPostCabVolume, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
       
@@ -335,18 +341,19 @@ const initializeAudio = async () => {
         samplers['eguitar'] = targetSamplerMulti;
       }
 
-      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion && guitarCabinetIR && guitarComp) {
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (IRベース)...');
+      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion && guitarCabinetIR && guitarComp && guitarPostCabVolume) {
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (IRベース + 音量補償)...');
         targetSamplerMulti.sampler.chain(
             guitarPitchShift,
             guitarVibrato,
             guitarEQ,
             guitarDistortion,
             guitarCabinetIR,
+            guitarPostCabVolume,
             guitarComp
         );
         guitarComp.fan(masterComp, reverb);
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (IRベース)');
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (IRベース + 音量補償)');
       } else {
          console.error('[GEMINI_DEBUG_LOG] ギターチェイン接続エラー: 必須ノードがnullです。');
       }
