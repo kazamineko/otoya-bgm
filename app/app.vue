@@ -239,15 +239,25 @@ const initializeAudio = async () => {
     targetBassPlayer = new Tone.Player('/ebass/ebass-e1.mp3').toDestination();
 
     const multiSampleUrls = {
-      "C2": "C2_s1_01.mp3",
-      "E2": "E2_s1_01.mp3",
       "A2": "A2_s2_01.mp3",
-      "C3": "C3_s2_01.mp3",
-      "D3": "D3_s3_01.mp3",
-      "E3": "E3_s3_01.mp3",
-      "G3": "G3_s4_01.mp3",
+      "A#5": "As5_s6_01.mp3",
       "B3": "B3_s5_01.mp3",
+      "B4": "B4_s6_01.mp3",
+      "C2": "C2_s1_01.mp3",
+      "C3": "C3_s2_01.mp3",
       "C5": "C5_s6_01.mp3",
+      "C#4": "Cs4_s5_01.mp3",
+      "C#6": "Cs6_s6_01.mp3",
+      "D3": "D3_s3_01.mp3",
+      "D5": "D5_s6_01.mp3",
+      "E2": "E2_s1_01.mp3",
+      "E3": "E3_s3_01.mp3",
+      "E4": "E4_s6_01.mp3",
+      "F2": "F2_s1_01.mp3",
+      "F5": "F5_s6_01.mp3",
+      "G3": "G3_s4_01.mp3",
+      "G4": "G4_s6_01.mp3",
+      "G#5": "Gs5_s6_01.mp3"
     };
 
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み開始 (Players & Samplers)...');
@@ -450,8 +460,7 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
 
       if (instrumentName === 'target_eguitar' && samplers['eguitar'] && Tone) {
         const sampler = samplers['eguitar'].sampler;
-        sampler.triggerAttackRelease('C3', duration); // Test with a note from the urls map
-
+        sampler.triggerAttackRelease('C3', duration);
       } else {
         const targetSampler = targetSamplers[instrumentName];
         if (targetSampler) targetSampler.sampler.triggerAttackRelease(targetSampler.baseNote, duration);
