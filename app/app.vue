@@ -80,7 +80,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -4, "attack": 0.01, "release": 1.5, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0.4 },
+  "target_eguitar": { "volume": -4, "attack": 0.01, "release": 1.5, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0.2 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -223,7 +223,7 @@ const initializeAudio = async () => {
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
     guitarDistortion = new Tone.Distortion(eguitarTargetP.distortion);
-    guitarCabinetFilter = new Tone.Filter(2000, "lowpass");
+    guitarCabinetFilter = new Tone.Filter(4000, "lowpass");
     guitarEQ = new Tone.EQ3({ 
         low: eguitarTargetP.eqLow, 
         mid: eguitarTargetP.eqMid, 
@@ -452,9 +452,9 @@ const stopMusic = () => {
 };
 
 const triggerGuitarSound = (note: string | string[], duration: ToneType.Unit.Time, time: ToneType.Unit.Time, velocity: number) => {
-  if (velocity < 0.5) {
+  if (velocity < 0.4) {
     guitarSoftSampler?.triggerAttackRelease(note, duration, time, velocity);
-  } else {
+  } else if (velocity > 0.6) {
     guitarHardSampler?.triggerAttackRelease(note, duration, time, velocity);
   }
 }
