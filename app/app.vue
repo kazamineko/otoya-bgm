@@ -132,7 +132,6 @@ watch(tuningParams, (newParams) => {
       if(p.release !== undefined) newElecOrganSampler.sampler.release = p.release;
   }
 
-  // 新規: ヘビメタSamplerのパラメータ調整
   const eguitarTargetParams = newParams.target_eguitar;
   if (heavyMetalSampler && eguitarTargetParams) {
       if(eguitarTargetParams.volume !== undefined) heavyMetalSampler.volume.value = eguitarTargetParams.volume;
@@ -560,7 +559,6 @@ const createJazzSound = (rng: () => number): boolean => {
 };
 
 const createRockSound = (rng: () => number): boolean => {
-    // BUGFIX: Samplerの状態をログで確認
     console.log('[GEMINI_DEBUG_LOG] createRockSound: Checking samplers...');
     console.log(`  - heavyMetalSampler: ${heavyMetalSampler ? 'Loaded' : 'NULL'}`);
     console.log(`  - samplers.rockKick: ${samplers.rockKick ? 'Loaded' : 'NULL'}`);
@@ -617,7 +615,7 @@ const createRockSound = (rng: () => number): boolean => {
       const leadVelocity = isGhostNote ? vel * 0.3 : vel;
 
       const leadAction = {
-        'guitar': () => triggerGuitarSound(`${rootNote}3`, '4n', time, leadVelocity),
+        'guitar': () => triggerGuitarSound([`${rootNote}2`, `${rootNote}3`], '4n', time, leadVelocity),
         'synth': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '8n', time, leadVelocity),
         'organ': () => newElecOrganSampler?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity * 0.8),
       };
@@ -625,7 +623,7 @@ const createRockSound = (rng: () => number): boolean => {
       const padAction = {
           'guitar': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`], '2n', time, vel * 0.6),
           'synth': () => {
-              triggerGuitarSound(`${rootNote}3`, '8n', time, vel * 0.8);
+              triggerGuitarSound(`${rootNote}2`, '8n', time, vel * 0.8);
           },
           'organ': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}5`], '2n', time, vel * 0.6)
       };
@@ -643,7 +641,6 @@ const createRockSound = (rng: () => number): boolean => {
 };
 
 const createLiteStyleRock = (rng: () => number): boolean => {
-    // BUGFIX: Samplerの状態をログで確認
     console.log('[GEMINI_DEBUG_LOG] createLiteStyleRock: Checking samplers...');
     console.log(`  - heavyMetalSampler: ${heavyMetalSampler ? 'Loaded' : 'NULL'}`);
     console.log(`  - samplers.rockKick: ${samplers.rockKick ? 'Loaded' : 'NULL'}`);
@@ -667,92 +664,72 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     if(!kickNote || !snareNote || !rideNote || !crashNote) return false;
 
     // --- Verse Patterns ---
-    const verseKickSeq = new Tone.Sequence((time, note) => {
-        if (note) kick.triggerAttack(kickNote, time);
-    }, [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0], "16n");
-    const verseSnareSeq = new Tone.Sequence((time, note) => {
-        if (note) snare.triggerAttack(snareNote, time);
-    }, [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], "16n");
-    const verseRideSeq = new Tone.Sequence((time, note) => {
-        if (note) ride.triggerAttack(rideNote, time, 0.7);
-    }, [1, 1, 1, 1, 1, 1, 1, 1], "8n");
-    const verseGuitarRiff = new Tone.Sequence((time, note) => {
-        if (note) triggerGuitarSound(note, "8n", time, 1.0);
-    }, ['E4', null, 'G4', 'A4', null, 'G4', null, 'D4'], "8n");
+    const verseKickSeq = new Tone.Sequence((time, note) => { if (note) kick.triggerAttack(kickNote, time); }, [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0], "16n");
+    const verseSnareSeq = new Tone.Sequence((time, note) => { if (note) snare.triggerAttack(snareNote, time); }, [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], "16n");
+    const verseRideSeq = new Tone.Sequence((time, note) => { if (note) ride.triggerAttack(rideNote, time, 0.7); }, [1, 1, 1, 1, 1, 1, 1, 1], "8n");
+    const verseGuitarRiff = new Tone.Sequence((time, note) => { if (note) triggerGuitarSound(note, "8n", time, 1.0); }, ['E3', null, 'G3', 'A3', null, 'G3', null, 'D3'], "8n");
 
     // --- Chorus Patterns ---
-    const chorusKickSeq = new Tone.Sequence((time, note) => {
-        if (note) kick.triggerAttack(kickNote, time, 1.0);
-    }, [1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0], "16n");
-    const chorusSnareSeq = new Tone.Sequence((time, note) => {
-        if (note) snare.triggerAttack(snareNote, time, 1.0);
-    }, [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1], "16n");
-    const chorusCrashSeq = new Tone.Sequence((time, note) => {
-        if (note) crash.triggerAttack(crashNote, time, 0.9);
-    }, [1, 0, 0, 0], "1m");
+    const chorusKickSeq = new Tone.Sequence((time, note) => { if (note) kick.triggerAttack(kickNote, time, 1.0); }, [1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0], "16n");
+    const chorusSnareSeq = new Tone.Sequence((time, note) => { if (note) snare.triggerAttack(snareNote, time, 1.0); }, [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1], "16n");
+    const chorusCrashSeq = new Tone.Sequence((time, note) => { if (note) crash.triggerAttack(crashNote, time, 0.9); }, [1, 0, 0, 0], "1m");
     const chorusGuitarPart = new Tone.Part<{ time: string, note: string[], duration: string }>((time, value) => {
         triggerGuitarSound(value.note, value.duration, time, 1.0);
     }, [
-        { time: '0:0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '0:0:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '0:1:0', note: ['A4', 'E5'], duration: '8n' }, { time: '0:1:2', note: ['B4', 'F#5'], duration: '8n' },
-        { time: '0:2:0', note: ['C5', 'G5'], duration: '8n' }, { time: '0:2:2', note: ['B4', 'F#5'], duration: '8n' },
-        { time: '0:3:0', note: ['A4', 'E5'], duration: '8n' }, { time: '0:3:2', note: ['G4', 'D5'], duration: '8n' },
+        { time: '0:0:0', note: ['E3', 'B3'], duration: '8n' }, { time: '0:0:2', note: ['G3', 'D4'], duration: '8n' },
+        { time: '0:1:0', note: ['A3', 'E4'], duration: '8n' }, { time: '0:1:2', note: ['B3', 'F#4'], duration: '8n' },
+        { time: '0:2:0', note: ['C4', 'G4'], duration: '8n' }, { time: '0:2:2', note: ['B3', 'F#4'], duration: '8n' },
+        { time: '0:3:0', note: ['A3', 'E4'], duration: '8n' }, { time: '0:3:2', note: ['G3', 'D4'], duration: '8n' },
         
-        { time: '1:0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '1:0:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '1:1:0', note: ['A4', 'E5'], duration: '8n' }, { time: '1:1:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '1:2:0', note: ['E4', 'B4'], duration: '2n.' },
+        { time: '1:0:0', note: ['E3', 'B3'], duration: '8n' }, { time: '1:0:2', note: ['G3', 'D4'], duration: '8n' },
+        { time: '1:1:0', note: ['A3', 'E4'], duration: '8n' }, { time: '1:1:2', note: ['G3', 'D4'], duration: '8n' },
+        { time: '1:2:0', note: ['E3', 'B3'], duration: '2n.' },
         
-        { time: '2:0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '2:0:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '2:1:0', note: ['A4', 'E5'], duration: '8n' }, { time: '2:1:2', note: ['B4', 'F#5'], duration: '8n' },
-        { time: '2:2:0', note: ['C5', 'G5'], duration: '8n' }, { time: '2:2:2', note: ['B4', 'F#5'], duration: '8n' },
-        { time: '2:3:0', note: ['A4', 'E5'], duration: '8n' }, { time: '2:3:2', note: ['G4', 'D5'], duration: '8n' },
+        { time: '2:0:0', note: ['E3', 'B3'], duration: '8n' }, { time: '2:0:2', note: ['G3', 'D4'], duration: '8n' },
+        { time: '2:1:0', note: ['A3', 'E4'], duration: '8n' }, { time: '2:1:2', note: ['B3', 'F#4'], duration: '8n' },
+        { time: '2:2:0', note: ['C4', 'G4'], duration: '8n' }, { time: '2:2:2', note: ['B3', 'F#4'], duration: '8n' },
+        { time: '2:3:0', note: ['A3', 'E4'], duration: '8n' }, { time: '2:3:2', note: ['G3', 'D4'], duration: '8n' },
 
-        { time: '3:0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '3:0:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '3:1:0', note: ['A4', 'E5'], duration: '8n' }, { time: '3:1:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '3:2:0', note: ['B4', 'F#5'], duration: '2n.' },
+        { time: '3:0:0', note: ['E3', 'B3'], duration: '8n' }, { time: '3:0:2', note: ['G3', 'D4'], duration: '8n' },
+        { time: '3:1:0', note: ['A3', 'E4'], duration: '8n' }, { time: '3:1:2', note: ['G3', 'D4'], duration: '8n' },
+        { time: '3:2:0', note: ['B3', 'F#4'], duration: '2n.' },
     ]);
-    chorusGuitarPart.loop = true;
-    chorusGuitarPart.loopEnd = '4m';
+    
+    let currentSection = '';
+    const sectionScheduler = new Tone.Loop(time => {
+        if (!Tone) return;
+        const positionBBS = Tone.Time(Tone.Transport.position).toBarsBeatsSixteenths();
+        const measures = positionBBS.split(':')[0] || '0';
+        const measureNum = parseInt(measures, 10) % 32;
 
-
-    // --- Section Control ---
-    const sectionPart = new Tone.Part<{ time: string; value: Role }>((time, event) => {
-        const role = event.value;
-        console.log(`[GEMINI_DEBUG_LOG] Section change triggered at ${time}. New role: ${role}`);
-        if (role === ROLES.VERSE) {
-            verseKickSeq.start(time);
-            verseSnareSeq.start(time);
-            verseRideSeq.start(time);
-            verseGuitarRiff.start(time);
-
-            chorusKickSeq.stop(time);
-            chorusSnareSeq.stop(time);
-            chorusCrashSeq.stop(time);
-            chorusGuitarPart.stop(time);
-        } else if (role === ROLES.CHORUS) {
-            chorusKickSeq.start(time);
-            chorusSnareSeq.start(time);
-            chorusCrashSeq.start(time);
-            chorusGuitarPart.start(time);
-
-            verseKickSeq.stop(time);
-            verseSnareSeq.stop(time);
-            verseRideSeq.stop(time);
-            verseGuitarRiff.stop(time);
+        let newSection = '';
+        if (measureNum >= 24 || (measureNum >= 8 && measureNum < 16)) {
+            newSection = ROLES.CHORUS;
+        } else {
+            newSection = ROLES.VERSE;
         }
-    }, [
-        { time: '0m', value: ROLES.VERSE },
-        { time: '8m', value: ROLES.CHORUS },
-        { time: '16m', value: ROLES.VERSE },
-        { time: '24m', value: ROLES.CHORUS }
-    ]).start(0);
-    
-    sectionPart.loopEnd = '32m';
-    sectionPart.loop = true;
-    
-    // Manage all sequences for cleanup
+
+        if (newSection !== currentSection) {
+            currentSection = newSection;
+            const allParts = [verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff, chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart];
+            allParts.forEach(part => { if(part.state === 'started') part.stop(time) });
+            
+            if (newSection === ROLES.VERSE) {
+                verseKickSeq.start(time);
+                verseSnareSeq.start(time);
+                verseRideSeq.start(time);
+                verseGuitarRiff.start(time);
+            } else { // CHORUS
+                chorusKickSeq.start(time);
+                chorusSnareSeq.start(time);
+                chorusCrashSeq.start(time);
+                chorusGuitarPart.start(time);
+            }
+        }
+    }, "1m").start(0);
+
     scheduledEvents.push(
-        sectionPart,
+        sectionScheduler,
         verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff,
         chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart
     );
