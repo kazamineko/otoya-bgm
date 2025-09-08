@@ -371,6 +371,7 @@ const playMusic = async (menuName: string, seed?: string) => {
     case 'Lo-Fi・ビター': musicGenerated = createLoFiSound(rng); break;
     case 'ロック・ビート': musicGenerated = createRockSound(rng); break;
     case 'LITE-Style・Post Rock': musicGenerated = createLiteStyleRock(rng); break;
+    case 'LITE-Style (別方式)': musicGenerated = createLiteStyleRockV2(rng); break;
   }
   if (musicGenerated && Tone) {
     currentSeed.value = newSeed; 
@@ -416,8 +417,15 @@ const handleVolumeChange = (event: Event) => { const newVolume = parseFloat((eve
 const openModal = () => { isModalVisible.value = true; };
 const closeModal = () => { isModalVisible.value = false; };
 const copySeed = () => { if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value); };
-const playFromSeed = async () => { const [menuName, seed] = seedInput.value.split(':');
-  const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート', 'LITE-Style・Post Rock']; if (menuName && seed && validMenus.includes(menuName)) { await playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } };
+const playFromSeed = async () => { 
+  const [menuName, seed] = seedInput.value.split(':');
+  const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート', 'LITE-Style・Post Rock', 'LITE-Style (別方式)']; 
+  if (menuName && seed && validMenus.includes(menuName)) { 
+    await playMusic(menuName, seed); 
+  } else { 
+    alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); 
+  } 
+};
 
 const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; };
 const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
@@ -560,13 +568,6 @@ const createJazzSound = (rng: () => number): boolean => {
 
 const createRockSound = (rng: () => number): boolean => {
     console.log('[GEMINI_DEBUG_LOG] createRockSound: Checking samplers...');
-    console.log(`  - heavyMetalSampler: ${heavyMetalSampler ? 'Loaded' : 'NULL'}`);
-    console.log(`  - samplers.rockKick: ${samplers.rockKick ? 'Loaded' : 'NULL'}`);
-    console.log(`  - samplers.rockSnare: ${samplers.rockSnare ? 'Loaded' : 'NULL'}`);
-    console.log(`  - newRockBassSampler: ${newRockBassSampler ? 'Loaded' : 'NULL'}`);
-    console.log(`  - newSynthPianoSampler: ${newSynthPianoSampler ? 'Loaded' : 'NULL'}`);
-    console.log(`  - newElecOrganSampler: ${newElecOrganSampler ? 'Loaded' : 'NULL'}`);
-
     if (!Tone || !heavyMetalSampler || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler) {
         return false;
     }
@@ -641,7 +642,7 @@ const createRockSound = (rng: () => number): boolean => {
 };
 
 const createLiteStyleRock = (rng: () => number): boolean => {
-    console.log('[GEMINI_DEBUG_LOG] createLiteStyleRock: Checking samplers...');
+    console.log('[GEMINI_DEBUG_LOG] createLiteStyleRock (Single Part Ver.): Checking samplers...');
     if (!Tone || !heavyMetalSampler || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash) {
         console.error('[GEMINI_DEBUG_LOG] createLiteStyleRock: 必要なサンプラーが初期化されていないため、再生を中止します。');
         return false;
@@ -740,6 +741,86 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     console.log(`[GEMINI_DEBUG_LOG] createLiteStyleRock: A single Tone.Part with ${events.length} events scheduled for playback.`);
     return true;
 };
+
+
+const createLiteStyleRockV2 = (rng: () => number): boolean => {
+    console.log('[GEMINI_DEBUG_LOG] createLiteStyleRockV2 (Multi-Event Ver.): Initializing...');
+    if (!Tone || !heavyMetalSampler || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash) {
+        console.error('[GEMINI_DEBUG_LOG] createLiteStyleRockV2: Missing essential samplers.');
+        return false;
+    }
+    scheduledEvents.forEach(e => e.dispose());
+    scheduledEvents.length = 0;
+
+    Tone.Transport.bpm.value = 135;
+    Tone.Transport.swing = 0;
+
+    const { sampler: kick, baseNote: kickNote } = samplers.rockKick;
+    const { sampler: snare, baseNote: snareNote } = samplers.rockSnare;
+    const { sampler: ride, baseNote: rideNote } = samplers.ride;
+    const { sampler: crash, baseNote: crashNote } = samplers.crash;
+    if (!kickNote || !snareNote || !rideNote || !crashNote) return false;
+
+    // --- Verse Patterns ---
+    const verseKickSeq = new Tone.Sequence((time, note) => { if (note) kick.triggerAttack(kickNote, time); }, [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0], "16n");
+    const verseSnareSeq = new Tone.Sequence((time, note) => { if (note) snare.triggerAttack(snareNote, time); }, [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], "16n");
+    const verseRideSeq = new Tone.Sequence((time, note) => { if (note) ride.triggerAttack(rideNote, time, 0.7); }, [1, 1, 1, 1, 1, 1, 1, 1], "8n");
+    const verseGuitarRiff = new Tone.Sequence((time, note) => { if (note) triggerGuitarSound(note, "8n", time, 1.0); }, ['E3', null, 'G3', 'A3', null, 'G3', null, 'D4'], "8n");
+
+    // --- Chorus Patterns ---
+    const chorusKickSeq = new Tone.Sequence((time, note) => { if (note) kick.triggerAttack(kickNote, time, 1.0); }, [1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0], "16n");
+    const chorusSnareSeq = new Tone.Sequence((time, note) => { if (note) snare.triggerAttack(snareNote, time, 1.0); }, [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1], "16n");
+    const chorusCrashSeq = new Tone.Sequence((time, note) => { if (note) crash.triggerAttack(crashNote, time, 0.9); }, [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0], "2m"); // Adjusted to fire every 2 measures
+    
+    const chorusGuitarPart = new Tone.Part<{ time: string, note: string, duration: string }>((time, value) => {
+        triggerGuitarSound(value.note, value.duration, time, 1.0);
+    }, [
+        { time: '0:0:0', note: 'E3', duration: '8n' }, { time: '0:0:2', note: 'G3', duration: '8n' }, { time: '0:1:0', note: 'A3', duration: '8n' }, { time: '0:1:2', note: 'B3', duration: '8n' },
+        { time: '0:2:0', note: 'C4', duration: '8n' }, { time: '0:2:2', note: 'B3', duration: '8n' }, { time: '0:3:0', note: 'A3', duration: '8n' }, { time: '0:3:2', note: 'G3', duration: '8n' },
+        { time: '1:0:0', note: 'E3', duration: '8n' }, { time: '1:0:2', note: 'G3', duration: '8n' }, { time: '1:1:0', note: 'A3', duration: '8n' }, { time: '1:1:2', note: 'G3', duration: '8n' }, { time: '1:2:0', note: 'E3', duration: '2n.' },
+        { time: '2:0:0', note: 'E3', duration: '8n' }, { time: '2:0:2', note: 'G3', duration: '8n' }, { time: '2:1:0', note: 'A3', duration: '8n' }, { time: '2:1:2', note: 'B3', duration: '8n' },
+        { time: '2:2:0', note: 'C4', duration: '8n' }, { time: '2:2:2', note: 'B3', duration: '8n' }, { time: '2:3:0', note: 'A3', duration: '8n' }, { time: '2:3:2', note: 'G3', duration: '8n' },
+        { time: '3:0:0', note: 'E3', duration: '8n' }, { time: '3:0:2', note: 'G3', duration: '8n' }, { time: '3:1:0', note: 'A3', duration: '8n' }, { time: '3:1:2', note: 'G3', duration: '8n' }, { time: '3:2:0', note: 'B3', duration: '2n.' },
+    ]);
+    chorusGuitarPart.loop = true;
+    chorusGuitarPart.loopEnd = '4m';
+
+    let currentSection = '';
+    const sectionScheduler = new Tone.Loop(time => {
+        if (!Tone) return;
+        const measures = Math.floor(Tone.Transport.getTicksAtTime(time) / (Tone.Transport.PPQ * 4));
+        const measureNum = measures % 32;
+
+        let newSection = '';
+        if (measureNum >= 24 || (measureNum >= 8 && measureNum < 16)) {
+            newSection = ROLES.CHORUS;
+        } else {
+            newSection = ROLES.VERSE;
+        }
+
+        if (newSection !== currentSection) {
+            currentSection = newSection;
+            const allParts = [verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff, chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart];
+            allParts.forEach(part => { if (part.state === 'started') part.stop(time) });
+
+            if (newSection === ROLES.VERSE) {
+                verseKickSeq.start(time);
+                verseSnareSeq.start(time);
+                verseRideSeq.start(time);
+                verseGuitarRiff.start(time);
+            } else { // CHORUS
+                chorusKickSeq.start(time);
+                chorusSnareSeq.start(time);
+                chorusCrashSeq.start(time);
+                chorusGuitarPart.start(time);
+            }
+        }
+    }, "1m").start(0);
+    
+    scheduledEvents.push(sectionScheduler, verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff, chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart);
+    console.log(`[GEMINI_DEBUG_LOG] createLiteStyleRockV2: Scheduled ${scheduledEvents.length} independent events.`);
+    return true;
+};
 </script>
 
 <template>
@@ -803,6 +884,15 @@ const createLiteStyleRock = (rng: () => number): boolean => {
               <span class="menu-description">反復と構築。ミニマルな骨格が生むグルーヴ。</span>
             </div>
             <div v-if="selectedMenu === 'LITE-Style・Post Rock' && isPlaying" class="active-indicator">
+              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            </div>
+          </button>
+          <button class="menu-button" @click="playMusic('LITE-Style (別方式)')" :class="{ 'is-active': selectedMenu === 'LITE-Style (別方式)' }">
+            <div class="menu-content">
+              <span class="menu-title">LITE-Style (別方式)</span>
+              <span class="menu-description">診断用：マルチイベント方式での再生。</span>
+            </div>
+            <div v-if="selectedMenu === 'LITE-Style (別方式)' && isPlaying" class="active-indicator">
               <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
             </div>
           </button>
