@@ -359,6 +359,7 @@ onUnmounted(() => { stopMusic(); });
 
 const playMusic = async (menuName: string, seed?: string) => {
   if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) return; }
+  console.log(`[GEMINI_DIAG_LOG] playMusic: '${menuName}' がリクエストされました。既存の音楽を停止します...`);
   if (isPlaying.value) stopMusic();
   const randomPart = seed || Date.now().toString(36) + Math.random().toString(36).substring(2);
   const newSeed = `${menuName}:${randomPart}`;
@@ -371,7 +372,6 @@ const playMusic = async (menuName: string, seed?: string) => {
     case 'Lo-Fi・ビター': musicGenerated = createLoFiSound(rng); break;
     case 'ロック・ビート': musicGenerated = createRockSound(rng); break;
     case 'LITE-Style・Post Rock': musicGenerated = createLiteStyleRock(rng); break;
-    case 'LITE-Style (別方式)': musicGenerated = createLiteStyleRockV2(rng); break;
   }
   if (musicGenerated && Tone) {
     currentSeed.value = newSeed; 
@@ -385,19 +385,23 @@ const playMusic = async (menuName: string, seed?: string) => {
 
 const stopMusic = () => {
   if (!isPlaying.value || !Tone) return;
-  console.log(`[GEMINI_DEBUG_LOG] stopMusic: 開始。現在 ${scheduledEvents.length} 個のイベントがあります。`);
+  console.log(`[GEMINI_DIAG_LOG] stopMusic: 停止処理開始。現在 ${scheduledEvents.length} 個のイベントを処理します。`);
   Tone.Transport.stop(); 
   Tone.Transport.cancel(0);
   
   scheduledEvents.forEach((event, index) => {
     // @ts-ignore
-    console.log(`[GEMINI_DEBUG_LOG] cleaning up event ${index + 1}/${scheduledEvents.length}: ${event.constructor.name}`);
+    console.log(`[GEMINI_DIAG_LOG] -> イベント ${index + 1}/${scheduledEvents.length}: ${event.constructor.name} (状態: ${event.state})`);
     if (event.state === "started") {
+        console.log(`[GEMINI_DIAG_LOG]    - 停止中...`);
         event.stop(0);
     }
+    console.log(`[GEMINI_DIAG_LOG]    - 破棄中...`);
     event.dispose();
   });
+
   scheduledEvents.length = 0;
+  console.log(`[GEMINI_DIAG_LOG] stopMusic: イベント配列をクリアしました。残り: ${scheduledEvents.length}個`);
   if (noise) { noise.stop(0); noise.dispose(); noise = null; }
   
   heavyMetalSampler?.releaseAll();
@@ -405,7 +409,7 @@ const stopMusic = () => {
   Object.values(targetSamplers).forEach(s => s.sampler.releaseAll());
   
   isPlaying.value = false;
-  console.log('[GEMINI_DEBUG_LOG] stopMusic: 完了。');
+  console.log('[GEMINI_DIAG_LOG] stopMusic: 完了。');
 };
 
 const triggerGuitarSound = (note: string | string[], duration: ToneType.Unit.Time, time: ToneType.Unit.Time, velocity: number) => {
@@ -419,7 +423,7 @@ const closeModal = () => { isModalVisible.value = false; };
 const copySeed = () => { if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value); };
 const playFromSeed = async () => { 
   const [menuName, seed] = seedInput.value.split(':');
-  const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート', 'LITE-Style・Post Rock', 'LITE-Style (別方式)']; 
+  const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート', 'LITE-Style・Post Rock']; 
   if (menuName && seed && validMenus.includes(menuName)) { 
     await playMusic(menuName, seed); 
   } else { 
@@ -642,111 +646,9 @@ const createRockSound = (rng: () => number): boolean => {
 };
 
 const createLiteStyleRock = (rng: () => number): boolean => {
-    console.log('[GEMINI_DEBUG_LOG] createLiteStyleRock (Single Part Ver.): Checking samplers...');
+    console.log('[GEMINI_DIAG_LOG] createLiteStyleRock (Multi-Event Ver.): 初期化中...');
     if (!Tone || !heavyMetalSampler || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash) {
-        console.error('[GEMINI_DEBUG_LOG] createLiteStyleRock: 必要なサンプラーが初期化されていないため、再生を中止します。');
-        return false;
-    }
-    scheduledEvents.forEach(e => e.dispose());
-    scheduledEvents.length = 0;
-    
-    Tone.Transport.bpm.value = 135;
-    Tone.Transport.swing = 0;
-
-    const { sampler: kick, baseNote: kickNote } = samplers.rockKick;
-    const { sampler: snare, baseNote: snareNote } = samplers.rockSnare;
-    const { sampler: ride, baseNote: rideNote } = samplers.ride;
-    const { sampler: crash, baseNote: crashNote } = samplers.crash;
-    if(!kickNote || !snareNote || !rideNote || !crashNote) return false;
-
-    type MusicEvent = { time: string, instrument: 'kick'|'snare'|'ride'|'crash'|'guitar', note: string|string[], duration: string, velocity: number };
-    const events: MusicEvent[] = [];
-    
-    const TOTAL_MEASURES = 32;
-    const songStructure = [
-        ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE,
-        ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS,
-        ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE,
-        ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS,
-    ];
-
-    // --- Define Patterns (Recomposed for HMRhyA Sampler) ---
-    const verseKickPattern = [1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,0];
-    const verseSnarePattern = [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0];
-    const verseGuitarPattern = ['E3', null, 'G3', 'A3', null, 'G3', null, 'D4'];
-
-    const chorusKickPattern = [1,1,0,1,1,0,1,0,1,1,0,1,1,1,1,0];
-    const chorusSnarePattern = [0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,1];
-    const chorusGuitarPartPattern: { time: string, note: string, duration: string }[] = [
-        { time: '0:0:0', note: 'E3', duration: '8n' }, { time: '0:0:2', note: 'G3', duration: '8n' },
-        { time: '0:1:0', note: 'A3', duration: '8n' }, { time: '0:1:2', note: 'B3', duration: '8n' },
-        { time: '0:2:0', note: 'C4', duration: '8n' }, { time: '0:2:2', note: 'B3', duration: '8n' },
-        { time: '0:3:0', note: 'A3', duration: '8n' }, { time: '0:3:2', note: 'G3', duration: '8n' },
-        
-        { time: '1:0:0', note: 'E3', duration: '8n' }, { time: '1:0:2', note: 'G3', duration: '8n' },
-        { time: '1:1:0', note: 'A3', duration: '8n' }, { time: '1:1:2', note: 'G3', duration: '8n' },
-        { time: '1:2:0', note: 'E3', duration: '2n.' },
-        
-        { time: '2:0:0', note: 'E3', duration: '8n' }, { time: '2:0:2', note: 'G3', duration: '8n' },
-        { time: '2:1:0', note: 'A3', duration: '8n' }, { time: '2:1:2', note: 'B3', duration: '8n' },
-        { time: '2:2:0', note: 'C4', duration: '8n' }, { time: '2:2:2', note: 'B3', duration: '8n' },
-        { time: '2:3:0', note: 'A3', duration: '8n' }, { time: '2:3:2', note: 'G3', duration: '8n' },
-
-        { time: '3:0:0', note: 'E3', duration: '8n' }, { time: '3:0:2', note: 'G3', duration: '8n' },
-        { time: '3:1:0', note: 'A3', duration: '8n' }, { time: '3:1:2', note: 'G3', duration: '8n' },
-        { time: '3:2:0', note: 'B3', duration: '2n.' },
-    ];
-
-    for (let measure = 0; measure < TOTAL_MEASURES; measure++) {
-        const measureTime = `${measure}m`;
-        if (songStructure[measure] === ROLES.VERSE) {
-            verseKickPattern.forEach((n, i) => { if(n) events.push({ time: `${measureTime} + ${i}*16n`, instrument: 'kick', note: kickNote, duration: '16n', velocity: 1.0 }); });
-            verseSnarePattern.forEach((n, i) => { if(n) events.push({ time: `${measureTime} + ${i}*16n`, instrument: 'snare', note: snareNote, duration: '16n', velocity: 1.0 }); });
-            for(let i=0; i<8; i++) { events.push({ time: `${measureTime} + ${i}*8n`, instrument: 'ride', note: rideNote, duration: '8n', velocity: 0.7 }); }
-            verseGuitarPattern.forEach((n, i) => { if(n) events.push({ time: `${measureTime} + ${i}*8n`, instrument: 'guitar', note: n, duration: '8n', velocity: 1.0 }); });
-        } else { // CHORUS
-            chorusKickPattern.forEach((n, i) => { if(n) events.push({ time: `${measureTime} + ${i}*16n`, instrument: 'kick', note: kickNote, duration: '16n', velocity: 1.0 }); });
-            chorusSnarePattern.forEach((n, i) => { if(n) events.push({ time: `${measureTime} + ${i}*16n`, instrument: 'snare', note: snareNote, duration: '16n', velocity: 1.0 }); });
-            
-            const chorusMeasureIndex = (measure < 16) ? measure - 8 : measure - 24;
-            if (chorusMeasureIndex % 4 === 0) { 
-                events.push({ time: measureTime, instrument: 'crash', note: crashNote, duration: '1m', velocity: 0.9 });
-            }
-
-            const currentGuitarPatternMeasure = chorusMeasureIndex % 4; // 4小節パターンをループ
-            chorusGuitarPartPattern.forEach(p => {
-                const [m_part] = p.time.split(':').map(Number);
-                if (m_part === currentGuitarPatternMeasure) {
-                    const relativeTime = p.time.substring(p.time.indexOf(':') + 1); // "b:s"の部分を取得
-                    events.push({ time: `${measureTime} + ${relativeTime}`, instrument: 'guitar', note: p.note, duration: p.duration, velocity: 1.0 });
-                }
-            });
-        }
-    }
-    
-    const mainPart = new Tone.Part<MusicEvent>((time, value) => {
-        switch(value.instrument) {
-            case 'kick': kick.triggerAttack(value.note as string, time, value.velocity); break;
-            case 'snare': snare.triggerAttack(value.note as string, time, value.velocity); break;
-            case 'ride': ride.triggerAttack(value.note as string, time, value.velocity); break;
-            case 'crash': crash.triggerAttack(value.note as string, time, value.velocity); break;
-            case 'guitar': triggerGuitarSound(value.note, value.duration, time, value.velocity); break;
-        }
-    }, events).start(0);
-
-    mainPart.loop = true;
-    mainPart.loopEnd = `${TOTAL_MEASURES}m`;
-    scheduledEvents.push(mainPart);
-
-    console.log(`[GEMINI_DEBUG_LOG] createLiteStyleRock: A single Tone.Part with ${events.length} events scheduled for playback.`);
-    return true;
-};
-
-
-const createLiteStyleRockV2 = (rng: () => number): boolean => {
-    console.log('[GEMINI_DEBUG_LOG] createLiteStyleRockV2 (Multi-Event Ver.): Initializing...');
-    if (!Tone || !heavyMetalSampler || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash) {
-        console.error('[GEMINI_DEBUG_LOG] createLiteStyleRockV2: Missing essential samplers.');
+        console.error('[GEMINI_DIAG_LOG] createLiteStyleRock: 必須サンプラーがありません。');
         return false;
     }
     scheduledEvents.forEach(e => e.dispose());
@@ -763,14 +665,21 @@ const createLiteStyleRockV2 = (rng: () => number): boolean => {
 
     // --- Verse Patterns ---
     const verseKickSeq = new Tone.Sequence((time, note) => { if (note) kick.triggerAttack(kickNote, time); }, [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0], "16n");
+    console.log('[GEMINI_DIAG_LOG] -> verseKickSeq を作成');
     const verseSnareSeq = new Tone.Sequence((time, note) => { if (note) snare.triggerAttack(snareNote, time); }, [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], "16n");
+    console.log('[GEMINI_DIAG_LOG] -> verseSnareSeq を作成');
     const verseRideSeq = new Tone.Sequence((time, note) => { if (note) ride.triggerAttack(rideNote, time, 0.7); }, [1, 1, 1, 1, 1, 1, 1, 1], "8n");
+    console.log('[GEMINI_DIAG_LOG] -> verseRideSeq を作成');
     const verseGuitarRiff = new Tone.Sequence((time, note) => { if (note) triggerGuitarSound(note, "8n", time, 1.0); }, ['E3', null, 'G3', 'A3', null, 'G3', null, 'D4'], "8n");
+    console.log('[GEMINI_DIAG_LOG] -> verseGuitarRiff を作成');
 
     // --- Chorus Patterns ---
     const chorusKickSeq = new Tone.Sequence((time, note) => { if (note) kick.triggerAttack(kickNote, time, 1.0); }, [1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0], "16n");
+    console.log('[GEMINI_DIAG_LOG] -> chorusKickSeq を作成');
     const chorusSnareSeq = new Tone.Sequence((time, note) => { if (note) snare.triggerAttack(snareNote, time, 1.0); }, [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1], "16n");
+    console.log('[GEMINI_DIAG_LOG] -> chorusSnareSeq を作成');
     const chorusCrashSeq = new Tone.Sequence((time, note) => { if (note) crash.triggerAttack(crashNote, time, 0.9); }, [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0], "2m"); // Adjusted to fire every 2 measures
+    console.log('[GEMINI_DIAG_LOG] -> chorusCrashSeq を作成');
     
     const chorusGuitarPart = new Tone.Part<{ time: string, note: string, duration: string }>((time, value) => {
         triggerGuitarSound(value.note, value.duration, time, 1.0);
@@ -784,12 +693,14 @@ const createLiteStyleRockV2 = (rng: () => number): boolean => {
     ]);
     chorusGuitarPart.loop = true;
     chorusGuitarPart.loopEnd = '4m';
+    console.log('[GEMINI_DIAG_LOG] -> chorusGuitarPart を作成');
 
     let currentSection = '';
     const sectionScheduler = new Tone.Loop(time => {
         if (!Tone) return;
         const measures = Math.floor(Tone.Transport.getTicksAtTime(time) / (Tone.Transport.PPQ * 4));
         const measureNum = measures % 32;
+        console.log(`[GEMINI_DIAG_LOG] sectionScheduler: Loop fired at ${Tone.Transport.position}, measureNum: ${measureNum}`);
 
         let newSection = '';
         if (measureNum >= 24 || (measureNum >= 8 && measureNum < 16)) {
@@ -797,18 +708,22 @@ const createLiteStyleRockV2 = (rng: () => number): boolean => {
         } else {
             newSection = ROLES.VERSE;
         }
+        console.log(`[GEMINI_DIAG_LOG]    - currentSection: '${currentSection}', newSection: '${newSection}'`);
 
         if (newSection !== currentSection) {
+            console.log(`[GEMINI_DIAG_LOG]    - ★★★ セクション変更！'${currentSection}' -> '${newSection}' ★★★`);
             currentSection = newSection;
             const allParts = [verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff, chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart];
             allParts.forEach(part => { if (part.state === 'started') part.stop(time) });
 
             if (newSection === ROLES.VERSE) {
+                console.log(`[GEMINI_DIAG_LOG]    - VERSE パートを開始します。`);
                 verseKickSeq.start(time);
                 verseSnareSeq.start(time);
                 verseRideSeq.start(time);
                 verseGuitarRiff.start(time);
             } else { // CHORUS
+                console.log(`[GEMINI_DIAG_LOG]    - CHORUS パートを開始します。`);
                 chorusKickSeq.start(time);
                 chorusSnareSeq.start(time);
                 chorusCrashSeq.start(time);
@@ -816,9 +731,10 @@ const createLiteStyleRockV2 = (rng: () => number): boolean => {
             }
         }
     }, "1m").start(0);
+    console.log('[GEMINI_DIAG_LOG] -> sectionScheduler (Loop) を作成');
     
     scheduledEvents.push(sectionScheduler, verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff, chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart);
-    console.log(`[GEMINI_DEBUG_LOG] createLiteStyleRockV2: Scheduled ${scheduledEvents.length} independent events.`);
+    console.log(`[GEMINI_DIAG_LOG] createLiteStyleRock: ${scheduledEvents.length} 個の独立イベントをスケジュールしました。`);
     return true;
 };
 </script>
@@ -884,15 +800,6 @@ const createLiteStyleRockV2 = (rng: () => number): boolean => {
               <span class="menu-description">反復と構築。ミニマルな骨格が生むグルーヴ。</span>
             </div>
             <div v-if="selectedMenu === 'LITE-Style・Post Rock' && isPlaying" class="active-indicator">
-              <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            </div>
-          </button>
-          <button class="menu-button" @click="playMusic('LITE-Style (別方式)')" :class="{ 'is-active': selectedMenu === 'LITE-Style (別方式)' }">
-            <div class="menu-content">
-              <span class="menu-title">LITE-Style (別方式)</span>
-              <span class="menu-description">診断用：マルチイベント方式での再生。</span>
-            </div>
-            <div v-if="selectedMenu === 'LITE-Style (別方式)' && isPlaying" class="active-indicator">
               <svg :xmlns="'http://www.w3.org/2000/svg'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
             </div>
           </button>
