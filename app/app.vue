@@ -695,7 +695,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     let currentSection = '';
     const sectionScheduler = new Tone.Loop(time => {
         const currentTone = Tone;
-        if (!currentTone) return; // THIS IS THE CORRECT FIX
+        if (!currentTone) return; 
         const measures = Math.floor(currentTone.Transport.getTicksAtTime(time) / (currentTone.Transport.PPQ * 4));
         const measureNum = measures % 32;
 
@@ -710,25 +710,26 @@ const createLiteStyleRock = (rng: () => number): boolean => {
             console.log(`[GEMINI_DIAG_LOG] ★★★ セクション変更！'${currentSection || 'None'}' -> '${newSection}' at ${time} ★★★`);
             currentSection = newSection;
             const allParts = [verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff, chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart];
+            const timeOffset = "+64n";
+
             allParts.forEach(part => { 
                 if (part.state === 'started') {
-                    console.log(`[GEMINI_DIAG_LOG]    - 即時停止: ${part.constructor.name}`);
-                    part.stop(currentTone.immediate());
+                    part.stop(time);
                 }
             });
 
             if (newSection === ROLES.VERSE) {
-                console.log(`[GEMINI_DIAG_LOG]    - VERSE パートを '${time}' に開始予約`);
-                verseKickSeq.start(time);
-                verseSnareSeq.start(time);
-                verseRideSeq.start(time);
-                verseGuitarRiff.start(time);
+                console.log(`[GEMINI_DIAG_LOG]    - VERSE パートを '${time}' に開始予約 (オフセット付き)`);
+                verseKickSeq.start(time + timeOffset);
+                verseSnareSeq.start(time + timeOffset);
+                verseRideSeq.start(time + timeOffset);
+                verseGuitarRiff.start(time + timeOffset);
             } else { // CHORUS
-                console.log(`[GEMINI_DIAG_LOG]    - CHORUS パートを '${time}' に開始予約`);
-                chorusKickSeq.start(time);
-                chorusSnareSeq.start(time);
-                chorusCrashSeq.start(time);
-                chorusGuitarPart.start(time);
+                console.log(`[GEMINI_DIAG_LOG]    - CHORUS パートを '${time}' に開始予約 (オフセット付き)`);
+                chorusKickSeq.start(time + timeOffset);
+                chorusSnareSeq.start(time + timeOffset);
+                chorusCrashSeq.start(time + timeOffset);
+                chorusGuitarPart.start(time + timeOffset);
             }
         }
     }, "1m").start(0);
