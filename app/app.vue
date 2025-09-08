@@ -615,7 +615,7 @@ const createRockSound = (rng: () => number): boolean => {
       const leadVelocity = isGhostNote ? vel * 0.3 : vel;
 
       const leadAction = {
-        'guitar': () => triggerGuitarSound([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity),
+        'guitar': () => triggerGuitarSound(`${rootNote}3`, '4n', time, leadVelocity),
         'synth': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '8n', time, leadVelocity),
         'organ': () => newElecOrganSampler?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity * 0.8),
       };
@@ -669,31 +669,31 @@ const createLiteStyleRock = (rng: () => number): boolean => {
         ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS,
     ];
 
-    // --- Define Patterns ---
+    // --- Define Patterns (Recomposed for HMRhyA Sampler) ---
     const verseKickPattern = [1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,0];
     const verseSnarePattern = [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0];
-    const verseGuitarPattern = ['E4',null,'G4','A4',null,'G4',null,'D4'];
+    const verseGuitarPattern = ['E3', null, 'G3', 'A3', null, 'G3', null, 'D4'];
 
     const chorusKickPattern = [1,1,0,1,1,0,1,0,1,1,0,1,1,1,1,0];
     const chorusSnarePattern = [0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,1];
-    const chorusGuitarPartPattern: { time: string, note: string[], duration: string }[] = [
-        { time: '0:0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '0:0:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '0:1:0', note: ['A4', 'E5'], duration: '8n' }, { time: '0:1:2', note: ['B4', 'F#5'], duration: '8n' },
-        { time: '0:2:0', note: ['C5', 'G5'], duration: '8n' }, { time: '0:2:2', note: ['B4', 'F#5'], duration: '8n' },
-        { time: '0:3:0', note: ['A4', 'E5'], duration: '8n' }, { time: '0:3:2', note: ['G4', 'D5'], duration: '8n' },
+    const chorusGuitarPartPattern: { time: string, note: string, duration: string }[] = [
+        { time: '0:0:0', note: 'E3', duration: '8n' }, { time: '0:0:2', note: 'G3', duration: '8n' },
+        { time: '0:1:0', note: 'A3', duration: '8n' }, { time: '0:1:2', note: 'B3', duration: '8n' },
+        { time: '0:2:0', note: 'C4', duration: '8n' }, { time: '0:2:2', note: 'B3', duration: '8n' },
+        { time: '0:3:0', note: 'A3', duration: '8n' }, { time: '0:3:2', note: 'G3', duration: '8n' },
         
-        { time: '1:0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '1:0:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '1:1:0', note: ['A4', 'E5'], duration: '8n' }, { time: '1:1:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '1:2:0', note: ['E4', 'B4'], duration: '2n.' },
+        { time: '1:0:0', note: 'E3', duration: '8n' }, { time: '1:0:2', note: 'G3', duration: '8n' },
+        { time: '1:1:0', note: 'A3', duration: '8n' }, { time: '1:1:2', note: 'G3', duration: '8n' },
+        { time: '1:2:0', note: 'E3', duration: '2n.' },
         
-        { time: '2:0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '2:0:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '2:1:0', note: ['A4', 'E5'], duration: '8n' }, { time: '2:1:2', note: ['B4', 'F#5'], duration: '8n' },
-        { time: '2:2:0', note: ['C5', 'G5'], duration: '8n' }, { time: '2:2:2', note: ['B4', 'F#5'], duration: '8n' },
-        { time: '2:3:0', note: ['A4', 'E5'], duration: '8n' }, { time: '2:3:2', note: ['G4', 'D5'], duration: '8n' },
+        { time: '2:0:0', note: 'E3', duration: '8n' }, { time: '2:0:2', note: 'G3', duration: '8n' },
+        { time: '2:1:0', note: 'A3', duration: '8n' }, { time: '2:1:2', note: 'B3', duration: '8n' },
+        { time: '2:2:0', note: 'C4', duration: '8n' }, { time: '2:2:2', note: 'B3', duration: '8n' },
+        { time: '2:3:0', note: 'A3', duration: '8n' }, { time: '2:3:2', note: 'G3', duration: '8n' },
 
-        { time: '3:0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '3:0:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '3:1:0', note: ['A4', 'E5'], duration: '8n' }, { time: '3:1:2', note: ['G4', 'D5'], duration: '8n' },
-        { time: '3:2:0', note: ['B4', 'F#5'], duration: '2n.' },
+        { time: '3:0:0', note: 'E3', duration: '8n' }, { time: '3:0:2', note: 'G3', duration: '8n' },
+        { time: '3:1:0', note: 'A3', duration: '8n' }, { time: '3:1:2', note: 'G3', duration: '8n' },
+        { time: '3:2:0', note: 'B3', duration: '2n.' },
     ];
 
     for (let measure = 0; measure < TOTAL_MEASURES; measure++) {
