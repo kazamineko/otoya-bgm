@@ -20,7 +20,7 @@ const loadingMessage = ref<string>('');
 
 // --- 音声関連 ---
 let Tone: typeof ToneType | null = null;
-let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote?: string } } = {}; // baseNote is optional
+let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote?: string } } = {}; // baseNote is now optional
 let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 // NEW: Separate samplers for velocity layers
 let guitarSoftSampler: ToneType.Sampler | null = null;
@@ -34,6 +34,7 @@ let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
 let guitarDistortion: ToneType.Distortion | null = null;
+let guitarCabinetFilter: ToneType.Filter | null = null;
 let guitarComp: ToneType.Compressor | null = null;
 let bassEQNode: ToneType.EQ3 | null = null;
 
@@ -79,7 +80,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -4, "attack": 0.01, "release": 1.2, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0 },
+  "target_eguitar": { "volume": -4, "attack": 0.01, "release": 1.5, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0.4 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -128,7 +129,6 @@ watch(tuningParams, (newParams) => {
       if (guitarPitchShift) {
           if (eguitarTargetParams.detune !== undefined) guitarPitchShift.pitch = eguitarTargetParams.detune;
       }
-      // Note: Volume, Attack, Release for guitar samplers are set on the individual samplers
       if (guitarSoftSampler) {
           if(eguitarTargetParams.volume !== undefined) guitarSoftSampler.volume.value = eguitarTargetParams.volume;
           if(eguitarTargetParams.attack !== undefined) guitarSoftSampler.attack = eguitarTargetParams.attack;
@@ -223,6 +223,7 @@ const initializeAudio = async () => {
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
     guitarDistortion = new Tone.Distortion(eguitarTargetP.distortion);
+    guitarCabinetFilter = new Tone.Filter(2000, "lowpass");
     guitarEQ = new Tone.EQ3({ 
         low: eguitarTargetP.eqLow, 
         mid: eguitarTargetP.eqMid, 
@@ -344,7 +345,7 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && guitarComp && guitarSoftSampler && guitarHardSampler) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && guitarComp && guitarSoftSampler && guitarHardSampler && guitarDistortion && guitarCabinetFilter) {
       console.log('[GEMINI_DEBUG_LOG] 全てのオーディオノードが有効です。接続処理を実行します。');
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
@@ -353,10 +354,11 @@ const initializeAudio = async () => {
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
       // E-GUITAR SIGNAL CHAIN
-      guitarSoftSampler.chain(guitarComp);
-      guitarHardSampler.chain(guitarComp);
-      guitarComp.fan(masterComp, reverb);
-      console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (Velocityレイヤーベース)');
+      guitarSoftSampler.connect(guitarComp);
+      guitarHardSampler.connect(guitarComp);
+      guitarComp.chain(guitarDistortion, guitarCabinetFilter);
+      guitarCabinetFilter.fan(masterComp, reverb);
+      console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (新エフェクトチェーン)');
 
       for (const [name, data] of Object.entries(samplers)) {
         if (rockDrumKit.includes(name)) {
