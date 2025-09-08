@@ -32,10 +32,10 @@ let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
 let guitarDistortion: ToneType.Distortion | null = null;
-let cabLow: ToneType.Filter | null = null;
-let cabHigh: ToneType.Filter | null = null;
+let guitarCabinetIR: ToneType.Convolver | null = null;
 let guitarComp: ToneType.Compressor | null = null;
 let bassEQNode: ToneType.EQ3 | null = null;
+let bassCabinetIR: ToneType.Convolver | null = null;
 
 
 let rawSamplePlayers: ToneType.Players | null = null;
@@ -79,7 +79,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 0.3, "detune": 0, "eqLow": 6.5, "eqMid": 3.5, "eqHigh": 0.5, "distortion": 0.2 },
+  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 1.5, "detune": 0, "eqLow": 6.5, "eqMid": 3.5, "eqHigh": 0.5, "distortion": 0.2 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0.5, "eqMid": 2.5, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -223,8 +223,7 @@ const initializeAudio = async () => {
         mid: eguitarTargetP.eqMid, 
         high: eguitarTargetP.eqHigh 
     });
-    cabLow = new Tone.Filter(100, "highpass");
-    cabHigh = new Tone.Filter(5000, "lowpass");
+    guitarCabinetIR = new Tone.Convolver("/ir-guitar-cab.wav");
     guitarComp = new Tone.Compressor(-20, 3);
     
     const ebassTargetP = tuningParams.value.target_ebass;
@@ -233,6 +232,7 @@ const initializeAudio = async () => {
         mid: ebassTargetP.eqMid,
         high: ebassTargetP.eqHigh
     });
+    bassCabinetIR = new Tone.Convolver("/ir-bass-cab.wav");
     console.log('[GEMINI_DEBUG_LOG] 全てのエフェクトノードをインスタンス化完了');
     
     loadingMessage.value = 'AI奏者を準備しています...';
@@ -260,7 +260,7 @@ const initializeAudio = async () => {
         targetSamplerMulti = { sampler, baseNote: 'G#5' };
     });
 
-    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, multiSamplerPromise]);
+    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, multiSamplerPromise, guitarCabinetIR.load, bassCabinetIR.load]);
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み完了');
     loadingMessage.value = '楽器を最終調整しています...';
     
@@ -323,9 +323,9 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler && guitarDistortion && cabLow && cabHigh && guitarComp) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler && guitarDistortion && guitarCabinetIR && guitarComp && bassCabinetIR) {
       console.log('[GEMINI_DEBUG_LOG] 全てのオーディオノードが有効です。接続処理を実行します。');
-      newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
+      newRockBassSampler.sampler.chain(bassEQNode, bassCabinetIR, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
       
@@ -335,19 +335,18 @@ const initializeAudio = async () => {
         samplers['eguitar'] = targetSamplerMulti;
       }
 
-      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion && cabLow && cabHigh && guitarComp) {
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (改)...');
+      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion && guitarCabinetIR && guitarComp) {
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (IRベース)...');
         targetSamplerMulti.sampler.chain(
             guitarPitchShift,
             guitarVibrato,
             guitarEQ,
             guitarDistortion,
-            cabLow,
-            cabHigh,
+            guitarCabinetIR,
             guitarComp
         );
         guitarComp.fan(masterComp, reverb);
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (改)');
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (IRベース)');
       } else {
          console.error('[GEMINI_DEBUG_LOG] ギターチェイン接続エラー: 必須ノードがnullです。');
       }
