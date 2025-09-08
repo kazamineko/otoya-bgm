@@ -346,10 +346,11 @@ const initializeAudio = async () => {
         guitarPitchShift.connect(guitarVibrato);
         guitarVibrato.connect(guitarDistortion);
         guitarDistortion.connect(guitarEQ);
-        guitarEQ.connect(guitarCabinet);
-        guitarCabinet.connect(masterComp);
-        guitarCabinet.connect(reverb);
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (手動配線)');
+        // guitarEQ.connect(guitarCabinet); // Bypass cabinet for now
+        // guitarCabinet.connect(masterComp);
+        // guitarCabinet.connect(reverb);
+        guitarEQ.fan(masterComp, reverb);
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (手動配線、Cabinetバイパス)');
       } else {
          console.error('[GEMINI_DEBUG_LOG] ギターチェイン接続エラー: 必須ノードがnullです。');
       }
@@ -514,10 +515,12 @@ const handlePlaySoundChainTest = (stage: 'sampler' | 'distortion' | 'eq' | 'cabi
             guitarEQ.connect(limiter);
             break;
         case 'cabinet':
+            // This test is now temporarily bypassed
+            console.log('[DIAGNOSTIC] Cabinet test is currently bypassed.');
+            // To avoid confusion, let's play the EQ'd sound again
             guitarTestSampler.connect(guitarDistortion);
             guitarDistortion.connect(guitarEQ);
-            guitarEQ.connect(guitarCabinet);
-            guitarCabinet.connect(limiter);
+            guitarEQ.connect(limiter);
             break;
         case 'final':
              if(targetSamplerMulti) {
