@@ -33,6 +33,7 @@ let newElecOrganSampler: { sampler: ToneType.Sampler, baseNote: string } | null 
 let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
+let guitarMidEQ: ToneType.EQ3 | null = null; // NEW: Mid-boost EQ
 let guitarDistortion: ToneType.Distortion | null = null;
 let guitarCabinetFilter: ToneType.Filter | null = null;
 let guitarComp: ToneType.Compressor | null = null;
@@ -80,7 +81,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -4, "attack": 0.01, "release": 1.5, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0.2 },
+  "target_eguitar": { "volume": -4, "attack": 0.01, "release": 1.5, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0.05 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -223,7 +224,8 @@ const initializeAudio = async () => {
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
     guitarDistortion = new Tone.Distortion(eguitarTargetP.distortion);
-    guitarCabinetFilter = new Tone.Filter(4000, "lowpass");
+    guitarCabinetFilter = new Tone.Filter({ frequency: 3000, type: "lowpass", rolloff: -12, Q: 0.5 });
+    guitarMidEQ = new Tone.EQ3({ low: 0, mid: 3, high: -2 });
     guitarEQ = new Tone.EQ3({ 
         low: eguitarTargetP.eqLow, 
         mid: eguitarTargetP.eqMid, 
@@ -345,7 +347,7 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && guitarComp && guitarSoftSampler && guitarHardSampler && guitarDistortion && guitarCabinetFilter) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && guitarComp && guitarSoftSampler && guitarHardSampler && guitarDistortion && guitarCabinetFilter && guitarMidEQ) {
       console.log('[GEMINI_DEBUG_LOG] 全てのオーディオノードが有効です。接続処理を実行します。');
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
@@ -356,9 +358,9 @@ const initializeAudio = async () => {
       // E-GUITAR SIGNAL CHAIN
       guitarSoftSampler.connect(guitarComp);
       guitarHardSampler.connect(guitarComp);
-      guitarComp.chain(guitarDistortion, guitarCabinetFilter);
+      guitarComp.chain(guitarDistortion, guitarMidEQ, guitarCabinetFilter);
       guitarCabinetFilter.fan(masterComp, reverb);
-      console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (新エフェクトチェーン)');
+      console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (アドバイス Step1-3適用)');
 
       for (const [name, data] of Object.entries(samplers)) {
         if (rockDrumKit.includes(name)) {
@@ -482,8 +484,8 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
 
       if (instrumentName === 'target_eguitar' && now) {
         // Test both velocity layers
-        triggerGuitarSound('C3', '1n', now, 0.4); // soft
-        triggerGuitarSound('C3', '1n', now + 1, 1.0); // hard
+        triggerGuitarSound('C3', '1n', now, 0.3); // soft
+        triggerGuitarSound('C3', '1n', now + 1, 0.7); // hard
       }
   } else {
       const samplerData = samplers[instrumentName];
