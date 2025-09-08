@@ -32,7 +32,7 @@ let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
 let guitarDistortion: ToneType.Distortion | null = null;
-// let guitarCabinet: ToneType.Convolver | null = null; // DISABLED
+let guitarCabinetFilter: ToneType.Filter | null = null; // Cabinet Simulator
 let bassEQNode: ToneType.EQ3 | null = null;
 
 
@@ -221,6 +221,7 @@ const initializeAudio = async () => {
         mid: eguitarTargetP.eqMid, 
         high: eguitarTargetP.eqHigh 
     });
+    guitarCabinetFilter = new Tone.Filter(800, "bandpass");
     
     const ebassTargetP = tuningParams.value.target_ebass;
     bassEQNode = new Tone.EQ3({
@@ -318,7 +319,7 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler && guitarDistortion) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler && guitarDistortion && guitarCabinetFilter) {
       console.log('[GEMINI_DEBUG_LOG] 全てのオーディオノードが有効です。接続処理を実行します。');
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
@@ -330,16 +331,17 @@ const initializeAudio = async () => {
         samplers['eguitar'] = targetSamplerMulti;
       }
 
-      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion) {
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (Cabinetバイパス)...');
+      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion && guitarCabinetFilter) {
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (新シグナルチェーン)...');
         targetSamplerMulti.sampler.chain(
             guitarPitchShift,
             guitarVibrato,
             guitarDistortion,
-            guitarEQ
+            guitarEQ,
+            guitarCabinetFilter
         );
-        guitarEQ.fan(masterComp, reverb);
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (Cabinetバイパス)');
+        guitarCabinetFilter.fan(masterComp, reverb);
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (新シグナルチェーン)');
       } else {
          console.error('[GEMINI_DEBUG_LOG] ギターチェイン接続エラー: 必須ノードがnullです。');
       }
