@@ -729,13 +729,13 @@ const createLiteStyleRock = (rng: () => number): boolean => {
         } else {
             newSection = ROLES.VERSE;
         }
+        
+        console.log(`[GEMINI_DIAG_LOG] Scheduler Tick: Measure=${measureNum}, Current='${currentSection || 'None'}', Target='${newSection}'`);
 
         if (newSection !== currentSection) {
             console.log(`[GEMINI_DIAG_LOG] ★★★ セクション変更！'${currentSection || 'None'}' -> '${newSection}' at ${time} ★★★`);
             currentSection = newSection;
             const allParts = [verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff, chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart];
-            
-            // Schedule stop for the next measure, then start
             const nextMeasureTime = currentTone.Transport.nextSubdivision("1m");
 
             allParts.forEach(part => { 
