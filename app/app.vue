@@ -51,6 +51,7 @@ let guitarTestGate_Comp: ToneType.Gain | null = null;
 let guitarTestGate_Chorus: ToneType.Gain | null = null;
 let guitarTestGate_Distortion: ToneType.Gain | null = null;
 let guitarTestGate_MidEQ: ToneType.Gain | null = null;
+let guitarTestGate_EQ: ToneType.Gain | null = null;
 let guitarTestGate_Final: ToneType.Gain | null = null;
 
 
@@ -96,8 +97,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  // 最終修正: マスターの助言に基づきパラメータを最終調整
-  "target_eguitar": { "volume": -8, "attack": 0.005, "release": 0.6, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0.02 },
+  "target_eguitar": { "volume": -8, "attack": 0.005, "release": 0.6, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0.00 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -258,7 +258,7 @@ const initializeAudio = async () => {
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
     guitarChorus = new Tone.Chorus({ frequency: 0.8, wet: 0.15 });
-    guitarDistortion = new Tone.Distortion(0.02);
+    guitarDistortion = new Tone.Distortion(0.00);
     guitarCabinetFilter = new Tone.Filter({ frequency: 5000, type: "lowpass" });
     guitarMidEQ = new Tone.EQ3({ low: 0, mid: 3, high: -2 });
     guitarEQ = new Tone.EQ3({ 
@@ -274,6 +274,7 @@ const initializeAudio = async () => {
     guitarTestGate_Chorus = new Tone.Gain(0).connect(masterComp);
     guitarTestGate_Distortion = new Tone.Gain(0).connect(masterComp);
     guitarTestGate_MidEQ = new Tone.Gain(0).connect(masterComp);
+    guitarTestGate_EQ = new Tone.Gain(0).connect(masterComp);
     guitarTestGate_Final = new Tone.Gain(0).connect(masterComp);
 
 
@@ -372,7 +373,7 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && guitarComp && guitarSoftSampler && guitarHardSampler && guitarDistortion && guitarCabinetFilter && guitarMidEQ && guitarChorus && guitarTestGate_Direct && guitarTestGate_Comp && guitarTestGate_Chorus && guitarTestGate_Distortion && guitarTestGate_MidEQ && guitarTestGate_Final) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && guitarComp && guitarSoftSampler && guitarHardSampler && guitarDistortion && guitarCabinetFilter && guitarMidEQ && guitarChorus && guitarTestGate_Direct && guitarTestGate_Comp && guitarTestGate_Chorus && guitarTestGate_Distortion && guitarTestGate_MidEQ && guitarTestGate_EQ && guitarTestGate_Final) {
       console.log('[GEMINI_DEBUG_LOG] 全てのオーディオノードが有効です。接続処理を実行します。');
       
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
@@ -398,7 +399,10 @@ const initializeAudio = async () => {
       guitarDistortion.connect(guitarMidEQ);
       
       guitarMidEQ.connect(guitarTestGate_MidEQ);
-      guitarMidEQ.connect(guitarCabinetFilter);
+      guitarMidEQ.connect(guitarEQ);
+
+      guitarEQ.connect(guitarTestGate_EQ);
+      guitarEQ.connect(guitarCabinetFilter);
 
       guitarCabinetFilter.connect(guitarTestGate_Final);
       guitarCabinetFilter.fan(masterComp, reverb); // 通常の出力も維持
@@ -518,7 +522,7 @@ const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
 const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => {
   if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; } }
   
-  const allGates = [guitarTestGate_Direct, guitarTestGate_Comp, guitarTestGate_Chorus, guitarTestGate_Distortion, guitarTestGate_MidEQ, guitarTestGate_Final];
+  const allGates = [guitarTestGate_Direct, guitarTestGate_Comp, guitarTestGate_Chorus, guitarTestGate_Distortion, guitarTestGate_MidEQ, guitarTestGate_EQ, guitarTestGate_Final];
   allGates.forEach(g => { if(g) g.gain.value = 0; });
   if (guitarTestGate_Final) guitarTestGate_Final.gain.value = 1;
 
@@ -532,7 +536,7 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
       }
 
       if (instrumentName === 'target_eguitar' && now) {
-        triggerGuitarSound('C#4', '1n', now, 0.7); // hard
+        triggerGuitarSound('C#4', '1n', now, 0.7);
       }
   } else {
       const samplerData = samplers[instrumentName];
@@ -545,7 +549,7 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
 
 const handlePlaySoundStage = (payload: { stage: string }) => {
   console.log(`[GEMINI_DEBUG_LOG] Stage Playback: ${payload.stage}`);
-  const allGates = [guitarTestGate_Direct, guitarTestGate_Comp, guitarTestGate_Chorus, guitarTestGate_Distortion, guitarTestGate_MidEQ, guitarTestGate_Final];
+  const allGates = [guitarTestGate_Direct, guitarTestGate_Comp, guitarTestGate_Chorus, guitarTestGate_Distortion, guitarTestGate_MidEQ, guitarTestGate_EQ, guitarTestGate_Final];
   allGates.forEach(g => { if(g) g.gain.value = 0; });
 
   switch (payload.stage) {
@@ -554,6 +558,7 @@ const handlePlaySoundStage = (payload: { stage: string }) => {
     case 'chorus': if(guitarTestGate_Chorus) guitarTestGate_Chorus.gain.value = 1; break;
     case 'distortion': if(guitarTestGate_Distortion) guitarTestGate_Distortion.gain.value = 1; break;
     case 'mideq': if(guitarTestGate_MidEQ) guitarTestGate_MidEQ.gain.value = 1; break;
+    case 'eq': if(guitarTestGate_EQ) guitarTestGate_EQ.gain.value = 1; break;
     case 'final': if(guitarTestGate_Final) guitarTestGate_Final.gain.value = 1; break;
   }
   

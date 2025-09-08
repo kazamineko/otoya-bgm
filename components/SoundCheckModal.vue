@@ -83,7 +83,8 @@
                     <button @click.prevent="playSoundStage('chorus')">3. Chorus後</button>
                     <button @click.prevent="playSoundStage('distortion')">4. Distortion後</button>
                     <button @click.prevent="playSoundStage('mideq')">5. MidEQ後</button>
-                    <button @click.prevent="playSoundStage('final')">6. 最終段(Filter後)</button>
+                    <button @click.prevent="playSoundStage('eq')">6. EQ後</button>
+                    <button @click.prevent="playSoundStage('final')">7. 最終段(Filter後)</button>
                   </div>
 
                   <div class="sub-header">Raw MP3 Playback</div>
