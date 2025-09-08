@@ -226,6 +226,7 @@ const initializeAudio = async () => {
     guitarVibrato = new Tone.Vibrato(5, 0.02);
     // マスターの助言(ステップ1)に基づき、Distortion値を0.05に固定
     guitarDistortion = new Tone.Distortion(0.05);
+    // マスターの助言(ステップ2)に基づき、FilterとMidEQの値を設定
     guitarCabinetFilter = new Tone.Filter({ frequency: 3000, type: "lowpass", rolloff: -12, Q: 0.5 });
     guitarMidEQ = new Tone.EQ3({ low: 0, mid: 3, high: -2 });
     guitarEQ = new Tone.EQ3({ 
