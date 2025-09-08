@@ -40,6 +40,7 @@ null = null; // NEW: Mid-boost EQ
 let guitarDistortion: ToneType.Distortion | null = null;
 let guitarCabinetFilter: ToneType.Filter | null = null;
 let guitarComp: ToneType.Compressor | null = null;
+let guitarChorus: ToneType.Chorus | null = null; // ステップ6: Chorus変数を追加
 let bassEQNode: ToneType.EQ3 | null = null;
 
 
@@ -225,6 +226,8 @@ const initializeAudio = async () => {
     const eguitarTargetP = tuningParams.value.target_eguitar;
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
+    // ステップ6: Chorusをインスタンス化
+    guitarChorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.3, wet: 0.2 });
     // マスターの助言(ステップ1)に基づき、Distortion値を0.05に固定
     guitarDistortion = new Tone.Distortion(0.05);
     // マスターの助言(ステップ2)に基づき、FilterとMidEQの値を設定
@@ -349,7 +352,7 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && guitarComp && guitarSoftSampler && guitarHardSampler && guitarDistortion && guitarCabinetFilter && guitarMidEQ) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && guitarComp && guitarSoftSampler && guitarHardSampler && guitarDistortion && guitarCabinetFilter && guitarMidEQ && guitarChorus) {
       console.log('[GEMINI_DEBUG_LOG] 全てのオーディオノードが有効です。接続処理を実行します。');
       
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
@@ -358,10 +361,10 @@ const initializeAudio = async () => {
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
-      // E-GUITAR SIGNAL CHAIN (マスターの助言 ステップ3適用)
+      // E-GUITAR SIGNAL CHAIN (マスターの助言 ステップ6適用)
       guitarSoftSampler.connect(guitarComp);
       guitarHardSampler.connect(guitarComp);
-      guitarComp.chain(guitarDistortion, guitarMidEQ, guitarCabinetFilter);
+      guitarComp.chain(guitarChorus, guitarDistortion, guitarMidEQ, guitarCabinetFilter);
       guitarCabinetFilter.fan(masterComp, reverb);
       console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了');
 
