@@ -20,9 +20,11 @@ const loadingMessage = ref<string>('');
 
 // --- 音声関連 ---
 let Tone: typeof ToneType | null = null;
-let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote?: string } } = {}; // baseNote is now optional
+let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote?: string } } = {}; // baseNote is optional
 let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
-let targetSamplerMulti: { sampler: ToneType.Sampler } | null = null; // baseNote is removed
+// NEW: Separate samplers for velocity layers
+let guitarSoftSampler: ToneType.Sampler | null = null;
+let guitarHardSampler: ToneType.Sampler | null = null;
 let newRockBassSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newSynthPianoSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newElecOrganSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
@@ -126,11 +128,16 @@ watch(tuningParams, (newParams) => {
       if (guitarPitchShift) {
           if (eguitarTargetParams.detune !== undefined) guitarPitchShift.pitch = eguitarTargetParams.detune;
       }
-      if (samplers['eguitar']) {
-          const eguitarSampler = samplers['eguitar'].sampler;
-          if(eguitarTargetParams.volume !== undefined) eguitarSampler.volume.value = eguitarTargetParams.volume;
-          if(eguitarTargetParams.attack !== undefined) eguitarSampler.attack = eguitarTargetParams.attack;
-          if(eguitarTargetParams.release !== undefined) eguitarSampler.release = eguitarTargetParams.release;
+      // Note: Volume, Attack, Release for guitar samplers are set on the individual samplers
+      if (guitarSoftSampler) {
+          if(eguitarTargetParams.volume !== undefined) guitarSoftSampler.volume.value = eguitarTargetParams.volume;
+          if(eguitarTargetParams.attack !== undefined) guitarSoftSampler.attack = eguitarTargetParams.attack;
+          if(eguitarTargetParams.release !== undefined) guitarSoftSampler.release = eguitarTargetParams.release;
+      }
+       if (guitarHardSampler) {
+          if(eguitarTargetParams.volume !== undefined) guitarHardSampler.volume.value = eguitarTargetParams.volume;
+          if(eguitarTargetParams.attack !== undefined) guitarHardSampler.attack = eguitarTargetParams.attack;
+          if(eguitarTargetParams.release !== undefined) guitarHardSampler.release = eguitarTargetParams.release;
       }
   }
 
@@ -238,41 +245,43 @@ const initializeAudio = async () => {
     targetGuitarPlayer = new Tone.Player('/eguitar/C5_s6_01.mp3').toDestination();
     targetBassPlayer = new Tone.Player('/ebass/ebass-e1.mp3').toDestination();
 
-    const multiSampleUrls = {
-      "A2": "A2_s2_01.mp3",
-      "A#5": "As5_s6_01.mp3",
-      "B3": "B3_s5_01.mp3",
-      "B4": "B4_s6_01.mp3",
-      "C2": "C2_s1_01.mp3",
-      "C3": "C3_s2_01.mp3",
-      "C5": "C5_s6_01.mp3",
-      "C#4": "Cs4_s5_01.mp3",
-      "C#6": "Cs6_s6_01.mp3",
-      "D3": "D3_s3_01.mp3",
-      "D5": "D5_s6_01.mp3",
-      "E2": "E2_s1_01.mp3",
-      "E3": "E3_s3_01.mp3",
-      "E4": "E4_s6_01.mp3",
-      "F2": "F2_s1_01.mp3",
-      "F5": "F5_s6_01.mp3",
-      "G3": "G3_s4_01.mp3",
-      "G4": "G4_s6_01.mp3",
+    const hardSampleUrls = {
+      "A2": "A2_s2_01.mp3", "A#5": "As5_s6_01.mp3", "B3": "B3_s5_01.mp3",
+      "B4": "B4_s6_01.mp3", "C2": "C2_s1_01.mp3", "C3": "C3_s2_01.mp3",
+      "C5": "C5_s6_01.mp3", "C#4": "Cs4_s5_01.mp3", "C#6": "Cs6_s6_01.mp3",
+      "D3": "D3_s3_01.mp3", "D5": "D5_s6_01.mp3", "E2": "E2_s1_01.mp3",
+      "E3": "E3_s3_01.mp3", "E4": "E4_s6_01.mp3", "F2": "F2_s1_01.mp3",
+      "F5": "F5_s6_01.mp3", "G3": "G3_s4_01.mp3", "G4": "G4_s6_01.mp3",
       "G#5": "Gs5_s6_01.mp3"
+    };
+
+    const softSampleUrls = {
+       "A2": "A2_s2_soft_01.mp3", "B3": "B3_s5_soft_01.mp3", "C2": "C2_s1_soft_01.mp3",
+       "C3": "C3_s2_soft_01.mp3", "C5": "C5_s6_soft_01.mp3", "C#4": "Cs4_s5_soft_01.mp3",
+       "D3": "D3_s3_soft_01.mp3", "D5": "D5_s6_soft_01.mp3", "E2": "E2_s1_soft_01.mp3",
+       "E3": "E3_s3_soft_01.mp3", "E4": "E4_s6_soft_01.mp3", "F2": "F2_s1_soft_01.mp3",
+       "G3": "G3_s4_soft_01.mp3"
     };
 
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み開始 (Players & Samplers)...');
     
-    const multiSamplerPromise = new Promise<void>(resolve => {
-        const multiSampleParams = tuningParams.value['target_eguitar'];
-        const sampler = new Tone!.Sampler({
-            urls: multiSampleUrls, baseUrl: "/eguitar/",
-            volume: multiSampleParams.volume, attack: multiSampleParams.attack, release: multiSampleParams.release,
+    const guitarParams = tuningParams.value['target_eguitar'];
+    const hardSamplerPromise = new Promise<void>(resolve => {
+        guitarHardSampler = new Tone!.Sampler({
+            urls: hardSampleUrls, baseUrl: "/eguitar/",
+            volume: guitarParams.volume, attack: guitarParams.attack, release: guitarParams.release,
             onload: () => resolve()
         });
-        targetSamplerMulti = { sampler }; // baseNote is CORRECTLY removed
+    });
+     const softSamplerPromise = new Promise<void>(resolve => {
+        guitarSoftSampler = new Tone!.Sampler({
+            urls: softSampleUrls, baseUrl: "/eguitar/",
+            volume: guitarParams.volume, attack: guitarParams.attack, release: guitarParams.release,
+            onload: () => resolve()
+        });
     });
 
-    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, multiSamplerPromise]);
+    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, hardSamplerPromise, softSamplerPromise]);
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み完了');
     loadingMessage.value = '楽器を最終調整しています...';
     
@@ -335,7 +344,7 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && guitarComp && guitarSoftSampler && guitarHardSampler) {
       console.log('[GEMINI_DEBUG_LOG] 全てのオーディオノードが有効です。接続処理を実行します。');
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
@@ -343,23 +352,13 @@ const initializeAudio = async () => {
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
-      if (targetSamplerMulti) {
-        samplers['eguitar'] = targetSamplerMulti;
-      }
-
-      // CORRECTED SIGNAL CHAIN FOR E-GUITAR
-      if (targetSamplerMulti && masterComp) {
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (エフェクトバイパス)...');
-        // Sampler's output is connected directly to the master compressor to hear the raw sound
-        targetSamplerMulti.sampler.connect(masterComp);
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (エフェクトバイパス)');
-      } else {
-         console.error('[GEMINI_DEBUG_LOG] ギターチェイン接続エラー: 必須ノードがnullです。');
-      }
+      // E-GUITAR SIGNAL CHAIN
+      guitarSoftSampler.chain(guitarComp);
+      guitarHardSampler.chain(guitarComp);
+      guitarComp.fan(masterComp, reverb);
+      console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (Velocityレイヤーベース)');
 
       for (const [name, data] of Object.entries(samplers)) {
-        if (name === 'eguitar') continue;
-
         if (rockDrumKit.includes(name)) {
           if (name === 'ride') {
             data.sampler.connect(rideFilter);
@@ -373,7 +372,6 @@ const initializeAudio = async () => {
       }
       
       for (const [name, { sampler }] of Object.entries(targetSamplers)) {
-        if (name === 'target_ebass') continue;
         sampler.fan(masterComp, reverb);
       }
       console.log('[GEMINI_DEBUG_LOG] 全てのシグナルチェーン接続完了');
@@ -427,16 +425,37 @@ const playMusic = async (menuName: string, seed?: string) => {
 
 const stopMusic = () => {
   if (!isPlaying.value || !Tone) return;
+  console.log(`[GEMINI_DEBUG_LOG] stopMusic: 開始。現在 ${scheduledEvents.length} 個のイベントがあります。`);
   Tone.Transport.stop(); 
   Tone.Transport.cancel(0);
-  scheduledEvents.forEach(event => { event.stop(0); event.dispose(); });
+  scheduledEvents.forEach((event, index) => {
+    // @ts-ignore
+    console.log(`[GEMINI_DEBUG_LOG] cleaning up event ${index + 1}/${scheduledEvents.length}: ${event.constructor.name}`);
+    if (event.state === "started") {
+        event.stop(0);
+    }
+    event.dispose();
+  });
   scheduledEvents.length = 0;
   if (noise) { noise.stop(0); noise.dispose(); noise = null; }
+  
+  // Release all sampler notes
+  guitarSoftSampler?.releaseAll();
+  guitarHardSampler?.releaseAll();
   Object.values(samplers).forEach(s => s.sampler.releaseAll());
   Object.values(targetSamplers).forEach(s => s.sampler.releaseAll());
-  if(targetSamplerMulti) targetSamplerMulti.sampler.releaseAll();
+
   isPlaying.value = false;
+  console.log('[GEMINI_DEBUG_LOG] stopMusic: 完了。');
 };
+
+const triggerGuitarSound = (note: string | string[], duration: ToneType.Unit.Time, time: ToneType.Unit.Time, velocity: number) => {
+  if (velocity < 0.5) {
+    guitarSoftSampler?.triggerAttackRelease(note, duration, time, velocity);
+  } else {
+    guitarHardSampler?.triggerAttackRelease(note, duration, time, velocity);
+  }
+}
 
 const togglePlayback = async () => { if (isPlaying.value) { stopMusic(); } else if (selectedMenu.value) { const [menuName, seed] = currentSeed.value.split(':'); if (menuName && seed) await playMusic(menuName, seed); } };
 const handleVolumeChange = (event: Event) => { const newVolume = parseFloat((event.target as HTMLInputElement).value); volume.value = newVolume; if (isAudioInitialized.value && Tone) { Tone.Destination.volume.value = Tone.gainToDb(newVolume); } };
@@ -451,19 +470,18 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
   if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; } }
   
   const duration = '2n';
+  const now = Tone?.now();
 
   if (type === 'target_sampler') {
       if (instrumentName === 'target_ebass' && newRockBassSampler) {
-        newRockBassSampler.sampler.triggerAttackRelease('E1', duration); // Example note
+        newRockBassSampler.sampler.triggerAttackRelease('E1', duration);
         return; 
       }
 
-      if (instrumentName === 'target_eguitar' && samplers['eguitar'] && Tone) {
-        const sampler = samplers['eguitar'].sampler;
-        sampler.triggerAttackRelease('C3', duration);
-      } else {
-        const targetSampler = targetSamplers[instrumentName];
-        if (targetSampler) targetSampler.sampler.triggerAttackRelease(targetSampler.baseNote, duration);
+      if (instrumentName === 'target_eguitar' && now) {
+        // Test both velocity layers
+        triggerGuitarSound('C3', '1n', now, 0.4); // soft
+        triggerGuitarSound('C3', '1n', now + 1, 1.0); // hard
       }
   } else {
       const samplerData = samplers[instrumentName];
@@ -566,7 +584,7 @@ const createJazzSound = (rng: () => number): boolean => {
 };
 
 const createRockSound = (rng: () => number): boolean => {
-    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler || !guitarEQ) {
+    if (!Tone || !guitarHardSampler || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler || !guitarEQ) {
         return false;
     }
     scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
@@ -616,7 +634,7 @@ const createRockSound = (rng: () => number): boolean => {
       const leadVelocity = isGhostNote ? vel * 0.3 : vel;
 
       const leadAction = {
-        'guitar': () => samplers.eguitar?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity),
+        'guitar': () => triggerGuitarSound([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity),
         'synth': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '8n', time, leadVelocity),
         'organ': () => newElecOrganSampler?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity * 0.8),
       };
@@ -624,9 +642,12 @@ const createRockSound = (rng: () => number): boolean => {
       const padAction = {
           'guitar': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`], '2n', time, vel * 0.6),
           'synth': () => {
-              if (samplers.eguitar) {
-                samplers.eguitar.sampler.release = 0.05;
-                samplers.eguitar.sampler.triggerAttackRelease(`${rootNote}3`, '8n', time, vel * 0.8)
+              if (guitarHardSampler) {
+                // Quick staccato guitar as pad
+                const originalRelease = guitarHardSampler.release;
+                guitarHardSampler.release = 0.05;
+                triggerGuitarSound(`${rootNote}3`, '8n', time, vel * 0.8);
+                guitarHardSampler.release = originalRelease;
               }
           },
           'organ': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}5`], '2n', time, vel * 0.6)
@@ -645,7 +666,9 @@ const createRockSound = (rng: () => number): boolean => {
 };
 
 const createLiteStyleRock = (rng: () => number): boolean => {
-    if (!Tone || !samplers.eguitar || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash) {
+    console.log('[GEMINI_DEBUG_LOG] createLiteStyleRock: 関数が呼び出されました。');
+    if (!Tone || !guitarHardSampler || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash) {
+        console.error('[GEMINI_DEBUG_LOG] createLiteStyleRock: 必要なサンプラーが初期化されていないため、再生を中止します。');
         return false;
     }
     scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
@@ -653,7 +676,6 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     Tone.Transport.bpm.value = 135;
     Tone.Transport.swing = 0;
 
-    const { sampler: guitar } = samplers.eguitar;
     const { sampler: kick, baseNote: kickNote } = samplers.rockKick;
     const { sampler: snare, baseNote: snareNote } = samplers.rockSnare;
     const { sampler: ride, baseNote: rideNote } = samplers.ride;
@@ -674,7 +696,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     }, [1, 1, 1, 1, 1, 1, 1, 1], "8n");
 
     const verseGuitarRiff = new Tone.Sequence((time, note) => {
-        if (note) guitar.triggerAttackRelease(note, "8n", time);
+        if (note) triggerGuitarSound(note, "8n", time, 1.0);
     }, ['E4', null, 'G4', 'A4', null, 'G4', null, 'D4'], "8n");
 
     // --- Chorus Patterns ---
@@ -691,7 +713,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     }, [1, 0, 0, 0], "1m");
 
     const chorusGuitarPart = new Tone.Part<{ time: string, note: string[], duration: string }>((time, value) => {
-        guitar.triggerAttackRelease(value.note, value.duration, time, 1.0);
+        triggerGuitarSound(value.note, value.duration, time, 1.0);
     }, [
         { time: '0:0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '0:0:2', note: ['G4', 'D5'], duration: '8n' },
         { time: '0:1:0', note: ['A4', 'E5'], duration: '8n' }, { time: '0:1:2', note: ['B4', 'F#5'], duration: '8n' },
@@ -718,6 +740,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     // --- Section Control ---
     const sectionPart = new Tone.Part<{ time: string; value: Role }>((time, event) => {
         const role = event.value;
+        console.log(`[GEMINI_DEBUG_LOG] Section change triggered at ${time}. New role: ${role}`);
         if (role === ROLES.VERSE) {
             verseKickSeq.start(time);
             verseSnareSeq.start(time);
@@ -755,6 +778,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
         verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff,
         chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart
     );
+    console.log(`[GEMINI_DEBUG_LOG] createLiteStyleRock: ${scheduledEvents.length} events scheduled for playback.`);
     
     return true;
 };
