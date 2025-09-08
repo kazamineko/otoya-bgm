@@ -389,14 +389,19 @@ const stopMusic = () => {
   Tone.Transport.stop(); 
   Tone.Transport.cancel(0);
   
+  // First, stop all running events.
   scheduledEvents.forEach((event, index) => {
     // @ts-ignore
-    console.log(`[GEMINI_DIAG_LOG] -> イベント ${index + 1}/${scheduledEvents.length}: ${event.constructor.name} (状態: ${event.state})`);
     if (event.state === "started") {
-        console.log(`[GEMINI_DIAG_LOG]    - 停止中...`);
-        event.stop(0);
+      console.log(`[GEMINI_DIAG_LOG] -> 停止中 イベント ${index + 1}/${scheduledEvents.length}: ${event.constructor.name}`);
+      event.stop(0);
     }
-    console.log(`[GEMINI_DIAG_LOG]    - 破棄中...`);
+  });
+
+  // Then, dispose of all events.
+  scheduledEvents.forEach((event, index) => {
+    // @ts-ignore
+    console.log(`[GEMINI_DIAG_LOG] -> 破棄中 イベント ${index + 1}/${scheduledEvents.length}: ${event.constructor.name}`);
     event.dispose();
   });
 
@@ -665,21 +670,14 @@ const createLiteStyleRock = (rng: () => number): boolean => {
 
     // --- Verse Patterns ---
     const verseKickSeq = new Tone.Sequence((time, note) => { if (note) kick.triggerAttack(kickNote, time); }, [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0], "16n");
-    console.log('[GEMINI_DIAG_LOG] -> verseKickSeq を作成');
     const verseSnareSeq = new Tone.Sequence((time, note) => { if (note) snare.triggerAttack(snareNote, time); }, [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], "16n");
-    console.log('[GEMINI_DIAG_LOG] -> verseSnareSeq を作成');
     const verseRideSeq = new Tone.Sequence((time, note) => { if (note) ride.triggerAttack(rideNote, time, 0.7); }, [1, 1, 1, 1, 1, 1, 1, 1], "8n");
-    console.log('[GEMINI_DIAG_LOG] -> verseRideSeq を作成');
     const verseGuitarRiff = new Tone.Sequence((time, note) => { if (note) triggerGuitarSound(note, "8n", time, 1.0); }, ['E3', null, 'G3', 'A3', null, 'G3', null, 'D4'], "8n");
-    console.log('[GEMINI_DIAG_LOG] -> verseGuitarRiff を作成');
 
     // --- Chorus Patterns ---
     const chorusKickSeq = new Tone.Sequence((time, note) => { if (note) kick.triggerAttack(kickNote, time, 1.0); }, [1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0], "16n");
-    console.log('[GEMINI_DIAG_LOG] -> chorusKickSeq を作成');
     const chorusSnareSeq = new Tone.Sequence((time, note) => { if (note) snare.triggerAttack(snareNote, time, 1.0); }, [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1], "16n");
-    console.log('[GEMINI_DIAG_LOG] -> chorusSnareSeq を作成');
-    const chorusCrashSeq = new Tone.Sequence((time, note) => { if (note) crash.triggerAttack(crashNote, time, 0.9); }, [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0], "2m"); // Adjusted to fire every 2 measures
-    console.log('[GEMINI_DIAG_LOG] -> chorusCrashSeq を作成');
+    const chorusCrashSeq = new Tone.Sequence((time, note) => { if (note) crash.triggerAttack(crashNote, time, 0.9); }, [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0], "2m");
     
     const chorusGuitarPart = new Tone.Part<{ time: string, note: string, duration: string }>((time, value) => {
         triggerGuitarSound(value.note, value.duration, time, 1.0);
@@ -693,14 +691,13 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     ]);
     chorusGuitarPart.loop = true;
     chorusGuitarPart.loopEnd = '4m';
-    console.log('[GEMINI_DIAG_LOG] -> chorusGuitarPart を作成');
 
     let currentSection = '';
     const sectionScheduler = new Tone.Loop(time => {
-        if (!Tone) return;
-        const measures = Math.floor(Tone.Transport.getTicksAtTime(time) / (Tone.Transport.PPQ * 4));
+        const currentTone = Tone;
+        if (!currentTone) return; // THIS IS THE CORRECT FIX
+        const measures = Math.floor(currentTone.Transport.getTicksAtTime(time) / (currentTone.Transport.PPQ * 4));
         const measureNum = measures % 32;
-        console.log(`[GEMINI_DIAG_LOG] sectionScheduler: Loop fired at ${Tone.Transport.position}, measureNum: ${measureNum}`);
 
         let newSection = '';
         if (measureNum >= 24 || (measureNum >= 8 && measureNum < 16)) {
@@ -708,22 +705,26 @@ const createLiteStyleRock = (rng: () => number): boolean => {
         } else {
             newSection = ROLES.VERSE;
         }
-        console.log(`[GEMINI_DIAG_LOG]    - currentSection: '${currentSection}', newSection: '${newSection}'`);
 
         if (newSection !== currentSection) {
-            console.log(`[GEMINI_DIAG_LOG]    - ★★★ セクション変更！'${currentSection}' -> '${newSection}' ★★★`);
+            console.log(`[GEMINI_DIAG_LOG] ★★★ セクション変更！'${currentSection || 'None'}' -> '${newSection}' at ${time} ★★★`);
             currentSection = newSection;
             const allParts = [verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff, chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart];
-            allParts.forEach(part => { if (part.state === 'started') part.stop(time) });
+            allParts.forEach(part => { 
+                if (part.state === 'started') {
+                    console.log(`[GEMINI_DIAG_LOG]    - 即時停止: ${part.constructor.name}`);
+                    part.stop(currentTone.immediate());
+                }
+            });
 
             if (newSection === ROLES.VERSE) {
-                console.log(`[GEMINI_DIAG_LOG]    - VERSE パートを開始します。`);
+                console.log(`[GEMINI_DIAG_LOG]    - VERSE パートを '${time}' に開始予約`);
                 verseKickSeq.start(time);
                 verseSnareSeq.start(time);
                 verseRideSeq.start(time);
                 verseGuitarRiff.start(time);
             } else { // CHORUS
-                console.log(`[GEMINI_DIAG_LOG]    - CHORUS パートを開始します。`);
+                console.log(`[GEMINI_DIAG_LOG]    - CHORUS パートを '${time}' に開始予約`);
                 chorusKickSeq.start(time);
                 chorusSnareSeq.start(time);
                 chorusCrashSeq.start(time);
@@ -731,7 +732,6 @@ const createLiteStyleRock = (rng: () => number): boolean => {
             }
         }
     }, "1m").start(0);
-    console.log('[GEMINI_DIAG_LOG] -> sectionScheduler (Loop) を作成');
     
     scheduledEvents.push(sectionScheduler, verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff, chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart);
     console.log(`[GEMINI_DIAG_LOG] createLiteStyleRock: ${scheduledEvents.length} 個の独立イベントをスケジュールしました。`);
