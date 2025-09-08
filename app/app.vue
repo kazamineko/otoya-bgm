@@ -674,7 +674,7 @@ const createRockSound = (rng: () => number): boolean => {
 };
 
 const createLiteStyleRock = (rng: () => number): boolean => {
-    console.log('[GEMINI_DIAG_LOG] createLiteStyleRock (Multi-Event Ver.): 初期化中...');
+    console.log('[GEMINI_DIAG_LOG] createLiteStyleRock: 初期化中 (マスター・アーキテクチャ)...');
     if (!Tone || !heavyMetalSampler || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash) {
         console.error('[GEMINI_DIAG_LOG] createLiteStyleRock: 必須サンプラーがありません。');
         return false;
@@ -692,76 +692,76 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     const { sampler: crash, baseNote: crashNote } = samplers.crash;
     if (!kickNote || !snareNote || !rideNote || !crashNote) return false;
 
-    // --- Verse Patterns ---
-    const verseKickSeq = new Tone.Sequence((time, note) => { if (note) kick.triggerAttack(kickNote, time); }, [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0], "16n");
-    const verseSnareSeq = new Tone.Sequence((time, note) => { if (note) snare.triggerAttack(snareNote, time); }, [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], "16n");
-    const verseRideSeq = new Tone.Sequence((time, note) => { if (note) ride.triggerAttack(rideNote, time, 0.7); }, [1, 1, 1, 1, 1, 1, 1, 1], "8n");
-    const verseGuitarRiff = new Tone.Sequence((time, note) => { if (note) triggerGuitarSound(note, "8n", time, 1.0); }, ['E3', null, 'G3', 'A3', null, 'G3', null, 'D4'], "8n");
-
-    // --- Chorus Patterns ---
-    const chorusKickSeq = new Tone.Sequence((time, note) => { if (note) kick.triggerAttack(kickNote, time, 1.0); }, [1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0], "16n");
-    const chorusSnareSeq = new Tone.Sequence((time, note) => { if (note) snare.triggerAttack(snareNote, time, 1.0); }, [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1], "16n");
-    const chorusCrashSeq = new Tone.Sequence((time, note) => { if (note) crash.triggerAttack(crashNote, time, 0.9); }, [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0], "2m");
+    type MusicEvent = { time: string, instrument: 'kick'|'snare'|'ride'|'crash'|'guitar', note: string|string[], duration: string, velocity: number };
+    const events: MusicEvent[] = [];
     
-    const chorusGuitarPart = new Tone.Part<{ time: string, note: string, duration: string }>((time, value) => {
-        triggerGuitarSound(value.note, value.duration, time, 1.0);
-    }, [
+    const TOTAL_MEASURES = 32;
+    const songStructure = [
+        ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE,
+        ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS,
+        ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE,
+        ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS,
+    ];
+
+    const verseKickPattern = [1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,0];
+    const verseSnarePattern = [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0];
+    const verseGuitarPattern = ['E3', null, 'G3', 'A3', null, 'G3', null, 'D4'];
+
+    const chorusKickPattern = [1,1,0,1,1,0,1,0,1,1,0,1,1,1,1,0];
+    const chorusSnarePattern = [0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,1];
+    const chorusGuitarPartPattern: { time: string, note: string, duration: string }[] = [
         { time: '0:0:0', note: 'E3', duration: '8n' }, { time: '0:0:2', note: 'G3', duration: '8n' }, { time: '0:1:0', note: 'A3', duration: '8n' }, { time: '0:1:2', note: 'B3', duration: '8n' },
         { time: '0:2:0', note: 'C4', duration: '8n' }, { time: '0:2:2', note: 'B3', duration: '8n' }, { time: '0:3:0', note: 'A3', duration: '8n' }, { time: '0:3:2', note: 'G3', duration: '8n' },
         { time: '1:0:0', note: 'E3', duration: '8n' }, { time: '1:0:2', note: 'G3', duration: '8n' }, { time: '1:1:0', note: 'A3', duration: '8n' }, { time: '1:1:2', note: 'G3', duration: '8n' }, { time: '1:2:0', note: 'E3', duration: '2n.' },
         { time: '2:0:0', note: 'E3', duration: '8n' }, { time: '2:0:2', note: 'G3', duration: '8n' }, { time: '2:1:0', note: 'A3', duration: '8n' }, { time: '2:1:2', note: 'B3', duration: '8n' },
         { time: '2:2:0', note: 'C4', duration: '8n' }, { time: '2:2:2', note: 'B3', duration: '8n' }, { time: '2:3:0', note: 'A3', duration: '8n' }, { time: '2:3:2', note: 'G3', duration: '8n' },
         { time: '3:0:0', note: 'E3', duration: '8n' }, { time: '3:0:2', note: 'G3', duration: '8n' }, { time: '3:1:0', note: 'A3', duration: '8n' }, { time: '3:1:2', note: 'G3', duration: '8n' }, { time: '3:2:0', note: 'B3', duration: '2n.' },
-    ]);
-    chorusGuitarPart.loop = true;
-    chorusGuitarPart.loopEnd = '4m';
+    ];
 
-    let currentSection = '';
-    const sectionScheduler = new Tone.Loop(time => {
-        const currentTone = Tone;
-        if (!currentTone) return; 
-        const measures = Math.floor(currentTone.Transport.getTicksAtTime(time) / (currentTone.Transport.PPQ * 4));
-        const measureNum = measures % 32;
+    for (let measure = 0; measure < TOTAL_MEASURES; measure++) {
+        const currentRole = songStructure[measure];
+        const measureTime = `${measure}m`;
 
-        let newSection = '';
-        if (measureNum >= 24 || (measureNum >= 8 && measureNum < 16)) {
-            newSection = ROLES.CHORUS;
-        } else {
-            newSection = ROLES.VERSE;
-        }
-        
-        console.log(`[GEMINI_DIAG_LOG] Scheduler Tick: Measure=${measureNum}, Current='${currentSection || 'None'}', Target='${newSection}'`);
+        if (currentRole === ROLES.VERSE) {
+            verseKickPattern.forEach((n, i) => { if(n) events.push({ time: `${measureTime} + ${i}*16n`, instrument: 'kick', note: kickNote, duration: '16n', velocity: 1.0 }); });
+            verseSnarePattern.forEach((n, i) => { if(n) events.push({ time: `${measureTime} + ${i}*16n`, instrument: 'snare', note: snareNote, duration: '16n', velocity: 1.0 }); });
+            for(let i=0; i<8; i++) { events.push({ time: `${measureTime} + ${i}*8n`, instrument: 'ride', note: rideNote, duration: '8n', velocity: 0.7 }); }
+            verseGuitarPattern.forEach((n, i) => { if(n) events.push({ time: `${measureTime} + ${i}*8n`, instrument: 'guitar', note: n, duration: '8n', velocity: 1.0 }); });
+        } else { // CHORUS
+            chorusKickPattern.forEach((n, i) => { if(n) events.push({ time: `${measureTime} + ${i}*16n`, instrument: 'kick', note: kickNote, duration: '16n', velocity: 1.0 }); });
+            chorusSnarePattern.forEach((n, i) => { if(n) events.push({ time: `${measureTime} + ${i}*16n`, instrument: 'snare', note: snareNote, duration: '16n', velocity: 1.0 }); });
+            
+            const chorusMeasureIndex = (measure < 16) ? measure - 8 : measure - 24;
+            if (chorusMeasureIndex % 4 === 0) { 
+                events.push({ time: measureTime, instrument: 'crash', note: crashNote, duration: '1m', velocity: 0.9 });
+            }
 
-        if (newSection !== currentSection) {
-            console.log(`[GEMINI_DIAG_LOG] ★★★ セクション変更！'${currentSection || 'None'}' -> '${newSection}' at ${time} ★★★`);
-            currentSection = newSection;
-            const allParts = [verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff, chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart];
-            const nextMeasureTime = currentTone.Transport.nextSubdivision("1m");
-
-            allParts.forEach(part => { 
-                if (part.state === 'started') {
-                    part.stop(nextMeasureTime);
+            const currentGuitarPatternMeasure = chorusMeasureIndex % 4;
+            chorusGuitarPartPattern.forEach(p => {
+                const [m_part] = p.time.split(':').map(Number);
+                if (m_part === currentGuitarPatternMeasure) {
+                    const relativeTime = p.time.substring(p.time.indexOf(':') + 1);
+                    events.push({ time: `${measureTime} + ${relativeTime}`, instrument: 'guitar', note: p.note, duration: p.duration, velocity: 1.0 });
                 }
             });
-
-            if (newSection === ROLES.VERSE) {
-                console.log(`[GEMINI_DIAG_LOG]    - VERSE パートを '${nextMeasureTime}' に開始予約`);
-                verseKickSeq.start(nextMeasureTime);
-                verseSnareSeq.start(nextMeasureTime);
-                verseRideSeq.start(nextMeasureTime);
-                verseGuitarRiff.start(nextMeasureTime);
-            } else { // CHORUS
-                console.log(`[GEMINI_DIAG_LOG]    - CHORUS パートを '${nextMeasureTime}' に開始予約`);
-                chorusKickSeq.start(nextMeasureTime);
-                chorusSnareSeq.start(nextMeasureTime);
-                chorusCrashSeq.start(nextMeasureTime);
-                chorusGuitarPart.start(nextMeasureTime);
-            }
         }
-    }, "1m").start(0);
+    }
     
-    scheduledEvents.push(sectionScheduler, verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff, chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart);
-    console.log(`[GEMINI_DIAG_LOG] createLiteStyleRock: ${scheduledEvents.length} 個の独立イベントをスケジュールしました。`);
+    const mainPart = new Tone.Part<MusicEvent>((time, value) => {
+        switch(value.instrument) {
+            case 'kick': kick.triggerAttack(value.note as string, time, value.velocity); break;
+            case 'snare': snare.triggerAttack(value.note as string, time, value.velocity); break;
+            case 'ride': ride.triggerAttack(value.note as string, time, value.velocity); break;
+            case 'crash': crash.triggerAttack(value.note as string, time, value.velocity); break;
+            case 'guitar': triggerGuitarSound(value.note, value.duration, time, value.velocity); break;
+        }
+    }, events).start(0);
+
+    mainPart.loop = true;
+    mainPart.loopEnd = `${TOTAL_MEASURES}m`;
+    scheduledEvents.push(mainPart);
+
+    console.log(`[GEMINI_DIAG_LOG] createLiteStyleRock: A single Tone.Part with ${events.length} events has been scheduled.`);
     return true;
 };
 </script>
