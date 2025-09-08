@@ -85,6 +85,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
+  // マスターの助言(ステップ4)に基づき、Attack/Release/Volumeの値を設定
   "target_eguitar": { "volume": -5, "attack": 0.01, "release": 0.8, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0.05 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
