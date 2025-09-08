@@ -32,12 +32,10 @@ let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
 let guitarDistortion: ToneType.Distortion | null = null;
-let guitarCabinetIR: ToneType.Convolver | null = null;
-let guitarPostCabVolume: ToneType.Volume | null = null; // NEW: Volume compensation
+// let guitarCabinetIR: ToneType.Convolver | null = null; // DISABLED: Using pre-distorted samples
 let guitarComp: ToneType.Compressor | null = null;
 let bassEQNode: ToneType.EQ3 | null = null;
-let bassCabinetIR: ToneType.Convolver | null = null;
-let bassPostCabVolume: ToneType.Volume | null = null; // NEW: Volume compensation
+// let bassCabinetIR: ToneType.Convolver | null = null; // DISABLED: Using pre-distorted samples
 
 
 let rawSamplePlayers: ToneType.Players | null = null;
@@ -81,9 +79,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  // RESET: EQ and Distortion values are flattened to 0 for a clean slate with the new IR.
-  "target_eguitar": { "volume": -10.1, "attack": 0.001, "release": 1.5, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0 },
-  // RESET: EQ values are flattened to 0.
+  "target_eguitar": { "volume": -4, "attack": 0.01, "release": 1.2, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -162,12 +158,12 @@ const initializeAudio = async () => {
   loadingMessage.value = '喫茶店の準備をしています...';
 
   const allSamplePaths: Record<string, string> = {
-    piano: 'piano-c4.wav', bass: 'bass-c1.wav', ride: 'drum-ride.wav', brush: 'drum-brush.wav',
-    epiano: 'epiano-c4.wav', kick: 'drum-kick.wav', snare: 'drum-snare.wav', pad: 'pad-cmaj7.wav',
-    sax: 'sax-c4.wav', trombone: 'trombone-c3.wav',
-    rockKick: 'rock-kick.wav', rockSnare: 'rock-snare.wav', crash: 'drum-crash.wav',
-    tomHigh: 'tom-high.wav', tomMid: 'tom-mid.wav', tomFloor: 'tom-floor.wav',
-    target_ebass: 'ebass-e1.wav',
+    piano: 'keys/piano-c4.mp3', bass: 'ebass/bass-c1.mp3', ride: 'drums/drum-ride.mp3', brush: 'drums/drum-brush.mp3',
+    epiano: 'keys/epiano-c4.mp3', kick: 'drums/drum-kick.mp3', snare: 'drums/drum-snare.mp3', pad: 'synth_misc/pad-cmaj7.mp3',
+    sax: 'winds/sax-c4.mp3', trombone: 'winds/trombone-c3.mp3',
+    rockKick: 'drums/rock-kick.mp3', rockSnare: 'drums/rock-snare.mp3', crash: 'drums/drum-crash.mp3',
+    tomHigh: 'drums/tom-high.mp3', tomMid: 'drums/tom-mid.mp3', tomFloor: 'drums/tom-floor.mp3',
+    target_ebass: 'ebass/ebass-e1.mp3',
   };
   instrumentList.value = Object.keys(masterTunedParams).filter(k => !k.startsWith('target_'));
   
@@ -227,8 +223,6 @@ const initializeAudio = async () => {
         mid: eguitarTargetP.eqMid, 
         high: eguitarTargetP.eqHigh 
     });
-    guitarCabinetIR = new Tone.Convolver("/ir-guitar-cab.wav");
-    guitarPostCabVolume = new Tone.Volume(12); // NEW: Compensate for IR volume loss
     guitarComp = new Tone.Compressor(-20, 3);
     
     const ebassTargetP = tuningParams.value.target_ebass;
@@ -237,21 +231,25 @@ const initializeAudio = async () => {
         mid: ebassTargetP.eqMid,
         high: ebassTargetP.eqHigh
     });
-    bassCabinetIR = new Tone.Convolver("/ir-bass-cab.wav");
-    bassPostCabVolume = new Tone.Volume(12); // NEW: Compensate for IR volume loss
     console.log('[GEMINI_DEBUG_LOG] 全てのエフェクトノードをインスタンス化完了');
     
     loadingMessage.value = 'AI奏者を準備しています...';
     
     rideFilter = new Tone.Filter(10000, 'lowpass');
     
-    targetGuitarPlayer = new Tone.Player('/C5_s6_01.wav').toDestination();
-    targetBassPlayer = new Tone.Player('/ebass-e1.wav').toDestination();
+    targetGuitarPlayer = new Tone.Player('/eguitar/C5_s6_01.mp3').toDestination();
+    targetBassPlayer = new Tone.Player('/ebass/ebass-e1.mp3').toDestination();
 
     const multiSampleUrls = {
-      'E2': 'E2_s1_02.wav', 'F2': 'F2_s1_03.wav', 'A2': 'A2_s2_02.wav', 'D3': 'D3_s3_02.wav',
-      'G3': 'G3_s4_02.wav', 'B3': 'B3_s5_02.wav', 'E4': 'E4_s6_02.wav', 'G4': 'G4_s6_02.wav',
-      'B4': 'B4_s6_02.wav', 'C5': 'C5_s6_01.wav', 'F5': 'F5_s6_02.wav', 'G#5': 'Gs5_s6_02.wav',
+      "C2": "C2_s1_01.mp3",
+      "E2": "E2_s1_01.mp3",
+      "A2": "A2_s2_01.mp3",
+      "C3": "C3_s2_01.mp3",
+      "D3": "D3_s3_01.mp3",
+      "E3": "E3_s3_01.mp3",
+      "G3": "G3_s4_01.mp3",
+      "B3": "B3_s5_01.mp3",
+      "C5": "C5_s6_01.mp3",
     };
 
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み開始 (Players & Samplers)...');
@@ -259,57 +257,57 @@ const initializeAudio = async () => {
     const multiSamplerPromise = new Promise<void>(resolve => {
         const multiSampleParams = tuningParams.value['target_eguitar'];
         const sampler = new Tone!.Sampler({
-            urls: multiSampleUrls, baseUrl: "/",
+            urls: multiSampleUrls, baseUrl: "/eguitar/",
             volume: multiSampleParams.volume, attack: multiSampleParams.attack, release: multiSampleParams.release,
             onload: () => resolve()
         });
-        targetSamplerMulti = { sampler, baseNote: 'G#5' };
+        targetSamplerMulti = { sampler, baseNote: 'C3' };
     });
 
-    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, multiSamplerPromise, guitarCabinetIR.load, bassCabinetIR.load]);
+    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, multiSamplerPromise]);
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み完了');
     loadingMessage.value = '楽器を最終調整しています...';
     
     const newBassUrls = {
-        'E1': 'ebass-new_E.wav', 'F1': 'ebass-new_F.wav', 'F#1': 'ebass-new_Fs.wav', 'G1': 'ebass-new_G.wav',
-        'G#1': 'ebass-new_Gs.wav', 'A1': 'ebass-new_A.wav', 'A#1': 'ebass-new_As.wav', 'B1': 'ebass-new_B.wav',
-        'C2': 'ebass-new_C.wav', 'C#2': 'ebass-new_Cs.wav', 'D2': 'ebass-new_D.wav', 'D#2': 'ebass-new_Ds.wav',
-        'E2': 'ebass-new_E2.wav',
+        'E1': 'ebass-new_E.mp3', 'F1': 'ebass-new_F.mp3', 'F#1': 'ebass-new_Fs.mp3', 'G1': 'ebass-new_G.mp3',
+        'G#1': 'ebass-new_Gs.mp3', 'A1': 'ebass-new_A.mp3', 'A#1': 'ebass-new_As.mp3', 'B1': 'ebass-new_B.mp3',
+        'C2': 'ebass-new_C.mp3', 'C#2': 'ebass-new_Cs.mp3', 'D2': 'ebass-new_D.mp3', 'D#2': 'ebass-new_Ds.mp3',
+        'E2': 'ebass-new_E2.mp3',
     };
     const newRockBassParams = tuningParams.value['target_ebass'];
     const loadedNewRockBassSampler = new Tone.Sampler({
-        urls: newBassUrls, baseUrl: "/",
+        urls: newBassUrls, baseUrl: "/ebass/",
         volume: newRockBassParams.volume, attack: newRockBassParams.attack, release: newRockBassParams.release
     });
     newRockBassSampler = { sampler: loadedNewRockBassSampler, baseNote: 'A1' };
 
     const newSynthPianoUrls = {
-        'C2': 'spiano-C2v100.wav', 'F#1': 'spiano-Fs1v100.wav',
-        'C3': 'spiano-C3v100.wav', 'F#2': 'spiano-Fs2v100.wav',
-        'C4': 'spiano-C4v100.wav', 'F#3': 'spiano-Fs3v100.wav',
-        'C5': 'spiano-C5v100.wav', 'F#4': 'spiano-Fs4v100.wav',
-        'C6': 'spiano-C6v100.wav', 'F#5': 'spiano-Fs5v100.wav',
-        'C7': 'spiano-C7v100.wav', 'F#6': 'spiano-Fs6v100.wav',
+        'C2': 'spiano-C2v100.mp3', 'F#1': 'spiano-Fs1v100.mp3',
+        'C3': 'spiano-C3v100.mp3', 'F#2': 'spiano-Fs2v100.mp3',
+        'C4': 'spiano-C4v100.mp3', 'F#3': 'spiano-Fs3v100.mp3',
+        'C5': 'spiano-C5v100.mp3', 'F#4': 'spiano-Fs4v100.mp3',
+        'C6': 'spiano-C6v100.mp3', 'F#5': 'spiano-Fs5v100.mp3',
+        'C7': 'spiano-C7v100.mp3', 'F#6': 'spiano-Fs6v100.mp3',
     };
     const newSynthPianoParams = tuningParams.value['spiano'];
     const loadedNewSynthPianoSampler = new Tone.Sampler({
-        urls: newSynthPianoUrls, baseUrl: "/",
+        urls: newSynthPianoUrls, baseUrl: "/keys/",
         volume: newSynthPianoParams.volume, attack: newSynthPianoParams.attack, release: newSynthPianoParams.release
     });
     newSynthPianoSampler = { sampler: loadedNewSynthPianoSampler, baseNote: 'C4' };
     samplers['spiano'] = newSynthPianoSampler;
     
     const newElecOrganUrls = {
-        'C2': 'eorgan-C2.wav', 'E2': 'eorgan-E2.wav', 'G#2': 'eorgan-Gs2.wav',
-        'C3': 'eorgan-C3.wav', 'E3': 'eorgan-E3.wav', 'G#3': 'eorgan-Gs3.wav',
-        'C4': 'eorgan-C4.wav', 'E4': 'eorgan-E4.wav', 'G#4': 'eorgan-Gs4.wav',
-        'C5': 'eorgan-C5.wav', 'E5': 'eorgan-E5.wav', 'G#5': 'eorgan-Gs5.wav',
-        'C6': 'eorgan-C6.wav', 'E6': 'eorgan-E6.wav', 'G#6': 'eorgan-Gs6.wav',
-        'C7': 'eorgan-C7.wav'
+        'C2': 'eorgan-C2.mp3', 'E2': 'eorgan-E2.mp3', 'G#2': 'eorgan-Gs2.mp3',
+        'C3': 'eorgan-C3.mp3', 'E3': 'eorgan-E3.mp3', 'G#3': 'eorgan-Gs3.mp3',
+        'C4': 'eorgan-C4.mp3', 'E4': 'eorgan-E4.mp3', 'G#4': 'eorgan-Gs4.mp3',
+        'C5': 'eorgan-C5.mp3', 'E5': 'eorgan-E5.mp3', 'G#5': 'eorgan-Gs5.mp3',
+        'C6': 'eorgan-C6.mp3', 'E6': 'eorgan-E6.mp3', 'G#6': 'eorgan-Gs6.mp3',
+        'C7': 'eorgan-C7.mp3'
     };
     const newElecOrganParams = tuningParams.value['eorgan'];
     const loadedNewElecOrganSampler = new Tone.Sampler({
-        urls: newElecOrganUrls, baseUrl: "/",
+        urls: newElecOrganUrls, baseUrl: "/keys/",
         volume: newElecOrganParams.volume, attack: newElecOrganParams.attack, release: newElecOrganParams.release
     });
     newElecOrganSampler = { sampler: loadedNewElecOrganSampler, baseNote: 'C4' };
@@ -329,9 +327,9 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler && guitarDistortion && guitarCabinetIR && guitarComp && bassCabinetIR && guitarPostCabVolume && bassPostCabVolume) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler && guitarDistortion && guitarComp) {
       console.log('[GEMINI_DEBUG_LOG] 全てのオーディオノードが有効です。接続処理を実行します。');
-      newRockBassSampler.sampler.chain(bassEQNode, bassCabinetIR, bassPostCabVolume, drumBusComp);
+      newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
       
@@ -341,19 +339,18 @@ const initializeAudio = async () => {
         samplers['eguitar'] = targetSamplerMulti;
       }
 
-      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion && guitarCabinetIR && guitarComp && guitarPostCabVolume) {
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (IRベース + 音量補償)...');
+      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion && guitarComp) {
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (Distorted音源ベース)...');
         targetSamplerMulti.sampler.chain(
             guitarPitchShift,
             guitarVibrato,
             guitarEQ,
-            guitarDistortion,
-            guitarCabinetIR,
-            guitarPostCabVolume,
+            // Distortion is now mainly for post-adjustment, default is 0
+            guitarDistortion, 
             guitarComp
         );
         guitarComp.fan(masterComp, reverb);
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (IRベース + 音量補償)');
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (Distorted音源ベース)');
       } else {
          console.error('[GEMINI_DEBUG_LOG] ギターチェイン接続エラー: 必須ノードがnullです。');
       }
