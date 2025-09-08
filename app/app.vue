@@ -393,7 +393,7 @@ const stopMusic = () => {
   scheduledEvents.forEach((event, index) => {
     try {
       // @ts-ignore
-      if (event.state === "started") {
+      if (event && event.state === "started") {
         console.log(`[GEMINI_DIAG_LOG] -> 停止中 イベント ${index + 1}/${scheduledEvents.length}: ${event.constructor.name}`);
         event.stop(0);
       }
@@ -402,22 +402,20 @@ const stopMusic = () => {
     }
   });
 
-  setTimeout(() => {
-    scheduledEvents.forEach((event, index) => {
-      try {
-        // @ts-ignore
+  scheduledEvents.forEach((event, index) => {
+    try {
+      // @ts-ignore
+      if (event && !event.disposed) {
         console.log(`[GEMINI_DIAG_LOG] -> 破棄中 イベント ${index + 1}/${scheduledEvents.length}: ${event.constructor.name}`);
-        if (!event.disposed) {
-          event.dispose();
-        }
-      } catch (e) {
-        console.warn(`[GEMINI_DIAG_LOG] イベント破棄エラー:`, e);
+        event.dispose();
       }
-    });
+    } catch (e) {
+      console.warn(`[GEMINI_DIAG_LOG] イベント破棄エラー:`, e);
+    }
+  });
 
-    scheduledEvents.length = 0;
-    console.log(`[GEMINI_DIAG_LOG] stopMusic: イベント配列をクリアしました。残り: ${scheduledEvents.length}個`);
-  }, 50);
+  scheduledEvents.length = 0;
+  console.log(`[GEMINI_DIAG_LOG] stopMusic: イベント配列をクリアしました。残り: ${scheduledEvents.length}個`);
 
   if (noise) { 
     try {
