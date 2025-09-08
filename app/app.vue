@@ -20,9 +20,9 @@ const loadingMessage = ref<string>('');
 
 // --- 音声関連 ---
 let Tone: typeof ToneType | null = null;
-let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
+let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote?: string } } = {}; // baseNote is now optional
 let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
-let targetSamplerMulti: { sampler: ToneType.Sampler, baseNote: string } | null = null;
+let targetSamplerMulti: { sampler: ToneType.Sampler } | null = null; // baseNote is removed
 let newRockBassSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newSynthPianoSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newElecOrganSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
@@ -32,10 +32,8 @@ let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
 let guitarDistortion: ToneType.Distortion | null = null;
-// let guitarCabinetIR: ToneType.Convolver | null = null; // DISABLED: Using pre-distorted samples
 let guitarComp: ToneType.Compressor | null = null;
 let bassEQNode: ToneType.EQ3 | null = null;
-// let bassCabinetIR: ToneType.Convolver | null = null; // DISABLED: Using pre-distorted samples
 
 
 let rawSamplePlayers: ToneType.Players | null = null;
@@ -122,11 +120,11 @@ watch(tuningParams, (newParams) => {
         if (eguitarTargetParams.eqMid !== undefined) guitarEQ.mid.value = eguitarTargetParams.eqMid;
         if (eguitarTargetParams.eqHigh !== undefined) guitarEQ.high.value = eguitarTargetParams.eqHigh;
       }
-      if (guitarDistortion && eguitarTargetParams.distortion !== undefined) {
-          guitarDistortion.distortion = eguitarTargetParams.distortion;
+      if (guitarDistortion) {
+          if (eguitarTargetParams.distortion !== undefined) guitarDistortion.distortion = eguitarTargetParams.distortion;
       }
-      if (guitarPitchShift && eguitarTargetParams.detune !== undefined) {
-          guitarPitchShift.pitch = eguitarTargetParams.detune;
+      if (guitarPitchShift) {
+          if (eguitarTargetParams.detune !== undefined) guitarPitchShift.pitch = eguitarTargetParams.detune;
       }
       if (samplers['eguitar']) {
           const eguitarSampler = samplers['eguitar'].sampler;
@@ -261,7 +259,7 @@ const initializeAudio = async () => {
             volume: multiSampleParams.volume, attack: multiSampleParams.attack, release: multiSampleParams.release,
             onload: () => resolve()
         });
-        targetSamplerMulti = { sampler, baseNote: 'C3' };
+        targetSamplerMulti = { sampler }; // baseNote is CORRECTLY removed
     });
 
     await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, multiSamplerPromise]);
@@ -327,7 +325,7 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler && guitarDistortion && guitarComp) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler) {
       console.log('[GEMINI_DEBUG_LOG] 全てのオーディオノードが有効です。接続処理を実行します。');
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
@@ -339,18 +337,12 @@ const initializeAudio = async () => {
         samplers['eguitar'] = targetSamplerMulti;
       }
 
-      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion && guitarComp) {
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (Distorted音源ベース)...');
-        targetSamplerMulti.sampler.chain(
-            guitarPitchShift,
-            guitarVibrato,
-            guitarEQ,
-            // Distortion is now mainly for post-adjustment, default is 0
-            guitarDistortion, 
-            guitarComp
-        );
-        guitarComp.fan(masterComp, reverb);
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (Distorted音源ベース)');
+      // CORRECTED SIGNAL CHAIN FOR E-GUITAR
+      if (targetSamplerMulti && masterComp) {
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (エフェクトバイパス)...');
+        // Sampler's output is connected directly to the master compressor to hear the raw sound
+        targetSamplerMulti.sampler.connect(masterComp);
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (エフェクトバイパス)');
       } else {
          console.error('[GEMINI_DEBUG_LOG] ギターチェイン接続エラー: 必須ノードがnullです。');
       }
@@ -452,13 +444,13 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
 
   if (type === 'target_sampler') {
       if (instrumentName === 'target_ebass' && newRockBassSampler) {
-        newRockBassSampler.sampler.triggerAttackRelease(newRockBassSampler.baseNote, duration);
+        newRockBassSampler.sampler.triggerAttackRelease('E1', duration); // Example note
         return; 
       }
 
       if (instrumentName === 'target_eguitar' && samplers['eguitar'] && Tone) {
         const sampler = samplers['eguitar'].sampler;
-        sampler.triggerAttackRelease('C4', duration);
+        sampler.triggerAttackRelease('C3', duration); // Test with a note from the urls map
 
       } else {
         const targetSampler = targetSamplers[instrumentName];
@@ -466,7 +458,7 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
       }
   } else {
       const samplerData = samplers[instrumentName];
-      if (type === 'sampler' && samplerData) { samplerData.sampler.triggerAttackRelease(samplerData.baseNote, duration); }
+      if (type === 'sampler' && samplerData && samplerData.baseNote) { samplerData.sampler.triggerAttackRelease(samplerData.baseNote, duration); }
       else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) { rawSamplePlayers.player(instrumentName).start(); }
       else if (type === 'target' && instrumentName === 'eguitar' && targetGuitarPlayer) { targetGuitarPlayer.start(); }
       else if (type === 'target' && instrumentName === 'ebass' && targetBassPlayer) { targetBassPlayer.start(); }
@@ -523,6 +515,7 @@ const createRelaxSound = (rng: () => number): boolean => {
     if (!samplers.pad) return false;
     scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
     const { sampler: padSampler, baseNote } = samplers.pad;
+    if (!baseNote) return false;
     Tone?.Transport.scheduleOnce(time => {
         padSampler.triggerAttack(baseNote, time);
     }, 0);
@@ -531,8 +524,8 @@ const createRelaxSound = (rng: () => number): boolean => {
 const createLoFiSound = (rng: () => number): boolean => {
     if (!Tone || !samplers.epiano || !samplers.kick || !samplers.snare) return false;
     scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
-    const kickSeq = new Tone.Sequence((time, note) => { if(note && samplers.kick) samplers.kick.sampler.triggerAttackRelease(samplers.kick.baseNote, '8n', time, 0.9 + rng() * 0.1); }, [1,0,1,0,1,0,1,0], "8n").start(0);
-    const snareSeq = new Tone.Sequence((time, note) => { if(note && samplers.snare) samplers.snare.sampler.triggerAttackRelease(samplers.snare.baseNote, '8n', time, 0.8 + rng() * 0.2); }, [0,1,0,1], "4n").start(0);
+    const kickSeq = new Tone.Sequence((time, note) => { if(note && samplers.kick?.baseNote) samplers.kick.sampler.triggerAttackRelease(samplers.kick.baseNote, '8n', time, 0.9 + rng() * 0.1); }, [1,0,1,0,1,0,1,0], "8n").start(0);
+    const snareSeq = new Tone.Sequence((time, note) => { if(note && samplers.snare?.baseNote) samplers.snare.sampler.triggerAttackRelease(samplers.snare.baseNote, '8n', time, 0.8 + rng() * 0.2); }, [0,1,0,1], "4n").start(0);
     const chordLoop = new Tone.Loop((time) => {
       const chords = [['C2', 'Eb2', 'G2'], ['A1', 'C2', 'E2']];
       let currentChord = chords[Math.floor(rng() * 2)]!;
@@ -548,6 +541,7 @@ const createJazzSound = (rng: () => number): boolean => {
     const { sampler: bass } = samplers.bass;
     const { sampler: ride, baseNote: rideNote } = samplers.ride;
     const { sampler: sax } = samplers.sax;
+    if(!rideNote) return false;
     Tone.Transport.bpm.value = 100 + rng() * 20;
     Tone.Transport.swing = 0.05;
     let isSolo = false;
@@ -575,11 +569,11 @@ const createRockSound = (rng: () => number): boolean => {
     let leadInstrument: 'guitar' | 'synth' | 'organ' = 'guitar';
 
     const kickSeq = new Tone.Sequence((time, note) => {
-        if(note) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time);
+        if(note && samplers.rockKick?.baseNote) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time);
     }, [1, 0, 0, 0, 1, 0, 0, 0], "8n").start(0);
 
     const snareSeq = new Tone.Sequence((time, note) => {
-        if(note) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, time);
+        if(note && samplers.rockSnare?.baseNote) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, time);
     }, [0, 1, 0, 1], "4n").start(0);
 
     const bassSeq = new Tone.Sequence((time, noteOn) => {
@@ -655,6 +649,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     const { sampler: snare, baseNote: snareNote } = samplers.rockSnare;
     const { sampler: ride, baseNote: rideNote } = samplers.ride;
     const { sampler: crash, baseNote: crashNote } = samplers.crash;
+    if(!kickNote || !snareNote || !rideNote || !crashNote) return false;
 
     // --- Verse Patterns ---
     const verseKickSeq = new Tone.Sequence((time, note) => {
