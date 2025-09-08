@@ -40,8 +40,16 @@ null = null; // NEW: Mid-boost EQ
 let guitarDistortion: ToneType.Distortion | null = null;
 let guitarCabinetFilter: ToneType.Filter | null = null;
 let guitarComp: ToneType.Compressor | null = null;
-let guitarChorus: ToneType.Chorus | null = null; // ステップ6: Chorus変数を追加
+let guitarChorus: ToneType.Chorus | null = null;
 let bassEQNode: ToneType.EQ3 | null = null;
+
+// DEBUG: テスト用ゲートノード
+let guitarTestGate_Direct: ToneType.Gain | null = null;
+let guitarTestGate_Comp: ToneType.Gain | null = null;
+let guitarTestGate_Chorus: ToneType.Gain | null = null;
+let guitarTestGate_Distortion: ToneType.Gain | null = null;
+let guitarTestGate_MidEQ: ToneType.Gain | null = null;
+let guitarTestGate_Final: ToneType.Gain | null = null;
 
 
 let rawSamplePlayers: ToneType.Players |
@@ -226,11 +234,8 @@ const initializeAudio = async () => {
     const eguitarTargetP = tuningParams.value.target_eguitar;
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
-    // 最終修正: Chorusをインスタンス化
     guitarChorus = new Tone.Chorus({ frequency: 0.8, wet: 0.15 });
-    // 最終修正: Distortion値を0.02に固定
     guitarDistortion = new Tone.Distortion(0.02);
-    // 最終修正: Filterの値を設定
     guitarCabinetFilter = new Tone.Filter({ frequency: 5000, type: "lowpass" });
     guitarMidEQ = new Tone.EQ3({ low: 0, mid: 3, high: -2 });
     guitarEQ = new Tone.EQ3({ 
@@ -240,6 +245,15 @@ const initializeAudio = async () => {
     });
     guitarComp = new Tone.Compressor(-20, 3);
     
+    // DEBUG: テスト用ゲートのインスタンス化
+    guitarTestGate_Direct = new Tone.Gain(0).connect(masterComp);
+    guitarTestGate_Comp = new Tone.Gain(0).connect(masterComp);
+    guitarTestGate_Chorus = new Tone.Gain(0).connect(masterComp);
+    guitarTestGate_Distortion = new Tone.Gain(0).connect(masterComp);
+    guitarTestGate_MidEQ = new Tone.Gain(0).connect(masterComp);
+    guitarTestGate_Final = new Tone.Gain(0).connect(masterComp);
+
+
     const ebassTargetP = tuningParams.value.target_ebass;
     bassEQNode = new Tone.EQ3({
         low: ebassTargetP.eqLow,
@@ -352,7 +366,7 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && guitarComp && guitarSoftSampler && guitarHardSampler && guitarDistortion && guitarCabinetFilter && guitarMidEQ && guitarChorus) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && guitarComp && guitarSoftSampler && guitarHardSampler && guitarDistortion && guitarCabinetFilter && guitarMidEQ && guitarChorus && guitarTestGate_Direct && guitarTestGate_Comp && guitarTestGate_Chorus && guitarTestGate_Distortion && guitarTestGate_MidEQ && guitarTestGate_Final) {
       console.log('[GEMINI_DEBUG_LOG] 全てのオーディオノードが有効です。接続処理を実行します。');
       
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
@@ -361,11 +375,27 @@ const initializeAudio = async () => {
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
-      // 最終修正: シグナルチェーンを確定
+      // DEBUG: E-GUITAR SIGNAL CHAINをステップごとに接続
+      guitarSoftSampler.connect(guitarTestGate_Direct);
+      guitarHardSampler.connect(guitarTestGate_Direct);
+
       guitarSoftSampler.connect(guitarComp);
       guitarHardSampler.connect(guitarComp);
-      guitarComp.chain(guitarChorus, guitarDistortion, guitarMidEQ, guitarCabinetFilter);
-      guitarCabinetFilter.fan(masterComp, reverb);
+      
+      guitarComp.connect(guitarTestGate_Comp);
+      guitarComp.connect(guitarChorus);
+      
+      guitarChorus.connect(guitarTestGate_Chorus);
+      guitarChorus.connect(guitarDistortion);
+
+      guitarDistortion.connect(guitarTestGate_Distortion);
+      guitarDistortion.connect(guitarMidEQ);
+      
+      guitarMidEQ.connect(guitarTestGate_MidEQ);
+      guitarMidEQ.connect(guitarCabinetFilter);
+
+      guitarCabinetFilter.connect(guitarTestGate_Final);
+      guitarCabinetFilter.fan(masterComp, reverb); // 通常の出力も維持
       console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了');
 
       for (const [name, data] of Object.entries(samplers)) {
@@ -482,6 +512,11 @@ const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
 const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => {
   if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; } }
   
+  const allGates = [guitarTestGate_Direct, guitarTestGate_Comp, guitarTestGate_Chorus, guitarTestGate_Distortion, guitarTestGate_MidEQ, guitarTestGate_Final];
+  allGates.forEach(g => { if(g) g.gain.value = 0; });
+  if (guitarTestGate_Final) guitarTestGate_Final.gain.value = 1;
+
+
   const duration = '2n';
   const now = Tone?.now();
   if (type === 'target_sampler') {
@@ -503,6 +538,27 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
       else if (type === 'target' && instrumentName === 'ebass' && targetBassPlayer) { targetBassPlayer.start(); }
   }
 };
+
+const handlePlaySoundStage = (payload: { stage: string }) => {
+  console.log(`[GEMINI_DEBUG_LOG] Stage Playback: ${payload.stage}`);
+  const allGates = [guitarTestGate_Direct, guitarTestGate_Comp, guitarTestGate_Chorus, guitarTestGate_Distortion, guitarTestGate_MidEQ, guitarTestGate_Final];
+  allGates.forEach(g => { if(g) g.gain.value = 0; });
+
+  switch (payload.stage) {
+    case 'direct': if(guitarTestGate_Direct) guitarTestGate_Direct.gain.value = 1; break;
+    case 'comp': if(guitarTestGate_Comp) guitarTestGate_Comp.gain.value = 1; break;
+    case 'chorus': if(guitarTestGate_Chorus) guitarTestGate_Chorus.gain.value = 1; break;
+    case 'distortion': if(guitarTestGate_Distortion) guitarTestGate_Distortion.gain.value = 1; break;
+    case 'mideq': if(guitarTestGate_MidEQ) guitarTestGate_MidEQ.gain.value = 1; break;
+    case 'final': if(guitarTestGate_Final) guitarTestGate_Final.gain.value = 1; break;
+  }
+  
+  const now = Tone?.now();
+  if(now){
+    triggerGuitarSound('C3', '1n', now, 0.3);
+    triggerGuitarSound('C3', '1n', now + 1, 0.7);
+  }
+}
 
 const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => {
   if (tuningParams.value[payload.instrument]) {
@@ -889,6 +945,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       :tuningParams="tuningParams"
       @close="closeSoundCheckModal"
       @playSound="handlePlaySound"
+      @playSoundStage="handlePlaySoundStage"
       @update-param="handleUpdateParam"
       @save-params="handleSaveParams"
       @export-params="handleExportParams"

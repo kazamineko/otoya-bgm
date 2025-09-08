@@ -18,9 +18,9 @@
               <span class="instrument-name">{{ instrument }}</span>
               <div class="play-buttons">
                 <template v-if="instrument === 'eguitar'">
-                  <button @click.prevent="playSound('target_eguitar', 'target_sampler')" title="新しいマルチサンプル音源">新Sampler</button>
+                  <button @click.prevent="playSound('target_eguitar', 'target_sampler')" title="最終的な音">最終アウトプット</button>
                   <button @click.prevent="playSound('eguitar', 'target')" title="最終的に目指すべき理想の音(WAV再生)">目標サウンド</button>
-                  <a href="/C5_s6_01.wav" download="target-sound-C5.wav" class="download-button" title="目標サウンドをダウンロード">DL</a>
+                  <a href="/eguitar/C5_s6_01.mp3" download="target-sound-C5.mp3" class="download-button" title="目標サウンドをダウンロード">DL</a>
                 </template>
                 <template v-else-if="instrument === 'ebass'">
                   <button @click.prevent="playSound('target_ebass', 'target_sampler')" title="マスターが作成した新しいマルチサンプルベース音源">新Rock Bass</button>
@@ -33,7 +33,6 @@
             </summary>
             
             <div class="sliders" v-if="tuningParams[instrument] || tuningParams['target_' + instrument]">
-              <!-- eGuitar & eBass Sampler Logic -->
               <template v-if="instrument === 'eguitar' || instrument === 'ebass'">
                 <div class="sub-header">{{ instrument === 'eguitar' ? 'マルチサンプル設定' : 'Sampler 設定' }}</div>
                 <div class="slider-container">
@@ -54,7 +53,7 @@
                 <template v-if="instrument === 'eguitar'">
                    <div class="slider-container">
                     <label>Distortion</label>
-                    <input type="range" min="0" max="1" step="0.05" :value="tuningParams['target_eguitar'].distortion" @input="updateParam('target_eguitar', 'distortion', $event)">
+                    <input type="range" min="0" max="1" step="0.01" :value="tuningParams['target_eguitar'].distortion" @input="updateParam('target_eguitar', 'distortion', $event)">
                     <span>{{ tuningParams['target_eguitar'].distortion.toFixed(2) }}</span>
                   </div>
                   <div class="slider-container">
@@ -76,6 +75,15 @@
                     <button @click.prevent="setExtremeEq('cut')">EQカット (-12dB)</button>
                     <button @click.prevent="setExtremeEq('boost')">EQブースト (+12dB)</button>
                   </div>
+                  <div class="sub-header">ステップ再生診断</div>
+                  <div class="play-buttons diagnostic-grid">
+                    <button @click.prevent="playSoundStage('direct')">1. Sampler直結</button>
+                    <button @click.prevent="playSoundStage('comp')">2. Comp後</button>
+                    <button @click.prevent="playSoundStage('chorus')">3. Chorus後</button>
+                    <button @click.prevent="playSoundStage('distortion')">4. Distortion後</button>
+                    <button @click.prevent="playSoundStage('mideq')">5. MidEQ後</button>
+                    <button @click.prevent="playSoundStage('final')">6. 最終段(Filter後)</button>
+                  </div>
                 </template>
                 <template v-if="instrument === 'ebass'">
                   <div class="slider-container">
@@ -95,7 +103,6 @@
                   </div>
                 </template>
               </template>
-              <!-- Other Instruments -->
               <template v-else>
                 <div class="slider-container">
                   <label>Volume</label>
@@ -138,10 +145,11 @@ defineProps<{
   tuningParams: Record<string, any>;
 }>();
 
-const emit = defineEmits(['close', 'playSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq']);
+const emit = defineEmits(['close', 'playSound', 'playSoundStage', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq']);
 
 const close = () => emit('close');
 const playSound = (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => emit('playSound', instrumentName, type);
+const playSoundStage = (stage: string) => emit('playSoundStage', { stage });
 const saveParams = () => emit('saveParams');
 const exportParams = () => emit('exportParams');
 const resetParams = () => emit('resetParams');
@@ -163,7 +171,8 @@ const updateParam = (instrument: string, param: string, event: Event) => {
 .modal-content {
   background-color: #fff; padding: 20px 30px; border-radius: 8px;
   box-shadow: 0 5px 20px rgba(0,0,0,0.3); max-width: 680px;
-  width: 90%; position: relative; font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif;
+  width: 90%; position: relative;
+  font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif;
   color: #333; max-height: 90vh; overflow-y: auto;
 }
 .close-button {
@@ -171,11 +180,13 @@ const updateParam = (instrument: string, param: string, event: Event) => {
   font-size: 28px; cursor: pointer; color: #888;
 }
 .global-actions {
-  display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;
+  display: flex; gap: 10px;
+  justify-content: center; margin-bottom: 20px;
 }
 .action-button {
   background-color: #485fc7; color: white; border: none; border-radius: 4px;
-  padding: 10px 15px; cursor: pointer; transition: background-color 0.2s ease;
+  padding: 10px 15px; cursor: pointer;
+  transition: background-color 0.2s ease;
 }
 .action-button:hover { background-color: #3e51b3; }
 .action-button-reset {
@@ -187,14 +198,16 @@ const updateParam = (instrument: string, param: string, event: Event) => {
 .sound-list { list-style: none; padding: 0; margin: 0; }
 .instrument-details { border-bottom: 1px solid #eee; }
 .instrument-summary {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex;
+  justify-content: space-between; align-items: center;
   padding: 15px 5px; cursor: pointer;
 }
 .instrument-summary::-webkit-details-marker { display: none; }
 .instrument-name { font-size: 1.1em; font-weight: bold; }
 .play-buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;}
 .play-buttons button {
-  background-color: #363636; color: white; border: none; border-radius: 4px;
+  background-color: #363636; color: white; border: none;
+  border-radius: 4px;
   padding: 8px 12px; cursor: pointer; transition: background-color 0.2s ease;
   font-size: 12px;
 }
@@ -242,6 +255,20 @@ const updateParam = (instrument: string, param: string, event: Event) => {
 .diagnostic-buttons button:hover {
   background-color: #b33e3e;
 }
+.diagnostic-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    justify-content: center;
+    margin-top: 10px;
+}
+.diagnostic-grid button {
+    background-color: #095066;
+}
+.diagnostic-grid button:hover {
+    background-color: #073b4d;
+}
+
 .no-sounds-message { text-align: center; color: #7a7a7a; padding: 20px; }
 .sub-header {
   font-weight: bold;
