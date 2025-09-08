@@ -75,6 +75,7 @@
                     <button @click.prevent="setExtremeEq('cut')">EQカット (-12dB)</button>
                     <button @click.prevent="setExtremeEq('boost')">EQブースト (+12dB)</button>
                   </div>
+                  
                   <div class="sub-header">ステップ再生診断</div>
                   <div class="play-buttons diagnostic-grid">
                     <button @click.prevent="playSoundStage('direct')">1. Sampler直結</button>
@@ -83,6 +84,26 @@
                     <button @click.prevent="playSoundStage('distortion')">4. Distortion後</button>
                     <button @click.prevent="playSoundStage('mideq')">5. MidEQ後</button>
                     <button @click.prevent="playSoundStage('final')">6. 最終段(Filter後)</button>
+                  </div>
+
+                  <div class="sub-header">Raw MP3 Playback</div>
+                  <div class="raw-samples-container">
+                    <div class="raw-sample-group">
+                      <strong>Hard Samples:</strong>
+                      <div class="play-buttons diagnostic-grid">
+                        <button v-for="(url, note) in hardSampleUrls" :key="`hard-${note}`" @click.prevent="playRawSample(url)">
+                          {{ note }}: {{ url }}
+                        </button>
+                      </div>
+                    </div>
+                    <div class="raw-sample-group">
+                      <strong>Soft Samples:</strong>
+                      <div class="play-buttons diagnostic-grid">
+                         <button v-for="(url, note) in softSampleUrls" :key="`soft-${note}`" @click.prevent="playRawSample(url)">
+                           {{ note }}: {{ url }}
+                         </button>
+                      </div>
+                    </div>
                   </div>
                 </template>
                 <template v-if="instrument === 'ebass'">
@@ -143,13 +164,16 @@ defineProps<{
   isVisible: boolean;
   instruments: string[];
   tuningParams: Record<string, any>;
+  hardSampleUrls: Record<string, string>;
+  softSampleUrls: Record<string, string>;
 }>();
 
-const emit = defineEmits(['close', 'playSound', 'playSoundStage', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq']);
+const emit = defineEmits(['close', 'playSound', 'playSoundStage', 'playRawSample', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq']);
 
 const close = () => emit('close');
 const playSound = (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => emit('playSound', instrumentName, type);
 const playSoundStage = (stage: string) => emit('playSoundStage', { stage });
+const playRawSample = (url: string) => emit('playRawSample', { url });
 const saveParams = () => emit('saveParams');
 const exportParams = () => emit('exportParams');
 const resetParams = () => emit('resetParams');
@@ -264,11 +288,27 @@ const updateParam = (instrument: string, param: string, event: Event) => {
 }
 .diagnostic-grid button {
     background-color: #095066;
+    font-size: 11px;
+    word-break: break-all;
+    text-align: left;
+    padding: 6px 8px;
 }
 .diagnostic-grid button:hover {
     background-color: #073b4d;
 }
-
+.raw-samples-container {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px dashed #ccc;
+}
+.raw-sample-group {
+  margin-bottom: 10px;
+}
+.raw-sample-group strong {
+  display: block;
+  margin-bottom: 8px;
+  text-align: center;
+}
 .no-sounds-message { text-align: center; color: #7a7a7a; padding: 20px; }
 .sub-header {
   font-weight: bold;

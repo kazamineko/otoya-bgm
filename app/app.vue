@@ -31,6 +31,8 @@ let newRockBassSampler: { sampler: ToneType.Sampler, baseNote: string } | null =
 let newSynthPianoSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newElecOrganSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 
+// DEBUG: Raw MP3 Player
+let rawMp3Player: ToneType.Player | null = null;
 
 let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
@@ -99,6 +101,24 @@ const masterTunedParams: TuningParams = {
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
+};
+
+// DEBUG: テンプレートから参照できるようトップレベルに定義
+const hardSampleUrls = {
+  "A2": "A2_s2_01.mp3", "A#5": "As5_s6_01.mp3", "B3": "B3_s5_01.mp3",
+  "B4": "B4_s6_01.mp3", "C2": "C2_s1_01.mp3", "C3": "C3_s2_01.mp3",
+  "C5": "C5_s6_01.mp3", "C#4": "Cs4_s5_01.mp3", "C#6": "Cs6_s6_01.mp3",
+  "D3": "D3_s3_01.mp3", "D5": "D5_s6_01.mp3", "E2": "E2_s1_01.mp3",
+  "E3": "E3_s3_01.mp3", "E4": "E4_s6_01.mp3", "F2": "F2_s1_01.mp3",
+  "F5": "F5_s6_01.mp3", "G3": "G3_s4_01.mp3", "G4": "G4_s6_01.mp3",
+  "G#5": "Gs5_s6_01.mp3"
+};
+const softSampleUrls = {
+   "A2": "A2_s2_soft_01.mp3", "B3": "B3_s5_soft_01.mp3", "C2": "C2_s1_soft_01.mp3",
+   "C3": "C3_s2_soft_01.mp3", "C5": "C5_s6_soft_01.mp3", "C#4": "Cs4_s5_soft_01.mp3",
+   "D3": "D3_s3_soft_01.mp3", "D5": "D5_s6_soft_01.mp3", "E2": "E2_s1_soft_01.mp3",
+   "E3": "E3_s3_soft_01.mp3", "E4": "E4_s6_soft_01.mp3", "F2": "F2_s1_soft_01.mp3",
+   "G3": "G3_s4_soft_01.mp3"
 };
 
 watch(tuningParams, (newParams) => {
@@ -230,6 +250,9 @@ const initializeAudio = async () => {
     chorus = new Tone.Chorus(4, 2.5, 0.7).connect(masterComp);
     delay = new Tone.PingPongDelay("8n", 0.2).connect(masterComp);
     
+    // DEBUG: Raw MP3 Player
+    rawMp3Player = new Tone.Player().toDestination();
+
     console.log('[GEMINI_DEBUG_LOG] ギターエフェクトの初期化開始');
     const eguitarTargetP = tuningParams.value.target_eguitar;
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
@@ -268,23 +291,6 @@ const initializeAudio = async () => {
     
     targetGuitarPlayer = new Tone.Player('/eguitar/C5_s6_01.mp3').toDestination();
     targetBassPlayer = new Tone.Player('/ebass/ebass-e1.mp3').toDestination();
-
-    const hardSampleUrls = {
-      "A2": "A2_s2_01.mp3", "A#5": "As5_s6_01.mp3", "B3": "B3_s5_01.mp3",
-      "B4": "B4_s6_01.mp3", "C2": "C2_s1_01.mp3", "C3": "C3_s2_01.mp3",
-      "C5": "C5_s6_01.mp3", "C#4": "Cs4_s5_01.mp3", "C#6": "Cs6_s6_01.mp3",
-      "D3": "D3_s3_01.mp3", "D5": "D5_s6_01.mp3", "E2": "E2_s1_01.mp3",
-      "E3": "E3_s3_01.mp3", "E4": "E4_s6_01.mp3", "F2": "F2_s1_01.mp3",
-      "F5": "F5_s6_01.mp3", "G3": "G3_s4_01.mp3", "G4": "G4_s6_01.mp3",
-      "G#5": "Gs5_s6_01.mp3"
-    };
-    const softSampleUrls = {
-       "A2": "A2_s2_soft_01.mp3", "B3": "B3_s5_soft_01.mp3", "C2": "C2_s1_soft_01.mp3",
-       "C3": "C3_s2_soft_01.mp3", "C5": "C5_s6_soft_01.mp3", "C#4": "Cs4_s5_soft_01.mp3",
-       "D3": "D3_s3_soft_01.mp3", "D5": "D5_s6_soft_01.mp3", "E2": "E2_s1_soft_01.mp3",
-       "E3": "E3_s3_soft_01.mp3", "E4": "E4_s6_soft_01.mp3", "F2": "F2_s1_soft_01.mp3",
-       "G3": "G3_s4_soft_01.mp3"
-    };
 
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み開始 (Players & Samplers)...');
     
@@ -558,7 +564,23 @@ const handlePlaySoundStage = (payload: { stage: string }) => {
     triggerGuitarSound('C3', '1n', now, 0.3);
     triggerGuitarSound('C3', '1n', now + 1, 0.7);
   }
-}
+};
+
+const handlePlayRawSample = async (payload: { url: string }) => {
+  if (!rawMp3Player) return;
+  const fullUrl = `/eguitar/${payload.url}`;
+  console.log('[GEMINI_DEBUG_LOG] Raw MP3 Playback Requested:', fullUrl);
+  try {
+    if (rawMp3Player.state === 'started') {
+      rawMp3Player.stop();
+    }
+    await rawMp3Player.load(fullUrl);
+    rawMp3Player.start();
+  } catch (e) {
+    console.error(`[GEMINI_DEBUG_LOG] Failed to load or play raw sample ${fullUrl}`, e);
+  }
+};
+
 
 const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => {
   if (tuningParams.value[payload.instrument]) {
@@ -943,9 +965,12 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       :isVisible="isSoundCheckModalVisible" 
       :instruments="instrumentList"
       :tuningParams="tuningParams"
+      :hardSampleUrls="hardSampleUrls"
+      :softSampleUrls="softSampleUrls"
       @close="closeSoundCheckModal"
       @playSound="handlePlaySound"
       @playSoundStage="handlePlaySoundStage"
+      @playRawSample="handlePlayRawSample"
       @update-param="handleUpdateParam"
       @save-params="handleSaveParams"
       @export-params="handleExportParams"
