@@ -382,7 +382,11 @@ const initializeAudio = async () => {
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
-      // DEBUG: E-GUITAR SIGNAL CHAINをステップごとに接続
+      // メインの音源はエフェクトをバイパスしてmasterCompに直結
+      guitarSoftSampler.connect(masterComp);
+      guitarHardSampler.connect(masterComp);
+
+      // 診断ボタン用のエフェクトチェーンは別途維持する
       guitarSoftSampler.connect(guitarTestGate_Direct);
       guitarHardSampler.connect(guitarTestGate_Direct);
 
@@ -405,7 +409,8 @@ const initializeAudio = async () => {
       guitarEQ.connect(guitarCabinetFilter);
 
       guitarCabinetFilter.connect(guitarTestGate_Final);
-      guitarCabinetFilter.fan(masterComp, reverb); // 通常の出力も維持
+      // マスターの指示により、デフォルトはエフェクトをバイパスした直結サウンドとするため、通常出力はコメントアウト
+      // guitarCabinetFilter.fan(masterComp, reverb);
       console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了');
 
       for (const [name, data] of Object.entries(samplers)) {
@@ -524,7 +529,8 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
   
   const allGates = [guitarTestGate_Direct, guitarTestGate_Comp, guitarTestGate_Chorus, guitarTestGate_Distortion, guitarTestGate_MidEQ, guitarTestGate_EQ, guitarTestGate_Final];
   allGates.forEach(g => { if(g) g.gain.value = 0; });
-  if (guitarTestGate_Final) guitarTestGate_Final.gain.value = 1;
+  // 「最終アウトプット」ボタンは通常の再生経路（直結）の音を確認するため、ゲートはすべて閉じたままにする
+  // if (guitarTestGate_Final) guitarTestGate_Final.gain.value = 1;
 
 
   const duration = '2n';
