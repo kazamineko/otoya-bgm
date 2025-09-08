@@ -386,36 +386,61 @@ const playMusic = async (menuName: string, seed?: string) => {
 const stopMusic = () => {
   if (!isPlaying.value || !Tone) return;
   console.log(`[GEMINI_DIAG_LOG] stopMusic: 停止処理開始。現在 ${scheduledEvents.length} 個のイベントを処理します。`);
+  
   Tone.Transport.stop(); 
   Tone.Transport.cancel(0);
   
-  // First, stop all running events.
   scheduledEvents.forEach((event, index) => {
-    // @ts-ignore
-    if (event.state === "started") {
-      console.log(`[GEMINI_DIAG_LOG] -> 停止中 イベント ${index + 1}/${scheduledEvents.length}: ${event.constructor.name}`);
-      event.stop(0);
+    try {
+      // @ts-ignore
+      if (event.state === "started") {
+        console.log(`[GEMINI_DIAG_LOG] -> 停止中 イベント ${index + 1}/${scheduledEvents.length}: ${event.constructor.name}`);
+        event.stop(0);
+      }
+    } catch (e) {
+      console.warn(`[GEMINI_DIAG_LOG] イベント停止エラー:`, e);
     }
   });
 
-  // Then, dispose of all events.
-  scheduledEvents.forEach((event, index) => {
-    // @ts-ignore
-    console.log(`[GEMINI_DIAG_LOG] -> 破棄中 イベント ${index + 1}/${scheduledEvents.length}: ${event.constructor.name}`);
-    event.dispose();
-  });
+  setTimeout(() => {
+    scheduledEvents.forEach((event, index) => {
+      try {
+        // @ts-ignore
+        console.log(`[GEMINI_DIAG_LOG] -> 破棄中 イベント ${index + 1}/${scheduledEvents.length}: ${event.constructor.name}`);
+        if (!event.disposed) {
+          event.dispose();
+        }
+      } catch (e) {
+        console.warn(`[GEMINI_DIAG_LOG] イベント破棄エラー:`, e);
+      }
+    });
 
-  scheduledEvents.length = 0;
-  console.log(`[GEMINI_DIAG_LOG] stopMusic: イベント配列をクリアしました。残り: ${scheduledEvents.length}個`);
-  if (noise) { noise.stop(0); noise.dispose(); noise = null; }
+    scheduledEvents.length = 0;
+    console.log(`[GEMINI_DIAG_LOG] stopMusic: イベント配列をクリアしました。残り: ${scheduledEvents.length}個`);
+  }, 50);
+
+  if (noise) { 
+    try {
+      noise.stop(0); 
+      noise.dispose(); 
+      noise = null;
+    } catch (e) {
+      console.warn(`[GEMINI_DIAG_LOG] ノイズ停止エラー:`, e);
+    }
+  }
   
-  heavyMetalSampler?.releaseAll();
-  Object.values(samplers).forEach(s => s.sampler.releaseAll());
-  Object.values(targetSamplers).forEach(s => s.sampler.releaseAll());
+  try {
+    heavyMetalSampler?.releaseAll();
+    Object.values(samplers).forEach(s => s.sampler.releaseAll());
+    Object.values(targetSamplers).forEach(s => s.sampler.releaseAll());
+  } catch (e) {
+    console.warn(`[GEMINI_DIAG_LOG] サンプラーリリースエラー:`, e);
+  }
   
   isPlaying.value = false;
   console.log('[GEMINI_DIAG_LOG] stopMusic: 完了。');
 };
+
 
 const triggerGuitarSound = (note: string | string[], duration: ToneType.Unit.Time, time: ToneType.Unit.Time, velocity: number) => {
     heavyMetalSampler?.triggerAttackRelease(note, duration, time, velocity);
@@ -656,9 +681,10 @@ const createLiteStyleRock = (rng: () => number): boolean => {
         console.error('[GEMINI_DIAG_LOG] createLiteStyleRock: 必須サンプラーがありません。');
         return false;
     }
+    
     scheduledEvents.forEach(e => e.dispose());
     scheduledEvents.length = 0;
-
+    
     Tone.Transport.bpm.value = 135;
     Tone.Transport.swing = 0;
 
@@ -710,26 +736,28 @@ const createLiteStyleRock = (rng: () => number): boolean => {
             console.log(`[GEMINI_DIAG_LOG] ★★★ セクション変更！'${currentSection || 'None'}' -> '${newSection}' at ${time} ★★★`);
             currentSection = newSection;
             const allParts = [verseKickSeq, verseSnareSeq, verseRideSeq, verseGuitarRiff, chorusKickSeq, chorusSnareSeq, chorusCrashSeq, chorusGuitarPart];
-            const timeOffset = "+64n";
+            
+            // Schedule stop for the next measure, then start
+            const nextMeasureTime = currentTone.Transport.nextSubdivision("1m");
 
             allParts.forEach(part => { 
                 if (part.state === 'started') {
-                    part.stop(time);
+                    part.stop(nextMeasureTime);
                 }
             });
 
             if (newSection === ROLES.VERSE) {
-                console.log(`[GEMINI_DIAG_LOG]    - VERSE パートを '${time}' に開始予約 (オフセット付き)`);
-                verseKickSeq.start(time + timeOffset);
-                verseSnareSeq.start(time + timeOffset);
-                verseRideSeq.start(time + timeOffset);
-                verseGuitarRiff.start(time + timeOffset);
+                console.log(`[GEMINI_DIAG_LOG]    - VERSE パートを '${nextMeasureTime}' に開始予約`);
+                verseKickSeq.start(nextMeasureTime);
+                verseSnareSeq.start(nextMeasureTime);
+                verseRideSeq.start(nextMeasureTime);
+                verseGuitarRiff.start(nextMeasureTime);
             } else { // CHORUS
-                console.log(`[GEMINI_DIAG_LOG]    - CHORUS パートを '${time}' に開始予約 (オフセット付き)`);
-                chorusKickSeq.start(time + timeOffset);
-                chorusSnareSeq.start(time + timeOffset);
-                chorusCrashSeq.start(time + timeOffset);
-                chorusGuitarPart.start(time + timeOffset);
+                console.log(`[GEMINI_DIAG_LOG]    - CHORUS パートを '${nextMeasureTime}' に開始予約`);
+                chorusKickSeq.start(nextMeasureTime);
+                chorusSnareSeq.start(nextMeasureTime);
+                chorusCrashSeq.start(nextMeasureTime);
+                chorusGuitarPart.start(nextMeasureTime);
             }
         }
     }, "1m").start(0);
