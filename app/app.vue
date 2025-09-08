@@ -532,9 +532,7 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
       }
 
       if (instrumentName === 'target_eguitar' && now) {
-        // Test both velocity layers
-        triggerGuitarSound('C3', '1n', now, 0.3); // soft
-        triggerGuitarSound('C3', '1n', now + 1, 0.7); // hard
+        triggerGuitarSound('C#4', '1n', now, 0.7); // hard
       }
   } else {
       const samplerData = samplers[instrumentName];
@@ -561,10 +559,9 @@ const handlePlaySoundStage = (payload: { stage: string }) => {
   
   const now = Tone?.now();
   if(now){
-    triggerGuitarSound('C3', '1n', now, 0.3);
-    triggerGuitarSound('C3', '1n', now + 1, 0.7);
+    triggerGuitarSound('C#4', '1n', now, 0.7);
   }
-};
+}
 
 const handlePlayRawSample = async (payload: { url: string }) => {
   if (!rawMp3Player) return;
