@@ -2,6 +2,7 @@
 import { ref, onUnmounted, watch } from 'vue';
 import seedrandom from 'seedrandom';
 import type * as ToneType from 'tone';
+// import { SampleLibrary } from 'tonejs-instruments'; // REMOVED
 import AboutModal from '../components/AboutModal.vue';
 import SoundCheckModal from '../components/SoundCheckModal.vue';
 
@@ -31,11 +32,8 @@ let guitarPitchShift: ToneType.PitchShift | null = null;
 let guitarVibrato: ToneType.Vibrato | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
 let guitarDistortion: ToneType.Distortion | null = null;
-let guitarCabinet: ToneType.Convolver | null = null;
+// let guitarCabinet: ToneType.Convolver | null = null; // DISABLED
 let bassEQNode: ToneType.EQ3 | null = null;
-
-// --- DIAGNOSTIC NODES ---
-let guitarTestSampler: ToneType.Sampler | null = null;
 
 
 let rawSamplePlayers: ToneType.Players | null = null;
@@ -216,19 +214,13 @@ const initializeAudio = async () => {
     console.log('[GEMINI_DEBUG_LOG] ギターエフェクトの初期化開始');
     const eguitarTargetP = tuningParams.value.target_eguitar;
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
-    console.log('[GEMINI_DEBUG_LOG] guitarPitchShift 作成完了:', guitarPitchShift);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
-    console.log('[GEMINI_DEBUG_LOG] guitarVibrato 作成完了:', guitarVibrato);
     guitarDistortion = new Tone.Distortion(eguitarTargetP.distortion);
-    console.log('[GEMINI_DEBUG_LOG] guitarDistortion 作成完了:', guitarDistortion);
-    guitarCabinet = new Tone.Convolver("/irs/guitar-cab.wav");
-    console.log('[GEMINI_DEBUG_LOG] guitarCabinet (Convolver) 作成完了:', guitarCabinet);
     guitarEQ = new Tone.EQ3({ 
         low: eguitarTargetP.eqLow, 
         mid: eguitarTargetP.eqMid, 
         high: eguitarTargetP.eqHigh 
     });
-    console.log('[GEMINI_DEBUG_LOG] guitarEQ 作成完了:', guitarEQ);
     
     const ebassTargetP = tuningParams.value.target_ebass;
     bassEQNode = new Tone.EQ3({
@@ -251,23 +243,21 @@ const initializeAudio = async () => {
       'B4': 'B4_s6_02.wav', 'C5': 'C5_s6_01.wav', 'F5': 'F5_s6_02.wav', 'G#5': 'Gs5_s6_02.wav',
     };
 
-    console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み開始 (Players, Cabinet IR, Test Sampler)...');
+    console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み開始 (Players & Samplers)...');
     
-    const testSamplerPromise = new Promise<void>(resolve => {
-        guitarTestSampler = new Tone!.Sampler({ urls: multiSampleUrls, baseUrl: "/", onload: () => resolve() });
+    const multiSamplerPromise = new Promise<void>(resolve => {
+        const multiSampleParams = tuningParams.value['target_eguitar'];
+        const sampler = new Tone!.Sampler({
+            urls: multiSampleUrls, baseUrl: "/",
+            volume: multiSampleParams.volume, attack: multiSampleParams.attack, release: multiSampleParams.release,
+            onload: () => resolve()
+        });
+        targetSamplerMulti = { sampler, baseNote: 'G#5' };
     });
 
-    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, guitarCabinet.load, testSamplerPromise]);
+    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, multiSamplerPromise]);
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み完了');
     loadingMessage.value = '楽器を最終調整しています...';
-    
-    const multiSampleParams = tuningParams.value['target_eguitar'];
-    const loadedMultiSampler = new Tone.Sampler({
-      urls: multiSampleUrls, baseUrl: "/",
-      volume: multiSampleParams.volume, attack: multiSampleParams.attack, release: multiSampleParams.release
-    });
-    targetSamplerMulti = { sampler: loadedMultiSampler, baseNote: 'G#5' }; 
-    console.log('[GEMINI_DEBUG_LOG] targetSamplerMulti 作成完了');
     
     const newBassUrls = {
         'E1': 'ebass-new_E.wav', 'F1': 'ebass-new_F.wav', 'F#1': 'ebass-new_Fs.wav', 'G1': 'ebass-new_G.wav',
@@ -328,7 +318,7 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler && guitarDistortion && guitarCabinet) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && guitarVibrato && guitarEQ && bassEQNode && newRockBassSampler && guitarDistortion) {
       console.log('[GEMINI_DEBUG_LOG] 全てのオーディオノードが有効です。接続処理を実行します。');
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
@@ -340,17 +330,16 @@ const initializeAudio = async () => {
         samplers['eguitar'] = targetSamplerMulti;
       }
 
-      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion && guitarCabinet) {
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (手動配線)...');
-        targetSamplerMulti.sampler.connect(guitarPitchShift);
-        guitarPitchShift.connect(guitarVibrato);
-        guitarVibrato.connect(guitarDistortion);
-        guitarDistortion.connect(guitarEQ);
-        // guitarEQ.connect(guitarCabinet); // Bypass cabinet for now
-        // guitarCabinet.connect(masterComp);
-        // guitarCabinet.connect(reverb);
+      if(targetSamplerMulti && guitarPitchShift && guitarVibrato && guitarEQ && guitarDistortion) {
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続開始 (Cabinetバイパス)...');
+        targetSamplerMulti.sampler.chain(
+            guitarPitchShift,
+            guitarVibrato,
+            guitarDistortion,
+            guitarEQ
+        );
         guitarEQ.fan(masterComp, reverb);
-        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (手動配線、Cabinetバイパス)');
+        console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (Cabinetバイパス)');
       } else {
          console.error('[GEMINI_DEBUG_LOG] ギターチェイン接続エラー: 必須ノードがnullです。');
       }
@@ -458,13 +447,7 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
 
       if (instrumentName === 'target_eguitar' && samplers['eguitar'] && Tone) {
         const sampler = samplers['eguitar'].sampler;
-        const now = Tone.now();
-        
-        if (guitarVibrato) {
-          guitarVibrato.frequency.value = 4 + Math.random() * 2;
-        }
-        
-        sampler.triggerAttackRelease('E5', duration, now);
+        sampler.triggerAttackRelease('C4', duration);
 
       } else {
         const targetSampler = targetSamplers[instrumentName];
@@ -477,58 +460,6 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
       else if (type === 'target' && instrumentName === 'eguitar' && targetGuitarPlayer) { targetGuitarPlayer.start(); }
       else if (type === 'target' && instrumentName === 'ebass' && targetBassPlayer) { targetBassPlayer.start(); }
   }
-};
-
-const handlePlaySoundChainTest = (stage: 'sampler' | 'distortion' | 'eq' | 'cabinet' | 'final') => {
-    if (!guitarTestSampler || !limiter || !guitarDistortion || !guitarEQ || !guitarCabinet || !masterComp) {
-        console.error('[DIAGNOSTIC] Test nodes not ready.');
-        return;
-    }
-    console.log(`[DIAGNOSTIC] Testing stage: ${stage}`);
-
-    // Reset parameters to current tuning before each test
-    const params = tuningParams.value.target_eguitar;
-    guitarDistortion.distortion = params.distortion;
-    guitarEQ.low.value = params.eqLow;
-    guitarEQ.mid.value = params.eqMid;
-    guitarEQ.high.value = params.eqHigh;
-
-    guitarTestSampler.disconnect();
-    guitarDistortion.disconnect();
-    guitarEQ.disconnect();
-    guitarCabinet.disconnect();
-    
-    switch (stage) {
-        case 'sampler':
-            guitarTestSampler.connect(limiter);
-            break;
-        case 'distortion':
-            guitarDistortion.distortion = 1; // Extreme value
-            guitarTestSampler.connect(guitarDistortion);
-            guitarDistortion.connect(limiter);
-            break;
-        case 'eq':
-            guitarEQ.mid.value = -12; // Extreme value
-            guitarEQ.high.value = 12; // Extreme value
-            guitarTestSampler.connect(guitarDistortion);
-            guitarDistortion.connect(guitarEQ);
-            guitarEQ.connect(limiter);
-            break;
-        case 'cabinet':
-            // This test is now temporarily bypassed
-            console.log('[DIAGNOSTIC] Cabinet test is currently bypassed.');
-            // To avoid confusion, let's play the EQ'd sound again
-            guitarTestSampler.connect(guitarDistortion);
-            guitarDistortion.connect(guitarEQ);
-            guitarEQ.connect(limiter);
-            break;
-        case 'final':
-             if(targetSamplerMulti) {
-                targetSamplerMulti.sampler.triggerAttackRelease("E4", "4n");
-             }
-            return;
-    }
-    guitarTestSampler.triggerAttackRelease("E4", "4n");
 };
 
 const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => {
@@ -909,7 +840,6 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       :tuningParams="tuningParams"
       @close="closeSoundCheckModal"
       @playSound="handlePlaySound"
-      @playSoundChainTest="handlePlaySoundChainTest"
       @update-param="handleUpdateParam"
       @save-params="handleSaveParams"
       @export-params="handleExportParams"
