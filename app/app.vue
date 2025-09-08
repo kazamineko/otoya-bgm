@@ -357,12 +357,12 @@ const initializeAudio = async () => {
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
-      // E-GUITAR SIGNAL CHAIN
+      // E-GUITAR SIGNAL CHAIN (マスターの助言 ステップ3適用)
       guitarSoftSampler.connect(guitarComp);
       guitarHardSampler.connect(guitarComp);
       guitarComp.chain(guitarDistortion, guitarMidEQ, guitarCabinetFilter);
       guitarCabinetFilter.fan(masterComp, reverb);
-      console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了 (アドバイス Step1-3適用)');
+      console.log('[GEMINI_DEBUG_LOG] ギターチェイン接続完了');
 
       for (const [name, data] of Object.entries(samplers)) {
         if (rockDrumKit.includes(name)) {
