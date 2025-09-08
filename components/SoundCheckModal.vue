@@ -34,7 +34,7 @@
             
             <div class="sliders" v-if="tuningParams[instrument] || tuningParams['target_' + instrument]">
               <template v-if="instrument === 'eguitar' || instrument === 'ebass'">
-                <div class="sub-header">{{ instrument === 'eguitar' ? 'マルチサンプル設定' : 'Sampler 設定' }}</div>
+                <div class="sub-header">{{ instrument === 'eguitar' ? 'HM-A サンプル設定' : 'Sampler 設定' }}</div>
                 <div class="slider-container">
                   <label>Volume</label>
                   <input type="range" min="-40" max="6" step="0.1" :value="tuningParams['target_' + instrument].volume" @input="updateParam('target_' + instrument, 'volume', $event)">
@@ -53,56 +53,32 @@
                 <template v-if="instrument === 'eguitar'">
                    <div class="slider-container">
                     <label>Distortion</label>
-                    <input type="range" min="0" max="1" step="0.01" :value="tuningParams['target_eguitar'].distortion" @input="updateParam('target_eguitar', 'distortion', $event)">
-                    <span>{{ tuningParams['target_eguitar'].distortion.toFixed(2) }}</span>
+                    <input type="range" min="0" max="1" step="0.01" :value="tuningParams['target_eguitar'].distortion" @input="updateParam('target_eguitar', 'distortion', $event)" disabled>
+                    <span style="color: #999;">(Direct)</span>
                   </div>
                   <div class="slider-container">
                     <label>EQ Low</label>
-                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqLow" @input="updateParam('target_eguitar', 'eqLow', $event)">
-                    <span>{{ tuningParams['target_eguitar'].eqLow.toFixed(1) }} dB</span>
+                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqLow" @input="updateParam('target_eguitar', 'eqLow', $event)" disabled>
+                    <span style="color: #999;">(Direct)</span>
                   </div>
                   <div class="slider-container">
                     <label>EQ Mid</label>
-                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqMid" @input="updateParam('target_eguitar', 'eqMid', $event)">
-                    <span>{{ tuningParams['target_eguitar'].eqMid.toFixed(1) }} dB</span>
+                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqMid" @input="updateParam('target_eguitar', 'eqMid', $event)" disabled>
+                     <span style="color: #999;">(Direct)</span>
                   </div>
                   <div class="slider-container">
                     <label>EQ High</label>
-                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqHigh" @input="updateParam('target_eguitar', 'eqHigh', $event)">
-                    <span>{{ tuningParams['target_eguitar'].eqHigh.toFixed(1) }} dB</span>
-                  </div>
-                  <div class="diagnostic-buttons">
-                    <button @click.prevent="setExtremeEq('cut')">EQカット (-12dB)</button>
-                    <button @click.prevent="setExtremeEq('boost')">EQブースト (+12dB)</button>
-                  </div>
-                  
-                  <div class="sub-header">ステップ再生診断</div>
-                  <div class="play-buttons diagnostic-grid">
-                    <button @click.prevent="playSoundStage('direct')">1. Sampler直結</button>
-                    <button @click.prevent="playSoundStage('comp')">2. Comp後</button>
-                    <button @click.prevent="playSoundStage('chorus')">3. Chorus後</button>
-                    <button @click.prevent="playSoundStage('distortion')">4. Distortion後</button>
-                    <button @click.prevent="playSoundStage('mideq')">5. MidEQ後</button>
-                    <button @click.prevent="playSoundStage('eq')">6. EQ後</button>
-                    <button @click.prevent="playSoundStage('final')">7. 最終段(Filter後)</button>
+                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqHigh" @input="updateParam('target_eguitar', 'eqHigh', $event)" disabled>
+                     <span style="color: #999;">(Direct)</span>
                   </div>
 
-                  <div class="sub-header">Raw MP3 Playback</div>
+                  <div class="sub-header">Raw MP3 Playback (HMRhyA)</div>
                   <div class="raw-samples-container">
                     <div class="raw-sample-group">
-                      <strong>Hard Samples:</strong>
                       <div class="play-buttons diagnostic-grid">
-                        <button v-for="(url, note) in hardSampleUrls" :key="`hard-${note}`" @click.prevent="playRawSample(url)">
+                        <button v-for="(url, note) in heavyMetalUrls" :key="`hm-${note}`" @click.prevent="playRawSample(url, 'HMRhyA')">
                           {{ note }}: {{ url }}
                         </button>
-                      </div>
-                    </div>
-                    <div class="raw-sample-group">
-                      <strong>Soft Samples:</strong>
-                      <div class="play-buttons diagnostic-grid">
-                         <button v-for="(url, note) in softSampleUrls" :key="`soft-${note}`" @click.prevent="playRawSample(url)">
-                           {{ note }}: {{ url }}
-                         </button>
                       </div>
                     </div>
                   </div>
@@ -165,16 +141,14 @@ defineProps<{
   isVisible: boolean;
   instruments: string[];
   tuningParams: Record<string, any>;
-  hardSampleUrls: Record<string, string>;
-  softSampleUrls: Record<string, string>;
+  heavyMetalUrls: Record<string, string>;
 }>();
 
-const emit = defineEmits(['close', 'playSound', 'playSoundStage', 'playRawSample', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq']);
+const emit = defineEmits(['close', 'playSound', 'playRawSample', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq']);
 
 const close = () => emit('close');
 const playSound = (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => emit('playSound', instrumentName, type);
-const playSoundStage = (stage: string) => emit('playSoundStage', { stage });
-const playRawSample = (url: string) => emit('playRawSample', { url });
+const playRawSample = (url: string, folder: string) => emit('playRawSample', { url, folder });
 const saveParams = () => emit('saveParams');
 const exportParams = () => emit('exportParams');
 const resetParams = () => emit('resetParams');
