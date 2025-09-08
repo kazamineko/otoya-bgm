@@ -86,8 +86,8 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  // マスターの助言(ステップ4)に基づき、Attack/Release/Volumeの値を設定
-  "target_eguitar": { "volume": -5, "attack": 0.01, "release": 0.8, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0.05 },
+  // 最終修正: マスターの助言に基づきパラメータを最終調整
+  "target_eguitar": { "volume": -8, "attack": 0.005, "release": 0.6, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0.02 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -226,12 +226,12 @@ const initializeAudio = async () => {
     const eguitarTargetP = tuningParams.value.target_eguitar;
     guitarPitchShift = new Tone.PitchShift(eguitarTargetP.detune);
     guitarVibrato = new Tone.Vibrato(5, 0.02);
-    // ステップ6: Chorusをインスタンス化
-    guitarChorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.3, wet: 0.2 });
-    // マスターの助言(ステップ1)に基づき、Distortion値を0.05に固定
-    guitarDistortion = new Tone.Distortion(0.05);
-    // マスターの助言(ステップ2)に基づき、FilterとMidEQの値を設定
-    guitarCabinetFilter = new Tone.Filter({ frequency: 3000, type: "lowpass", rolloff: -12, Q: 0.5 });
+    // 最終修正: Chorusをインスタンス化
+    guitarChorus = new Tone.Chorus({ frequency: 0.8, wet: 0.15 });
+    // 最終修正: Distortion値を0.02に固定
+    guitarDistortion = new Tone.Distortion(0.02);
+    // 最終修正: Filterの値を設定
+    guitarCabinetFilter = new Tone.Filter({ frequency: 5000, type: "lowpass" });
     guitarMidEQ = new Tone.EQ3({ low: 0, mid: 3, high: -2 });
     guitarEQ = new Tone.EQ3({ 
         low: eguitarTargetP.eqLow, 
@@ -361,7 +361,7 @@ const initializeAudio = async () => {
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
-      // E-GUITAR SIGNAL CHAIN (マスターの助言 ステップ6適用)
+      // 最終修正: シグナルチェーンを確定
       guitarSoftSampler.connect(guitarComp);
       guitarHardSampler.connect(guitarComp);
       guitarComp.chain(guitarChorus, guitarDistortion, guitarMidEQ, guitarCabinetFilter);
@@ -460,15 +460,11 @@ const stopMusic = () => {
 };
 
 const triggerGuitarSound = (note: string | string[], duration: ToneType.Unit.Time, time: ToneType.Unit.Time, velocity: number) => {
-    // マスターの助言(ステップ5)に基づき、Velocityマッピングを最適化
-    if (velocity < 0.3) {
+    // 最終修正: Velocityマッピングを単純な0.5での切り替えに変更
+    if (velocity < 0.5) {
         guitarSoftSampler?.triggerAttackRelease(note, duration, time, velocity);
-    } else if (velocity > 0.7) {
-        guitarHardSampler?.triggerAttackRelease(note, duration, time, velocity);
     } else {
-        // 中間域では両方を重ね、クロスフェード効果
-        guitarSoftSampler?.triggerAttackRelease(note, duration, time, velocity * 0.7);
-        guitarHardSampler?.triggerAttackRelease(note, duration, time, velocity * 1.3);
+        guitarHardSampler?.triggerAttackRelease(note, duration, time, velocity);
     }
 }
 
