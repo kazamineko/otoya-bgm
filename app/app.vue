@@ -88,7 +88,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -8, "attack": 0.005, "release": 0.6, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0.00 },
+  "target_eguitar": { "volume": 0, "attack": 0.005, "release": 0.6, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0.00 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -248,7 +248,6 @@ const initializeAudio = async () => {
     await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, heavyMetalSamplerPromise]);
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み完了');
     
-    // 読み込み完了後に接続
     if (heavyMetalSampler && masterComp) {
         heavyMetalSampler.connect(masterComp);
     }
@@ -559,7 +558,17 @@ const createJazzSound = (rng: () => number): boolean => {
     scheduledEvents.push(pianoPart, bassPart, ridePart, saxPart, soloToggle);
     return true; 
 };
+
 const createRockSound = (rng: () => number): boolean => {
+    // BUGFIX: Samplerの状態をログで確認
+    console.log('[GEMINI_DEBUG_LOG] createRockSound: Checking samplers...');
+    console.log(`  - heavyMetalSampler: ${heavyMetalSampler ? 'Loaded' : 'NULL'}`);
+    console.log(`  - samplers.rockKick: ${samplers.rockKick ? 'Loaded' : 'NULL'}`);
+    console.log(`  - samplers.rockSnare: ${samplers.rockSnare ? 'Loaded' : 'NULL'}`);
+    console.log(`  - newRockBassSampler: ${newRockBassSampler ? 'Loaded' : 'NULL'}`);
+    console.log(`  - newSynthPianoSampler: ${newSynthPianoSampler ? 'Loaded' : 'NULL'}`);
+    console.log(`  - newElecOrganSampler: ${newElecOrganSampler ? 'Loaded' : 'NULL'}`);
+
     if (!Tone || !heavyMetalSampler || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler) {
         return false;
     }
@@ -634,7 +643,14 @@ const createRockSound = (rng: () => number): boolean => {
 };
 
 const createLiteStyleRock = (rng: () => number): boolean => {
-    console.log('[GEMINI_DEBUG_LOG] createLiteStyleRock: 関数が呼び出されました。');
+    // BUGFIX: Samplerの状態をログで確認
+    console.log('[GEMINI_DEBUG_LOG] createLiteStyleRock: Checking samplers...');
+    console.log(`  - heavyMetalSampler: ${heavyMetalSampler ? 'Loaded' : 'NULL'}`);
+    console.log(`  - samplers.rockKick: ${samplers.rockKick ? 'Loaded' : 'NULL'}`);
+    console.log(`  - samplers.rockSnare: ${samplers.rockSnare ? 'Loaded' : 'NULL'}`);
+    console.log(`  - samplers.ride: ${samplers.ride ? 'Loaded' : 'NULL'}`);
+    console.log(`  - samplers.crash: ${samplers.crash ? 'Loaded' : 'NULL'}`);
+
     if (!Tone || !heavyMetalSampler || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash) {
         console.error('[GEMINI_DEBUG_LOG] createLiteStyleRock: 必要なサンプラーが初期化されていないため、再生を中止します。');
         return false;
