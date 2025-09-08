@@ -457,11 +457,16 @@ const stopMusic = () => {
 };
 
 const triggerGuitarSound = (note: string | string[], duration: ToneType.Unit.Time, time: ToneType.Unit.Time, velocity: number) => {
-  if (velocity < 0.4) {
-    guitarSoftSampler?.triggerAttackRelease(note, duration, time, velocity);
-  } else if (velocity > 0.6) {
-    guitarHardSampler?.triggerAttackRelease(note, duration, time, velocity);
-  }
+    // マスターの助言(ステップ5)に基づき、Velocityマッピングを最適化
+    if (velocity < 0.3) {
+        guitarSoftSampler?.triggerAttackRelease(note, duration, time, velocity);
+    } else if (velocity > 0.7) {
+        guitarHardSampler?.triggerAttackRelease(note, duration, time, velocity);
+    } else {
+        // 中間域では両方を重ね、クロスフェード効果
+        guitarSoftSampler?.triggerAttackRelease(note, duration, time, velocity * 0.7);
+        guitarHardSampler?.triggerAttackRelease(note, duration, time, velocity * 1.3);
+    }
 }
 
 const togglePlayback = async () => { if (isPlaying.value) { stopMusic(); } else if (selectedMenu.value) { const [menuName, seed] = currentSeed.value.split(':'); if (menuName && seed) await playMusic(menuName, seed); } };
