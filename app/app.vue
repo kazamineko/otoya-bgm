@@ -35,6 +35,7 @@ let rawMp3Player: ToneType.Player | null = null;
 let guitarDistortion: ToneType.Distortion | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
 let guitarCabinet: ToneType.Convolver | null = null;
+let guitarPostGain: ToneType.Volume | null = null; // [NEW] Distortion後の音量を制御するノード
 let bassEQNode: ToneType.EQ3 | null = null;
 
 let rawSamplePlayers: ToneType.Players |
@@ -121,7 +122,8 @@ watch(tuningParams, (newParams) => {
 
   const eguitarTargetParams = newParams.target_eguitar;
   if (cleanGuitarSampler && eguitarTargetParams) {
-      if(eguitarTargetParams.volume !== undefined) cleanGuitarSampler.volume.value = eguitarTargetParams.volume;
+      // [UPDATE] VolumeスライダーはPost-Gain Volumeを制御
+      if(guitarPostGain && eguitarTargetParams.volume !== undefined) guitarPostGain.volume.value = eguitarTargetParams.volume;
       if(eguitarTargetParams.attack !== undefined) cleanGuitarSampler.attack = eguitarTargetParams.attack;
       if(eguitarTargetParams.release !== undefined) cleanGuitarSampler.release = eguitarTargetParams.release;
       if(guitarDistortion && eguitarTargetParams.distortion !== undefined) guitarDistortion.distortion = eguitarTargetParams.distortion;
@@ -220,6 +222,7 @@ const initializeAudio = async () => {
     guitarDistortion = new Tone.Distortion(guitarP.distortion);
     guitarEQ = new Tone.EQ3(guitarP.eqLow, guitarP.eqMid, guitarP.eqHigh);
     guitarCabinet = new Tone.Convolver('/ir/ir-guitar-cab.wav');
+    guitarPostGain = new Tone.Volume(guitarP.volume); // [NEW] Post-Gain Volumeを初期化
 
     console.log('[GEMINI_DEBUG_LOG] 全てのエフェクトノードをインスタンス化完了');
     
@@ -237,7 +240,7 @@ const initializeAudio = async () => {
         cleanGuitarSampler = new Tone!.Sampler({
             urls: cleanGuitarUrls,
             baseUrl: "/eguitar2/",
-            volume: guitarParams.volume,
+            // [UPDATE] Sampler本体のVolumeは固定値に
             attack: guitarParams.attack,
             release: guitarParams.release,
             onload: () => resolve()
@@ -307,12 +310,13 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && cleanGuitarSampler && guitarDistortion && guitarEQ && guitarCabinet) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && cleanGuitarSampler && guitarDistortion && guitarEQ && guitarCabinet && guitarPostGain) {
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
       
-      cleanGuitarSampler.chain(guitarDistortion, guitarEQ, guitarCabinet, masterComp);
+      // [UPDATE] ギターの信号経路を再設計
+      cleanGuitarSampler.chain(guitarDistortion, guitarPostGain, guitarEQ, guitarCabinet, masterComp);
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
@@ -497,25 +501,21 @@ const handlePlayRawSample = async (payload: { url: string, folder: string }) => 
   }
 };
 
-// [FIX] 診断バスの非同期処理エラーを修正
 const handlePlayDiagnosticSound = async (type: 'sampler' | 'dist' | 'eq' | 'cab') => {
-  if (!Tone || !cleanGuitarSampler || !guitarDistortion || !guitarEQ || !guitarCabinet || !masterComp) {
+  if (!Tone || !cleanGuitarSampler || !guitarDistortion || !guitarEQ || !guitarCabinet || !masterComp || !guitarPostGain) {
      alert('診断に必要な音源またはエフェクトが準備できていません。');
      return;
   }
   
-  // 1. 空のPlayerを生成
   const diagnosticPlayer = new Tone.Player();
   try {
-    // 2. 音源の読み込みを【await】で確実に待機する
     await diagnosticPlayer.load(`/eguitar2/${cleanGuitarUrls['C4']}`);
-    diagnosticPlayer.volume.value = tuningParams.value.target_eguitar.volume;
-
+    
     const dist = guitarDistortion;
+    const postGain = guitarPostGain;
     const eq = guitarEQ;
     const cab = guitarCabinet;
 
-    // 3. 読み込み完了後、タイプに応じて接続
     switch (type) {
       case 'sampler':
         console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> MasterComp");
@@ -526,15 +526,14 @@ const handlePlayDiagnosticSound = async (type: 'sampler' | 'dist' | 'eq' | 'cab'
         diagnosticPlayer.chain(dist, masterComp);
         break;
       case 'eq':
-        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> EQ -> MasterComp");
-        diagnosticPlayer.chain(dist, eq, masterComp);
+        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> PostGain -> EQ -> MasterComp");
+        diagnosticPlayer.chain(dist, postGain, eq, masterComp);
         break;
       case 'cab':
-        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> EQ -> Cabinet -> MasterComp");
-        diagnosticPlayer.chain(dist, eq, cab, masterComp);
+        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> PostGain -> EQ -> Cabinet -> MasterComp");
+        diagnosticPlayer.chain(dist, postGain, eq, cab, masterComp);
         break;
     }
-    // 4. 接続完了後、再生を開始
     diagnosticPlayer.start();
     
     diagnosticPlayer.onstop = () => {
