@@ -32,10 +32,11 @@ let newElecOrganSampler: { sampler: ToneType.Sampler, baseNote: string } | null 
 
 let rawMp3Player: ToneType.Player | null = null;
 
-let guitarDistortion: ToneType.Distortion | null = null;
+// [UPDATE] DistortionをChebyshevに変更
+let guitarChebyshev: ToneType.Chebyshev | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
 let guitarCabinet: ToneType.Convolver | null = null;
-let guitarPostGain: ToneType.Volume | null = null; // [NEW] Distortion後の音量を制御するノード
+let guitarPostGain: ToneType.Volume | null = null;
 let bassEQNode: ToneType.EQ3 | null = null;
 
 let rawSamplePlayers: ToneType.Players |
@@ -80,7 +81,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -6, "attack": 0.005, "release": 0.6, "distortion": 0.4, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
+  "target_eguitar": { "volume": -6, "attack": 0.005, "release": 0.6, "distortion": 0.8, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -122,11 +123,11 @@ watch(tuningParams, (newParams) => {
 
   const eguitarTargetParams = newParams.target_eguitar;
   if (cleanGuitarSampler && eguitarTargetParams) {
-      // [UPDATE] VolumeスライダーはPost-Gain Volumeを制御
       if(guitarPostGain && eguitarTargetParams.volume !== undefined) guitarPostGain.volume.value = eguitarTargetParams.volume;
       if(eguitarTargetParams.attack !== undefined) cleanGuitarSampler.attack = eguitarTargetParams.attack;
       if(eguitarTargetParams.release !== undefined) cleanGuitarSampler.release = eguitarTargetParams.release;
-      if(guitarDistortion && eguitarTargetParams.distortion !== undefined) guitarDistortion.distortion = eguitarTargetParams.distortion;
+      // [UPDATE] DistortionスライダーがChebyshevのwet値を制御
+      if(guitarChebyshev && eguitarTargetParams.distortion !== undefined) guitarChebyshev.wet.value = eguitarTargetParams.distortion;
       if(guitarEQ) {
         if(eguitarTargetParams.eqLow !== undefined) guitarEQ.low.value = eguitarTargetParams.eqLow;
         if(eguitarTargetParams.eqMid !== undefined) guitarEQ.mid.value = eguitarTargetParams.eqMid;
@@ -219,10 +220,12 @@ const initializeAudio = async () => {
     });
     
     const guitarP = tuningParams.value.target_eguitar;
-    guitarDistortion = new Tone.Distortion(guitarP.distortion);
+    // [UPDATE] DistortionをChebyshevに換装。orderを高く設定して倍音を増やす。
+    guitarChebyshev = new Tone.Chebyshev(50);
+    guitarChebyshev.wet.value = guitarP.distortion;
     guitarEQ = new Tone.EQ3(guitarP.eqLow, guitarP.eqMid, guitarP.eqHigh);
     guitarCabinet = new Tone.Convolver('/ir/ir-guitar-cab.wav');
-    guitarPostGain = new Tone.Volume(guitarP.volume); // [NEW] Post-Gain Volumeを初期化
+    guitarPostGain = new Tone.Volume(guitarP.volume);
 
     console.log('[GEMINI_DEBUG_LOG] 全てのエフェクトノードをインスタンス化完了');
     
@@ -240,7 +243,6 @@ const initializeAudio = async () => {
         cleanGuitarSampler = new Tone!.Sampler({
             urls: cleanGuitarUrls,
             baseUrl: "/eguitar2/",
-            // [UPDATE] Sampler本体のVolumeは固定値に
             attack: guitarParams.attack,
             release: guitarParams.release,
             onload: () => resolve()
@@ -310,13 +312,12 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && cleanGuitarSampler && guitarDistortion && guitarEQ && guitarCabinet && guitarPostGain) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && cleanGuitarSampler && guitarChebyshev && guitarEQ && guitarCabinet && guitarPostGain) {
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
       
-      // [UPDATE] ギターの信号経路を再設計
-      cleanGuitarSampler.chain(guitarDistortion, guitarPostGain, guitarEQ, guitarCabinet, masterComp);
+      cleanGuitarSampler.chain(guitarChebyshev, guitarPostGain, guitarEQ, guitarCabinet, masterComp);
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
@@ -502,7 +503,7 @@ const handlePlayRawSample = async (payload: { url: string, folder: string }) => 
 };
 
 const handlePlayDiagnosticSound = async (type: 'sampler' | 'dist' | 'eq' | 'cab') => {
-  if (!Tone || !cleanGuitarSampler || !guitarDistortion || !guitarEQ || !guitarCabinet || !masterComp || !guitarPostGain) {
+  if (!Tone || !cleanGuitarSampler || !guitarChebyshev || !guitarEQ || !guitarCabinet || !masterComp || !guitarPostGain) {
      alert('診断に必要な音源またはエフェクトが準備できていません。');
      return;
   }
@@ -511,7 +512,7 @@ const handlePlayDiagnosticSound = async (type: 'sampler' | 'dist' | 'eq' | 'cab'
   try {
     await diagnosticPlayer.load(`/eguitar2/${cleanGuitarUrls['C4']}`);
     
-    const dist = guitarDistortion;
+    const dist = guitarChebyshev;
     const postGain = guitarPostGain;
     const eq = guitarEQ;
     const cab = guitarCabinet;
@@ -522,15 +523,15 @@ const handlePlayDiagnosticSound = async (type: 'sampler' | 'dist' | 'eq' | 'cab'
         diagnosticPlayer.connect(masterComp);
         break;
       case 'dist':
-        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> MasterComp");
+        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Chebyshev -> MasterComp");
         diagnosticPlayer.chain(dist, masterComp);
         break;
       case 'eq':
-        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> PostGain -> EQ -> MasterComp");
+        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Chebyshev -> PostGain -> EQ -> MasterComp");
         diagnosticPlayer.chain(dist, postGain, eq, masterComp);
         break;
       case 'cab':
-        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> PostGain -> EQ -> Cabinet -> MasterComp");
+        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Chebyshev -> PostGain -> EQ -> Cabinet -> MasterComp");
         diagnosticPlayer.chain(dist, postGain, eq, cab, masterComp);
         break;
     }
@@ -913,8 +914,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       @playDiagnosticSound="handlePlayDiagnosticSound"
       @update-param="handleUpdateParam"
       @save-params="handleSaveParams"
-      @export-params="handleExportParams"
-      @reset-params="handleResetParams"
+      @export-params="handleResetParams"
       @set-extreme-eq="handleSetExtremeEq"
     />
   </div>
