@@ -63,7 +63,7 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
-// [UPDATE] 「ぎゅおおおん」サウンドを実現するための黄金比パラメータ
+// [FINAL RECIPE] クランチサウンドを実現するための最終パラメータ
 const masterTunedParams: TuningParams = {
   "piano": { "volume": 0, "attack": 0.01, "release": 1 },
   "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
@@ -81,7 +81,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -9, "attack": 0.005, "release": 0.6, "distortion": 0.9, "eqLow": 2, "eqMid": -9, "eqHigh": 3 },
+  "target_eguitar": { "volume": -12, "attack": 0.005, "release": 0.6, "distortion": 0.3, "eqLow": 1, "eqMid": -2, "eqHigh": 1.5 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -219,7 +219,6 @@ const initializeAudio = async () => {
     });
     
     const guitarP = tuningParams.value.target_eguitar;
-    // [FIX] Chebyshevの次数を音楽的な '2' に変更
     guitarChebyshev = new Tone.Chebyshev(2);
     guitarChebyshev.wet.value = guitarP.distortion;
     guitarEQ = new Tone.EQ3(guitarP.eqLow, guitarP.eqMid, guitarP.eqHigh);
