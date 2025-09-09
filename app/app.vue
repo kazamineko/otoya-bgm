@@ -705,12 +705,11 @@ const createLiteStyleRock = (rng: () => number): boolean => {
         { time: '2:0', note: 'C4', duration: '8n' }, { time: '2:2', note: 'B3', duration: '8n' }, { time: '3:0', note: 'A3', duration: '8n' }, { time: '3:2', note: 'G3', duration: '8n' }
     ];
 
-    const songStructure = [
-        ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE,
-        ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS,
-        ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE, ROLES.VERSE,
-        ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS, ROLES.CHORUS,
-    ];
+    const songStructure: Role[] = [];
+    for(let i=0; i<8; i++) songStructure.push(ROLES.VERSE);
+    for(let i=0; i<8; i++) songStructure.push(ROLES.CHORUS);
+    for(let i=0; i<8; i++) songStructure.push(ROLES.VERSE);
+    for(let i=0; i<8; i++) songStructure.push(ROLES.CHORUS);
 
     // --- Pre-calculate full 32-bar score for each instrument ---
     const kickEvents: { time: string, note: string }[] = [];
@@ -722,6 +721,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     for (let measure = 0; measure < songStructure.length; measure++) {
         const role = songStructure[measure];
         const measureTime = `${measure}:0:0`;
+        
         if (role === ROLES.VERSE) {
             verseKickPattern.forEach((v, i) => { if(v) kickEvents.push({ time: `${measure}:0:${i * 2}`, note: kickNote }) });
             verseSnarePattern.forEach((v, i) => { if(v) snareEvents.push({ time: `${measure}:0:${i * 2}`, note: snareNote }) });
@@ -735,9 +735,10 @@ const createLiteStyleRock = (rng: () => number): boolean => {
         }
     }
     
-    console.table(guitarEvents.slice(0, 20)); // Log first 20 guitar events to verify structure
+    console.log(`[GEMINI_DIAG_LOG] LITE-Style: ${guitarEvents.length}個のギターイベントを生成しました。最初の20件を検証します:`);
+    console.table(guitarEvents.slice(0, 20));
 
-    // --- Create one event per instrument and schedule it ---
+    // --- Create one Part per instrument and schedule it ---
     const kickPart = new currentTone.Part(((time, value) => kick.triggerAttack(value.note, time)), kickEvents).start(0);
     const snarePart = new currentTone.Part(((time, value) => snare.triggerAttack(value.note, time)), snareEvents).start(0);
     const ridePart = new currentTone.Part(((time, value) => ride.triggerAttack(value.note, time, 0.7)), rideEvents).start(0);
@@ -752,7 +753,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     guitarPart.loop = true; guitarPart.loopEnd = loopEnd;
 
     scheduledEvents.push(kickPart, snarePart, ridePart, crashPart, guitarPart);
-    console.log(`[GEMINI_DIAG_LOG] createLiteStyleRock: 5つの独立したパートをスケジュールしました。`);
+    console.log(`[GEMINI_DIAG_LOG] createLiteStyleRock: 5つの独立したTone.Partをスケジュールしました。ループの終点は'${loopEnd}'です。`);
     return true;
 };
 </script>
