@@ -205,7 +205,8 @@ const initializeAudio = async () => {
     limiter = new Tone.Limiter(-0.1).toDestination();
     masterComp = new Tone.Compressor({ threshold: -12, ratio: 3 }).connect(limiter);
     
-    drumBusVolume = new Tone.Volume(-3).connect(masterComp);
+    // [FIX] ドラムバスの音量を -3dB から 0dB に変更し、迫力を強化
+    drumBusVolume = new Tone.Volume(0).connect(masterComp);
     drumBusComp = new Tone.Compressor({ threshold: -25, ratio: 5, attack: 0.01, release: 0.1 }).connect(drumBusVolume);
 
     Tone.Destination.volume.value = Tone.gainToDb(volume.value);
@@ -313,8 +314,8 @@ const initializeAudio = async () => {
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
       
-      // [FIX] heavyMetalSamplerを他のメロディ楽器と同様にエフェクトに接続
-      heavyMetalSampler.fan(masterComp, reverb, delay);
+      // [FIX] 歪みギターは空間系エフェクトをバイパスし、マスターコンプに直結してタイトな音に
+      heavyMetalSampler.connect(masterComp);
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
@@ -696,7 +697,6 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     const verseKickPattern = [1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,0];
     const verseSnarePattern = [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0];
     const verseRidePattern = [1,1,1,1,1,1,1,1];
-    // [FIX] Verseギターリフをより音楽的に洗練。時間表記を "M:B" 形式に統一。
     const verseGuitarRiffData: { time: string, note: string, duration: string }[] = [
       { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:1', note: 'G3', duration: '8n' },
       { time: '0:2', note: 'A3', duration: '8n' }, { time: '0:3', note: 'G3', duration: '8n' },
@@ -747,10 +747,6 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     }
     
     // --- [DIAGNOSTIC LOG] ---
-    console.log(`[GEMINI_DIAG_LOG] LITE-Style: ${kickEvents.length}個のキックイベント（楽譜）を生成しました。最初の20件を検証します:`);
-    console.table(kickEvents.slice(0, 20));
-    console.log(`[GEMINI_DIAG_LOG] LITE-Style: ${snareEvents.length}個のスネアイベント（楽譜）を生成しました。最初の20件を検証します:`);
-    console.table(snareEvents.slice(0, 20));
     console.log(`[GEMINI_DIAG_LOG] LITE-Style: ${guitarEvents.length}個のギターイベント（楽譜）を生成しました。最初の20件を検証します:`);
     console.table(guitarEvents.slice(0, 20));
 
