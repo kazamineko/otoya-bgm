@@ -81,7 +81,8 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -9, "attack": 0.005, "release": 0.6, "distortion": 0.6, "eqLow": 0, "eqMid": 6, "eqHigh": 3 },
+  // [GEMINI] ギターサウンドの再構築：まず音が出る、破綻のない初期値へと変更
+  "target_eguitar": { "volume": -6, "attack": 0.005, "release": 0.6, "distortion": 0.2, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -315,7 +316,9 @@ const initializeAudio = async () => {
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
       
-      cleanGuitarSampler.chain(guitarChebyshev, guitarPostGain, guitarEQ, guitarCabinet, masterComp);
+      // [GEMINI] ギターサウンドの再構築：信号経路を「歪み→EQ→音量」の順に修正
+      console.log('[GEMINI_DEBUG_LOG] ギター信号経路: Sampler -> Chebyshev -> EQ -> PostGain -> Cabinet -> MasterComp');
+      cleanGuitarSampler.chain(guitarChebyshev, guitarEQ, guitarPostGain, guitarCabinet, masterComp);
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
@@ -515,22 +518,23 @@ const handlePlayDiagnosticSound = async (type: 'sampler' | 'dist' | 'eq' | 'cab'
     const eq = guitarEQ;
     const cab = guitarCabinet;
 
+    // [GEMINI] ギターサウンドの再構築：診断バスが「真実」を再生するよう、実際の信号経路に合わせて全面的に修正
     switch (type) {
       case 'sampler':
-        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> MasterComp");
-        diagnosticPlayer.chain(postGain, masterComp);
+        console.log("[GEMINI_DIAGNOSTIC] ① Player -> MasterComp (エフェクトなしの素の音)");
+        diagnosticPlayer.connect(masterComp);
         break;
       case 'dist':
-        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Chebyshev -> PostGain -> MasterComp");
-        diagnosticPlayer.chain(dist, postGain, masterComp);
+        console.log("[GEMINI_DIAGNOSTIC] ② Player -> Chebyshev -> MasterComp");
+        diagnosticPlayer.chain(dist, masterComp);
         break;
       case 'eq':
-        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Chebyshev -> PostGain -> EQ -> MasterComp");
-        diagnosticPlayer.chain(dist, postGain, eq, masterComp);
+        console.log("[GEMINI_DIAGNOSTIC] ③ Player -> Chebyshev -> EQ -> MasterComp");
+        diagnosticPlayer.chain(dist, eq, masterComp);
         break;
       case 'cab':
-        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Chebyshev -> PostGain -> EQ -> Cabinet -> MasterComp");
-        diagnosticPlayer.chain(dist, postGain, eq, cab, masterComp);
+        console.log("[GEMINI_DIAGNOSTIC] ④ Player -> Chebyshev -> EQ -> PostGain -> Cabinet -> MasterComp (最終経路)");
+        diagnosticPlayer.chain(dist, eq, postGain, cab, masterComp);
         break;
     }
     diagnosticPlayer.start();
