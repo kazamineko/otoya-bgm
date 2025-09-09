@@ -71,6 +71,18 @@
                     <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqHigh" @input="updateParam('target_eguitar', 'eqHigh', $event)">
                      <span>{{ tuningParams['target_eguitar'].eqHigh.toFixed(1) }} dB</span>
                   </div>
+                  
+                  <!-- [DIAGNOSTIC] 診断バスの実装 -->
+                  <div class="sub-header">サウンド診断バス</div>
+                  <div class="diagnostic-bus">
+                    <button @click.prevent="playDiagnosticSound('sampler')">① Sampler単体</button>
+                    <span>→</span>
+                    <button @click.prevent="playDiagnosticSound('dist')">② ＋ Distortion</button>
+                    <span>→</span>
+                    <button @click.prevent="playDiagnosticSound('eq')">③ ＋ EQ</button>
+                    <span>→</span>
+                    <button @click.prevent="playDiagnosticSound('cab')">④ ＋ Cabinet (最終)</button>
+                  </div>
 
                   <div class="sub-header">Raw MP3 Playback (eguitar2)</div>
                   <div class="raw-samples-container">
@@ -144,11 +156,13 @@ defineProps<{
   heavyMetalUrls: Record<string, string>;
 }>();
 
-const emit = defineEmits(['close', 'playSound', 'playRawSample', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq']);
+const emit = defineEmits(['close', 'playSound', 'playRawSample', 'playDiagnosticSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq']);
 
 const close = () => emit('close');
 const playSound = (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => emit('playSound', instrumentName, type);
 const playRawSample = (url: string, folder: string) => emit('playRawSample', { url, folder });
+// [DIAGNOSTIC] 診断バス用のemit
+const playDiagnosticSound = (type: 'sampler' | 'dist' | 'eq' | 'cab') => emit('playDiagnosticSound', type);
 const saveParams = () => emit('saveParams');
 const exportParams = () => emit('exportParams');
 const resetParams = () => emit('resetParams');
@@ -235,13 +249,13 @@ const updateParam = (instrument: string, param: string, event: Event) => {
 .slider-container label { text-align: right; font-size: 0.9em; }
 .slider-container input[type="range"] { width: 100%; }
 .slider-container span { font-family: monospace; font-size: 0.9em; text-align: left; }
-.diagnostic-buttons {
+.diagnostic-bus {
   display: flex;
-  gap: 10px;
-  justify-content: center;
-  margin-top: 15px;
+  justify-content: space-around;
+  align-items: center;
+  padding: 10px 0;
 }
-.diagnostic-buttons button {
+.diagnostic-bus button {
   background-color: #c74848;
   color: white;
   border: none;
@@ -251,7 +265,7 @@ const updateParam = (instrument: string, param: string, event: Event) => {
   transition: background-color 0.2s ease;
   font-size: 12px;
 }
-.diagnostic-buttons button:hover {
+.diagnostic-bus button:hover {
   background-color: #b33e3e;
 }
 .diagnostic-grid {

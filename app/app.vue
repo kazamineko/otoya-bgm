@@ -25,16 +25,13 @@ let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote?: string } 
 // baseNote is now optional
 let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 
-// [NEW] 新しいクリーンギター音源用のSampler
 let cleanGuitarSampler: ToneType.Sampler | null = null;
 let newRockBassSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newSynthPianoSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newElecOrganSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 
-// DEBUG: Raw MP3 Player
 let rawMp3Player: ToneType.Player | null = null;
 
-// [RE-IMPLEMENT] ギター専用エフェクトチェーン
 let guitarDistortion: ToneType.Distortion | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
 let guitarCabinet: ToneType.Convolver | null = null;
@@ -82,7 +79,6 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  // [UPDATE] ギターのチューニングパラメータにDistortionとEQを再設定
   "target_eguitar": { "volume": -6, "attack": 0.005, "release": 0.6, "distortion": 0.4, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
@@ -128,7 +124,6 @@ watch(tuningParams, (newParams) => {
       if(eguitarTargetParams.volume !== undefined) cleanGuitarSampler.volume.value = eguitarTargetParams.volume;
       if(eguitarTargetParams.attack !== undefined) cleanGuitarSampler.attack = eguitarTargetParams.attack;
       if(eguitarTargetParams.release !== undefined) cleanGuitarSampler.release = eguitarTargetParams.release;
-      // [NEW] 新しいエフェクトチェーンのパラメータをチューニングと連動
       if(guitarDistortion && eguitarTargetParams.distortion !== undefined) guitarDistortion.distortion = eguitarTargetParams.distortion;
       if(guitarEQ) {
         if(eguitarTargetParams.eqLow !== undefined) guitarEQ.low.value = eguitarTargetParams.eqLow;
@@ -221,7 +216,6 @@ const initializeAudio = async () => {
         high: ebassTargetP.eqHigh
     });
     
-    // [NEW] ギターエフェクトチェーンのインスタンス化
     const guitarP = tuningParams.value.target_eguitar;
     guitarDistortion = new Tone.Distortion(guitarP.distortion);
     guitarEQ = new Tone.EQ3(guitarP.eqLow, guitarP.eqMid, guitarP.eqHigh);
@@ -318,7 +312,6 @@ const initializeAudio = async () => {
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
       
-      // [NEW] ギターのDI信号を、構築した仮想アンプリグを通してマスターコンプへ接続
       cleanGuitarSampler.chain(guitarDistortion, guitarEQ, guitarCabinet, masterComp);
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
@@ -504,6 +497,52 @@ const handlePlayRawSample = async (payload: { url: string, folder: string }) => 
   }
 };
 
+// [DIAGNOSTIC] 診断ボタン用の再生ロジック
+const handlePlayDiagnosticSound = async (type: 'sampler' | 'dist' | 'eq' | 'cab') => {
+  if (!Tone || !cleanGuitarSampler || !guitarDistortion || !guitarEQ || !guitarCabinet || !masterComp) {
+     alert('診断に必要な音源またはエフェクトが準備できていません。');
+     return;
+  }
+  
+  // 診断用の独立したプレーヤーを作成し、干渉を防ぐ
+  const diagnosticPlayer = new Tone.Player({
+      url: `/eguitar2/${cleanGuitarUrls['C4']}`,
+      volume: tuningParams.value.target_eguitar.volume
+  }).toDestination();
+  await diagnosticPlayer.load;
+
+  // 既存のエフェクトノードを再利用
+  const dist = guitarDistortion;
+  const eq = guitarEQ;
+  const cab = guitarCabinet;
+
+  // 診断タイプに応じて接続を切り替え
+  switch (type) {
+    case 'sampler':
+      console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Destination");
+      diagnosticPlayer.connect(masterComp);
+      break;
+    case 'dist':
+      console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> Destination");
+      diagnosticPlayer.chain(dist, masterComp);
+      break;
+    case 'eq':
+       console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> EQ -> Destination");
+      diagnosticPlayer.chain(dist, eq, masterComp);
+      break;
+    case 'cab':
+       console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> EQ -> Cabinet -> Destination");
+      diagnosticPlayer.chain(dist, eq, cab, masterComp);
+      break;
+  }
+
+  diagnosticPlayer.start();
+  
+  // 再生終了後にプレーヤーを破棄
+  diagnosticPlayer.onstop = () => {
+    diagnosticPlayer.dispose();
+  };
+};
 
 const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => {
   if (tuningParams.value[payload.instrument]) {
@@ -869,6 +908,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       @close="closeSoundCheckModal"
       @playSound="handlePlaySound"
       @playRawSample="handlePlayRawSample"
+      @playDiagnosticSound="handlePlayDiagnosticSound"
       @update-param="handleUpdateParam"
       @save-params="handleSaveParams"
       @export-params="handleExportParams"
