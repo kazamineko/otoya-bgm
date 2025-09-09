@@ -695,24 +695,22 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     const verseKickPattern = [1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,0];
     const verseSnarePattern = [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0];
     const verseRidePattern = [1,1,1,1,1,1,1,1];
-    // [TEST] Verseギターリフの一部を半音ずらし、ピッチシフトの効果を検証
+    // [REVERT] 半音ずらしのテストを撤回し、音源に忠実なノートに戻す
     const verseGuitarRiffData: { time: string, note: string, duration: string }[] = [
-      { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:1', note: 'G#3', duration: '8n' }, // G3 -> G#3 (Test)
+      { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:1', note: 'G3', duration: '8n' },
       { time: '0:2', note: 'A3', duration: '8n' }, { time: '0:3', note: 'G3', duration: '8n' },
-      { time: '1:0', note: 'D4', duration: '4n' }, { time: '1:2', note: 'G#3', duration: '4n' }, // G3 -> G#3 (Test)
+      { time: '1:0', note: 'D4', duration: '4n' }, { time: '1:2', note: 'G3', duration: '4n' },
       { time: '2:0', note: 'E3', duration: '8n' }, { time: '2:1', note: 'G3', duration: '8n' },
-      { time: '2:2', note: 'A#3', duration: '8n' }, { time: '2:3', note: 'B3', duration: '8n' }, // A3 -> A#3 (Test)
+      { time: '2:2', note: 'A3', duration: '8n' }, { time: '2:3', note: 'B3', duration: '8n' },
       { time: '3:0', note: 'A3', duration: '2n' },
     ];
 
     const chorusKickPattern = [1,1,0,1,1,0,1,0,1,1,0,1,1,1,1,0];
     const chorusSnarePattern = [0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,1];
-    // [TEST] Chorusギターリフの一部を半音ずらし、ピッチシフトの効果を検証
+    // [REVERT] 半音ずらしのテストを撤回し、音源に忠実なノートに戻す
     const chorusGuitarPartData: { time: string, note: string, duration: string }[] = [
-        { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:2', note: 'G3', duration: '8n' },
-        { time: '1:0', note: 'A3', duration: '8n' }, { time: '1:2', note: 'A#3', duration: '8n' }, // B3 -> A#3 (Test)
-        { time: '2:0', note: 'C4', duration: '8n' }, { time: '2:2', note: 'B3', duration: '8n' },
-        { time: '3:0', note: 'A3', duration: '8n' }, { time: '3:2', note: 'F#3', duration: '8n' }  // G3 -> F#3 (Test)
+        { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:2', note: 'G3', duration: '8n' }, { time: '1:0', note: 'A3', duration: '8n' }, { time: '1:2', note: 'B3', duration: '8n' },
+        { time: '2:0', note: 'C4', duration: '8n' }, { time: '2:2', note: 'B3', duration: '8n' }, { time: '3:0', note: 'A3', duration: '8n' }, { time: '3:2', note: 'G3', duration: '8n' }
     ];
 
     const songStructure: Role[] = [];
