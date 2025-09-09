@@ -205,7 +205,6 @@ const initializeAudio = async () => {
     limiter = new Tone.Limiter(-0.1).toDestination();
     masterComp = new Tone.Compressor({ threshold: -12, ratio: 3 }).connect(limiter);
     
-    // [FIX] ドラムバスの音量を -3dB から 0dB に変更し、迫力を強化
     drumBusVolume = new Tone.Volume(0).connect(masterComp);
     drumBusComp = new Tone.Compressor({ threshold: -25, ratio: 5, attack: 0.01, release: 0.1 }).connect(drumBusVolume);
 
@@ -314,7 +313,6 @@ const initializeAudio = async () => {
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
       
-      // [FIX] 歪みギターは空間系エフェクトをバイパスし、マスターコンプに直結してタイトな音に
       heavyMetalSampler.connect(masterComp);
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
@@ -697,20 +695,24 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     const verseKickPattern = [1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,0];
     const verseSnarePattern = [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0];
     const verseRidePattern = [1,1,1,1,1,1,1,1];
+    // [TEST] Verseギターリフの一部を半音ずらし、ピッチシフトの効果を検証
     const verseGuitarRiffData: { time: string, note: string, duration: string }[] = [
-      { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:1', note: 'G3', duration: '8n' },
+      { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:1', note: 'G#3', duration: '8n' }, // G3 -> G#3 (Test)
       { time: '0:2', note: 'A3', duration: '8n' }, { time: '0:3', note: 'G3', duration: '8n' },
-      { time: '1:0', note: 'D4', duration: '4n' }, { time: '1:2', note: 'G3', duration: '4n' },
+      { time: '1:0', note: 'D4', duration: '4n' }, { time: '1:2', note: 'G#3', duration: '4n' }, // G3 -> G#3 (Test)
       { time: '2:0', note: 'E3', duration: '8n' }, { time: '2:1', note: 'G3', duration: '8n' },
-      { time: '2:2', note: 'A3', duration: '8n' }, { time: '2:3', note: 'B3', duration: '8n' },
+      { time: '2:2', note: 'A#3', duration: '8n' }, { time: '2:3', note: 'B3', duration: '8n' }, // A3 -> A#3 (Test)
       { time: '3:0', note: 'A3', duration: '2n' },
     ];
 
     const chorusKickPattern = [1,1,0,1,1,0,1,0,1,1,0,1,1,1,1,0];
     const chorusSnarePattern = [0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,1];
+    // [TEST] Chorusギターリフの一部を半音ずらし、ピッチシフトの効果を検証
     const chorusGuitarPartData: { time: string, note: string, duration: string }[] = [
-        { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:2', note: 'G3', duration: '8n' }, { time: '1:0', note: 'A3', duration: '8n' }, { time: '1:2', note: 'B3', duration: '8n' },
-        { time: '2:0', note: 'C4', duration: '8n' }, { time: '2:2', note: 'B3', duration: '8n' }, { time: '3:0', note: 'A3', duration: '8n' }, { time: '3:2', note: 'G3', duration: '8n' }
+        { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:2', note: 'G3', duration: '8n' },
+        { time: '1:0', note: 'A3', duration: '8n' }, { time: '1:2', note: 'A#3', duration: '8n' }, // B3 -> A#3 (Test)
+        { time: '2:0', note: 'C4', duration: '8n' }, { time: '2:2', note: 'B3', duration: '8n' },
+        { time: '3:0', note: 'A3', duration: '8n' }, { time: '3:2', note: 'F#3', duration: '8n' }  // G3 -> F#3 (Test)
     ];
 
     const songStructure: Role[] = [];
