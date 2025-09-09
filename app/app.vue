@@ -198,6 +198,7 @@ const initializeAudio = async () => {
     Tone = await import('tone');
     await Tone.start();
     if (!Tone) { throw new Error('Tone.js failed to load'); }
+    console.log(` * Tone.js v${Tone.version} * `);
     console.log('[GEMINI_DEBUG_LOG] Tone.jsの準備完了');
     loadingMessage.value = '店内の響きを調整しています...';
     
@@ -693,10 +694,18 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     if (!kickNote || !snareNote || !rideNote || !crashNote) return false;
 
     // --- Define Patterns ---
+    // ノート名はHMRhyAのサンプルキーと完全に一致させ、ピッチシフトによる音割れを防ぐ
     const verseKickPattern = [1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,0];
     const verseSnarePattern = [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0];
     const verseRidePattern = [1,1,1,1,1,1,1,1];
-    const verseGuitarRiff = ['E3', null, 'G3', 'A3', null, 'G3', null, 'D4'];
+    // ギターリフを音楽的に自然な8分音符のシーケンスとして再定義
+    const verseGuitarRiffData: { time: string, note: string, duration: string }[] = [
+      { time: '0:0', note: 'E3', duration: '8n' },
+      { time: '0:2', note: 'G3', duration: '8n' },
+      { time: '1:0', note: 'A3', duration: '8n' },
+      { time: '1:2', note: 'G3', duration: '8n' },
+      { time: '2:0', note: 'D4', duration: '2n' },
+    ];
 
     const chorusKickPattern = [1,1,0,1,1,0,1,0,1,1,0,1,1,1,1,0];
     const chorusSnarePattern = [0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,1];
@@ -726,7 +735,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
             verseKickPattern.forEach((v, i) => { if(v) kickEvents.push({ time: `${measure}:0:${i * 2}`, note: kickNote }) });
             verseSnarePattern.forEach((v, i) => { if(v) snareEvents.push({ time: `${measure}:0:${i * 2}`, note: snareNote }) });
             verseRidePattern.forEach((v, i) => { if(v) rideEvents.push({ time: `${measure}:${i}`, note: rideNote }) });
-            verseGuitarRiff.forEach((note, i) => { if(note) guitarEvents.push({ time: `${measure}:${i}`, note, duration: '8n' }) });
+            verseGuitarRiffData.forEach(d => guitarEvents.push({ time: `${measure}:${d.time}`, note: d.note, duration: d.duration }));
         } else { // CHORUS
             chorusKickPattern.forEach((v, i) => { if(v) kickEvents.push({ time: `${measure}:0:${i * 2}`, note: kickNote }) });
             chorusSnarePattern.forEach((v, i) => { if(v) snareEvents.push({ time: `${measure}:0:${i * 2}`, note: snareNote }) });
@@ -735,7 +744,12 @@ const createLiteStyleRock = (rng: () => number): boolean => {
         }
     }
     
-    console.log(`[GEMINI_DIAG_LOG] LITE-Style: ${guitarEvents.length}個のギターイベントを生成しました。最初の20件を検証します:`);
+    // --- [DIAGNOSTIC LOG] ---
+    console.log(`[GEMINI_DIAG_LOG] LITE-Style: ${kickEvents.length}個のキックイベント（楽譜）を生成しました。最初の20件を検証します:`);
+    console.table(kickEvents.slice(0, 20));
+    console.log(`[GEMINI_DIAG_LOG] LITE-Style: ${snareEvents.length}個のスネアイベント（楽譜）を生成しました。最初の20件を検証します:`);
+    console.table(snareEvents.slice(0, 20));
+    console.log(`[GEMINI_DIAG_LOG] LITE-Style: ${guitarEvents.length}個のギターイベント（楽譜）を生成しました。最初の20件を検証します:`);
     console.table(guitarEvents.slice(0, 20));
 
     // --- Create one Part per instrument and schedule it ---
