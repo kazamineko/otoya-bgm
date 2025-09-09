@@ -25,8 +25,8 @@ let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote?: string } 
 // baseNote is now optional
 let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
 
-// 新規: ヘビメタ音源用のSampler
-let heavyMetalSampler: ToneType.Sampler | null = null;
+// [NEW] 新しいクリーンギター音源用のSampler
+let cleanGuitarSampler: ToneType.Sampler | null = null;
 let newRockBassSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newSynthPianoSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newElecOrganSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
@@ -94,16 +94,16 @@ const masterTunedParams: TuningParams = {
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
 };
 
-const heavyMetalUrls = {
-  'A3': 'HMRhyA_Powerchord-A.mp3',
-  'B3': 'HMRhyA_Powerchord-B.mp3',
-  'C4': 'HMRhyA_Powerchord-C.mp3',
-  'D3': 'HMRhyA_Powerchord-D_Lo.mp3',
-  'D4': 'HMRhyA_Powerchord-D_Hi.mp3',
-  'E3': 'HMRhyA_Powerchord-E.mp3',
-  'F3': 'HMRhyA_Powerchord-F.mp3',
-  'G3': 'HMRhyA_Powerchord-G.mp3'
+// [NEW] 新しいクリーンギター音源のマッピング
+const cleanGuitarUrls = {
+    'A2': 'A2.mp3', 'A3': 'A3.mp3', 'A4': 'A4.mp3', 'A5': 'A5.mp3',
+    'C3': 'C3.mp3', 'C4': 'C4.mp3', 'C5': 'C5.mp3', 'C6': 'C6.mp3',
+    'C#2': 'Cs2.mp3', 'D#3': 'Ds3.mp3', 'D#4': 'Ds4.mp3', 'D#5': 'Ds5.mp3',
+    'E2': 'E2.mp3', 'F#2': 'Fs2.mp3', 'F#3': 'Fs3.mp3', 'F#4': 'Fs4.mp3', 'F#5': 'Fs5.mp3'
 };
+
+// [REMOVED] 旧HMRhyA音源のマッピングは不要なため完全に削除
+// const heavyMetalUrls = { ... };
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value || !Tone) return;
@@ -133,10 +133,11 @@ watch(tuningParams, (newParams) => {
   }
 
   const eguitarTargetParams = newParams.target_eguitar;
-  if (heavyMetalSampler && eguitarTargetParams) {
-      if(eguitarTargetParams.volume !== undefined) heavyMetalSampler.volume.value = eguitarTargetParams.volume;
-      if(eguitarTargetParams.attack !== undefined) heavyMetalSampler.attack = eguitarTargetParams.attack;
-      if(eguitarTargetParams.release !== undefined) heavyMetalSampler.release = eguitarTargetParams.release;
+  // [UPDATE] 新しいクリーンギターサンプラーのパラメータを更新
+  if (cleanGuitarSampler && eguitarTargetParams) {
+      if(eguitarTargetParams.volume !== undefined) cleanGuitarSampler.volume.value = eguitarTargetParams.volume;
+      if(eguitarTargetParams.attack !== undefined) cleanGuitarSampler.attack = eguitarTargetParams.attack;
+      if(eguitarTargetParams.release !== undefined) cleanGuitarSampler.release = eguitarTargetParams.release;
   }
 
   for (const instrumentName in newParams) {
@@ -234,10 +235,11 @@ const initializeAudio = async () => {
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み開始 (Players & Samplers)...');
     
     const guitarParams = tuningParams.value['target_eguitar'];
-    const heavyMetalSamplerPromise = new Promise<void>(resolve => {
-        heavyMetalSampler = new Tone!.Sampler({
-            urls: heavyMetalUrls,
-            baseUrl: "/HMRhyA/",
+    // [NEW] 新しいクリーンギターサンプラーの読み込み処理
+    const cleanGuitarSamplerPromise = new Promise<void>(resolve => {
+        cleanGuitarSampler = new Tone!.Sampler({
+            urls: cleanGuitarUrls,
+            baseUrl: "/eguitar2/",
             volume: guitarParams.volume,
             attack: guitarParams.attack,
             release: guitarParams.release,
@@ -245,7 +247,7 @@ const initializeAudio = async () => {
         });
     });
     
-    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, heavyMetalSamplerPromise]);
+    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, cleanGuitarSamplerPromise]);
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み完了');
     
     loadingMessage.value = '楽器を最終調整しています...';
@@ -308,12 +310,13 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && heavyMetalSampler) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && cleanGuitarSampler) {
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
       
-      heavyMetalSampler.connect(masterComp);
+      // [UPDATE] 新しいクリーンギターサンプラーをマスターコンプに直結
+      cleanGuitarSampler.connect(masterComp);
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
@@ -427,7 +430,8 @@ const stopMusic = () => {
   }
   
   try {
-    heavyMetalSampler?.releaseAll();
+    // [UPDATE] 新しいサンプラーもreleaseAllを呼び出す
+    cleanGuitarSampler?.releaseAll();
     Object.values(samplers).forEach(s => s.sampler.releaseAll());
     Object.values(targetSamplers).forEach(s => s.sampler.releaseAll());
   } catch (e) {
@@ -440,7 +444,8 @@ const stopMusic = () => {
 
 
 const triggerGuitarSound = (note: string | string[], duration: ToneType.Unit.Time, time: ToneType.Unit.Time, velocity: number) => {
-    heavyMetalSampler?.triggerAttackRelease(note, duration, time, velocity);
+    // [UPDATE] 新しいクリーンギターサンプラーで音を再生
+    cleanGuitarSampler?.triggerAttackRelease(note, duration, time, velocity);
 }
 
 const togglePlayback = async () => { if (isPlaying.value) { stopMusic(); } else if (selectedMenu.value) { const [menuName, seed] = currentSeed.value.split(':'); if (menuName && seed) await playMusic(menuName, seed); } };
@@ -471,9 +476,9 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
         newRockBassSampler.sampler.triggerAttackRelease('E1', duration);
         return; 
       }
-
+      // [UPDATE] ギターのテスト再生を新しいクリーンギターサンプラーに変更
       if (instrumentName === 'target_eguitar' && now) {
-        triggerGuitarSound('D4', '1n', now, 0.9);
+        triggerGuitarSound('C4', '1n', now, 0.9);
       }
   } else {
       const samplerData = samplers[instrumentName];
@@ -599,7 +604,8 @@ const createJazzSound = (rng: () => number): boolean => {
 
 const createRockSound = (rng: () => number): boolean => {
     console.log('[GEMINI_DEBUG_LOG] createRockSound: Checking samplers...');
-    if (!Tone || !heavyMetalSampler || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler) {
+    // [UPDATE] 依存関係を新しいクリーンギターサンプラーに変更
+    if (!Tone || !cleanGuitarSampler || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler) {
         return false;
     }
     scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0;
@@ -674,7 +680,8 @@ const createRockSound = (rng: () => number): boolean => {
 
 const createLiteStyleRock = (rng: () => number): boolean => {
     const currentTone = Tone;
-    if (!currentTone || !heavyMetalSampler || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash || !newRockBassSampler || !newElecOrganSampler) {
+    // [UPDATE] 依存関係を新しいクリーンギターサンプラーに変更
+    if (!currentTone || !cleanGuitarSampler || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash || !newRockBassSampler || !newElecOrganSampler) {
         console.error('[GEMINI_DIAG_LOG] createLiteStyleRock: 必須サンプラーがありません。');
         return false;
     }
@@ -701,12 +708,11 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       snare: { note: snareNote, pattern: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0] },
       ride: { note: rideNote, pattern: [1,1,1,1,1,1,1,1] },
       bass: { note: '1', duration: '8n' }, // Octave 1
-      // [FIX] 不協和音の原因だったオルガンコードを、音楽的に正しい三和音（ルート、長3度、完全5度）に修正
       organ: { intervals: [0, 4, 7], duration: '1m' }, 
       guitar: [
-        { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:1', note: 'G3', duration: '8n' }, { time: '0:2', note: 'B3', duration: '4n'},
-        { time: '1:0', note: 'C4', duration: '4n' }, { time: '1:2', note: 'B3', duration: '4n'},
-        { time: '2:0', note: 'G3', duration: '2n' }, { time: '3:0', note: 'D4', duration: '2n' },
+        { time: '0:0', note: 'E4', duration: '8n' }, { time: '0:1', note: 'G4', duration: '8n' }, { time: '0:2', note: 'B4', duration: '4n'},
+        { time: '1:0', note: 'C5', duration: '4n' }, { time: '1:2', note: 'B4', duration: '4n'},
+        { time: '2:0', note: 'G4', duration: '2n' }, { time: '3:0', note: 'D5', duration: '2n' },
       ]
     };
 
@@ -861,7 +867,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       :isVisible="isSoundCheckModalVisible" 
       :instruments="instrumentList"
       :tuningParams="tuningParams"
-      :heavyMetalUrls="heavyMetalUrls"
+      :heavyMetalUrls="cleanGuitarUrls"
       @close="closeSoundCheckModal"
       @playSound="handlePlaySound"
       @playRawSample="handlePlayRawSample"
