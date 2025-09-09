@@ -248,10 +248,6 @@ const initializeAudio = async () => {
     await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, heavyMetalSamplerPromise]);
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み完了');
     
-    if (heavyMetalSampler && masterComp) {
-        heavyMetalSampler.connect(masterComp);
-    }
-
     loadingMessage.value = '楽器を最終調整しています...';
 
     const newBassUrls = {
@@ -312,10 +308,13 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && heavyMetalSampler) {
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
+      
+      // [FIX] heavyMetalSamplerを他のメロディ楽器と同様にエフェクトに接続
+      heavyMetalSampler.fan(masterComp, reverb, delay);
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
@@ -694,17 +693,17 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     if (!kickNote || !snareNote || !rideNote || !crashNote) return false;
 
     // --- Define Patterns ---
-    // ノート名はHMRhyAのサンプルキーと完全に一致させ、ピッチシフトによる音割れを防ぐ
     const verseKickPattern = [1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,0];
     const verseSnarePattern = [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0];
     const verseRidePattern = [1,1,1,1,1,1,1,1];
-    // ギターリフを音楽的に自然な8分音符のシーケンスとして再定義
+    // [FIX] Verseギターリフをより音楽的に洗練。時間表記を "M:B" 形式に統一。
     const verseGuitarRiffData: { time: string, note: string, duration: string }[] = [
-      { time: '0:0', note: 'E3', duration: '8n' },
-      { time: '0:2', note: 'G3', duration: '8n' },
-      { time: '1:0', note: 'A3', duration: '8n' },
-      { time: '1:2', note: 'G3', duration: '8n' },
-      { time: '2:0', note: 'D4', duration: '2n' },
+      { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:1', note: 'G3', duration: '8n' },
+      { time: '0:2', note: 'A3', duration: '8n' }, { time: '0:3', note: 'G3', duration: '8n' },
+      { time: '1:0', note: 'D4', duration: '4n' }, { time: '1:2', note: 'G3', duration: '4n' },
+      { time: '2:0', note: 'E3', duration: '8n' }, { time: '2:1', note: 'G3', duration: '8n' },
+      { time: '2:2', note: 'A3', duration: '8n' }, { time: '2:3', note: 'B3', duration: '8n' },
+      { time: '3:0', note: 'A3', duration: '2n' },
     ];
 
     const chorusKickPattern = [1,1,0,1,1,0,1,0,1,1,0,1,1,1,1,0];
@@ -735,7 +734,10 @@ const createLiteStyleRock = (rng: () => number): boolean => {
             verseKickPattern.forEach((v, i) => { if(v) kickEvents.push({ time: `${measure}:0:${i * 2}`, note: kickNote }) });
             verseSnarePattern.forEach((v, i) => { if(v) snareEvents.push({ time: `${measure}:0:${i * 2}`, note: snareNote }) });
             verseRidePattern.forEach((v, i) => { if(v) rideEvents.push({ time: `${measure}:${i}`, note: rideNote }) });
-            verseGuitarRiffData.forEach(d => guitarEvents.push({ time: `${measure}:${d.time}`, note: d.note, duration: d.duration }));
+            // 2小節単位のリフを適用
+            if (measure % 2 === 0) {
+              verseGuitarRiffData.forEach(d => guitarEvents.push({ time: `${measure + parseInt(d.time.split(':')[0]!)}:${d.time.split(':')[1]}`, note: d.note, duration: d.duration }));
+            }
         } else { // CHORUS
             chorusKickPattern.forEach((v, i) => { if(v) kickEvents.push({ time: `${measure}:0:${i * 2}`, note: kickNote }) });
             chorusSnarePattern.forEach((v, i) => { if(v) snareEvents.push({ time: `${measure}:0:${i * 2}`, note: snareNote }) });
