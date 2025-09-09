@@ -674,8 +674,8 @@ const createRockSound = (rng: () => number): boolean => {
 
 const createLiteStyleRock = (rng: () => number): boolean => {
     const currentTone = Tone;
-    if (!currentTone || !heavyMetalSampler || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash) {
-        console.error('[GEMINI_DIAG_LOG] createLiteStyleRock: 必須サンプラーまたはTone.jsがありません。');
+    if (!currentTone || !heavyMetalSampler || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash || !newRockBassSampler || !newElecOrganSampler) {
+        console.error('[GEMINI_DIAG_LOG] createLiteStyleRock: 必須サンプラーがありません。');
         return false;
     }
     
@@ -689,83 +689,79 @@ const createLiteStyleRock = (rng: () => number): boolean => {
     const { sampler: snare, baseNote: snareNote } = samplers.rockSnare;
     const { sampler: ride, baseNote: rideNote } = samplers.ride;
     const { sampler: crash, baseNote: crashNote } = samplers.crash;
+    const { sampler: bassSampler } = newRockBassSampler;
+    const { sampler: organSampler } = newElecOrganSampler;
+
     if (!kickNote || !snareNote || !rideNote || !crashNote) return false;
 
-    // --- Define Patterns ---
-    const verseKickPattern = [1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,0];
-    const verseSnarePattern = [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0];
-    const verseRidePattern = [1,1,1,1,1,1,1,1];
-    // [REVERT] 半音ずらしのテストを撤回し、音源に忠実なノートに戻す
-    const verseGuitarRiffData: { time: string, note: string, duration: string }[] = [
-      { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:1', note: 'G3', duration: '8n' },
-      { time: '0:2', note: 'A3', duration: '8n' }, { time: '0:3', note: 'G3', duration: '8n' },
-      { time: '1:0', note: 'D4', duration: '4n' }, { time: '1:2', note: 'G3', duration: '4n' },
-      { time: '2:0', note: 'E3', duration: '8n' }, { time: '2:1', note: 'G3', duration: '8n' },
-      { time: '2:2', note: 'A3', duration: '8n' }, { time: '2:3', note: 'B3', duration: '8n' },
-      { time: '3:0', note: 'A3', duration: '2n' },
-    ];
+    // --- Define Musical Data ---
+    const chordProgression = ['E', 'C', 'G', 'D'];
+    const parts = {
+      kick: { note: kickNote, pattern: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
+      snare: { note: snareNote, pattern: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0] },
+      ride: { note: rideNote, pattern: [1,1,1,1,1,1,1,1] },
+      bass: { note: '1', duration: '8n' }, // Octave 1
+      organ: { notes: ['3', '5', '7'], duration: '1m' }, // Play chord as whole note
+      guitar: [
+        { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:1', note: 'G3', duration: '8n' }, { time: '0:2', note: 'B3', duration: '4n'},
+        { time: '1:0', note: 'C4', duration: '4n' }, { time: '1:2', note: 'B3', duration: '4n'},
+        { time: '2:0', note: 'G3', duration: '2n' }, { time: '3:0', note: 'D4', duration: '2n' },
+      ]
+    };
 
-    const chorusKickPattern = [1,1,0,1,1,0,1,0,1,1,0,1,1,1,1,0];
-    const chorusSnarePattern = [0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,1];
-    // [REVERT] 半音ずらしのテストを撤回し、音源に忠実なノートに戻す
-    const chorusGuitarPartData: { time: string, note: string, duration: string }[] = [
-        { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:2', note: 'G3', duration: '8n' }, { time: '1:0', note: 'A3', duration: '8n' }, { time: '1:2', note: 'B3', duration: '8n' },
-        { time: '2:0', note: 'C4', duration: '8n' }, { time: '2:2', note: 'B3', duration: '8n' }, { time: '3:0', note: 'A3', duration: '8n' }, { time: '3:2', note: 'G3', duration: '8n' }
-    ];
-
-    const songStructure: Role[] = [];
-    for(let i=0; i<8; i++) songStructure.push(ROLES.VERSE);
-    for(let i=0; i<8; i++) songStructure.push(ROLES.CHORUS);
-    for(let i=0; i<8; i++) songStructure.push(ROLES.VERSE);
-    for(let i=0; i<8; i++) songStructure.push(ROLES.CHORUS);
-
-    // --- Pre-calculate full 32-bar score for each instrument ---
-    const kickEvents: { time: string, note: string }[] = [];
-    const snareEvents: { time: string, note: string }[] = [];
-    const rideEvents: { time: string, note: string }[] = [];
-    const crashEvents: { time: string, note: string }[] = [];
-    const guitarEvents: { time: string, note: string, duration: string }[] = [];
-
-    for (let measure = 0; measure < songStructure.length; measure++) {
-        const role = songStructure[measure];
-        const measureTime = `${measure}:0:0`;
-        
-        if (role === ROLES.VERSE) {
-            verseKickPattern.forEach((v, i) => { if(v) kickEvents.push({ time: `${measure}:0:${i * 2}`, note: kickNote }) });
-            verseSnarePattern.forEach((v, i) => { if(v) snareEvents.push({ time: `${measure}:0:${i * 2}`, note: snareNote }) });
-            verseRidePattern.forEach((v, i) => { if(v) rideEvents.push({ time: `${measure}:${i}`, note: rideNote }) });
-            // 2小節単位のリフを適用
-            if (measure % 2 === 0) {
-              verseGuitarRiffData.forEach(d => guitarEvents.push({ time: `${measure + parseInt(d.time.split(':')[0]!)}:${d.time.split(':')[1]}`, note: d.note, duration: d.duration }));
-            }
-        } else { // CHORUS
-            chorusKickPattern.forEach((v, i) => { if(v) kickEvents.push({ time: `${measure}:0:${i * 2}`, note: kickNote }) });
-            chorusSnarePattern.forEach((v, i) => { if(v) snareEvents.push({ time: `${measure}:0:${i * 2}`, note: snareNote }) });
-            if (measure % 4 === 0) crashEvents.push({ time: measureTime, note: crashNote });
-            chorusGuitarPartData.forEach(d => guitarEvents.push({ time: `${measure}:${d.time}`, note: d.note, duration: d.duration }));
-        }
-    }
+    // --- Pre-calculate full 32-bar score ---
+    const kickEvents: any[] = [], snareEvents: any[] = [], rideEvents: any[] = [], crashEvents: any[] = [],
+          bassEvents: any[] = [], organEvents: any[] = [], guitarEvents: any[] = [];
     
-    // --- [DIAGNOSTIC LOG] ---
-    console.log(`[GEMINI_DIAG_LOG] LITE-Style: ${guitarEvents.length}個のギターイベント（楽譜）を生成しました。最初の20件を検証します:`);
-    console.table(guitarEvents.slice(0, 20));
+    const songLength = 32; // Total bars
+    for (let measure = 0; measure < songLength; measure++) {
+      const chordRoot = chordProgression[measure % 4]!;
+      
+      // Drums
+      parts.kick.pattern.forEach((v, i) => { if(v) kickEvents.push({ time: `${measure}:0:${i*2}`, note: parts.kick.note }) });
+      parts.snare.pattern.forEach((v, i) => { if(v) snareEvents.push({ time: `${measure}:0:${i*2}`, note: parts.snare.note }) });
+      parts.ride.pattern.forEach((v, i) => { if(v) rideEvents.push({ time: `${measure}:${i}`, note: parts.ride.note }) });
+      if (measure > 0 && measure % 8 === 0) crashEvents.push({ time: `${measure}:0:0`, note: crashNote });
 
-    // --- Create one Part per instrument and schedule it ---
+      // Bass: Play root note on every 8th note
+      for (let beat = 0; beat < 4; beat++) {
+        for (let sixteenth = 0; sixteenth < 2; sixteenth++) {
+           bassEvents.push({ time: `${measure}:${beat}:${sixteenth * 2}`, note: `${chordRoot}${parts.bass.note}`, duration: parts.bass.duration });
+        }
+      }
+      
+      // Organ: Play one long chord per measure
+      const organChord = currentTone.Frequency(`${chordRoot}3`).harmonize(parts.organ.notes.map(n => parseInt(n)));
+      organEvents.push({ time: `${measure}:0:0`, note: organChord, duration: parts.organ.duration });
+
+      // Guitar: Play the riff every 4 bars
+      if (measure % 4 === 0) {
+        parts.guitar.forEach(d => {
+            const timeParts = d.time.split(':');
+            const newMeasure = measure + parseInt(timeParts[0]!);
+            guitarEvents.push({ time: `${newMeasure}:${timeParts[1]}:${timeParts[2] || 0}`, note: d.note, duration: d.duration });
+        });
+      }
+    }
+
+    // --- Create and schedule all parts ---
     const kickPart = new currentTone.Part(((time, value) => kick.triggerAttack(value.note, time)), kickEvents).start(0);
     const snarePart = new currentTone.Part(((time, value) => snare.triggerAttack(value.note, time)), snareEvents).start(0);
     const ridePart = new currentTone.Part(((time, value) => ride.triggerAttack(value.note, time, 0.7)), rideEvents).start(0);
     const crashPart = new currentTone.Part(((time, value) => crash.triggerAttack(value.note, time, 0.9)), crashEvents).start(0);
+    const bassPart = new currentTone.Part(((time, value) => bassSampler.triggerAttackRelease(value.note, value.duration, time)), bassEvents).start(0);
+    const organPart = new currentTone.Part(((time, value) => organSampler.triggerAttackRelease(value.note, value.duration, time)), organEvents).start(0);
     const guitarPart = new currentTone.Part(((time, value) => triggerGuitarSound(value.note, value.duration, time, 1.0)), guitarEvents).start(0);
+    
+    const allParts = [kickPart, snarePart, ridePart, crashPart, bassPart, organPart, guitarPart];
+    const loopEnd = `${songLength}m`;
+    allParts.forEach(part => {
+        part.loop = true;
+        part.loopEnd = loopEnd;
+        scheduledEvents.push(part);
+    });
 
-    const loopEnd = `${songStructure.length}m`;
-    kickPart.loop = true; kickPart.loopEnd = loopEnd;
-    snarePart.loop = true; snarePart.loopEnd = loopEnd;
-    ridePart.loop = true; ridePart.loopEnd = loopEnd;
-    crashPart.loop = true; crashPart.loopEnd = loopEnd;
-    guitarPart.loop = true; guitarPart.loopEnd = loopEnd;
-
-    scheduledEvents.push(kickPart, snarePart, ridePart, crashPart, guitarPart);
-    console.log(`[GEMINI_DIAG_LOG] createLiteStyleRock: 5つの独立したTone.Partをスケジュールしました。ループの終点は'${loopEnd}'です。`);
+    console.log(`[GEMINI_DIAG_LOG] createLiteStyleRock: ${allParts.length}つの楽器パートをスケジュールしました。ループの終点は'${loopEnd}'です。`);
     return true;
 };
 </script>
