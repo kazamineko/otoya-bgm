@@ -63,7 +63,7 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
-// [MASTER RECIPE] マスターご指定の最終パラメータを適用
+// [FINAL RECIPE] ギターサウンドの最終黄金比パラメータ
 const masterTunedParams: TuningParams = {
   "piano": { "volume": 0, "attack": 0.01, "release": 1 },
   "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
@@ -81,7 +81,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -3.7, "attack": 0.005, "release": 0.6, "distortion": 0.29, "eqLow": 4.5, "eqMid": -7.5, "eqHigh": 0 },
+  "target_eguitar": { "volume": -9, "attack": 0.005, "release": 0.6, "distortion": 0.6, "eqLow": 0, "eqMid": 6, "eqHigh": 3 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -518,11 +518,11 @@ const handlePlayDiagnosticSound = async (type: 'sampler' | 'dist' | 'eq' | 'cab'
     switch (type) {
       case 'sampler':
         console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> MasterComp");
-        diagnosticPlayer.connect(masterComp);
+        diagnosticPlayer.chain(postGain, masterComp);
         break;
       case 'dist':
-        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Chebyshev -> MasterComp");
-        diagnosticPlayer.chain(dist, masterComp);
+        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Chebyshev -> PostGain -> MasterComp");
+        diagnosticPlayer.chain(dist, postGain, masterComp);
         break;
       case 'eq':
         console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Chebyshev -> PostGain -> EQ -> MasterComp");
@@ -747,7 +747,6 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       ride: { note: rideNote, pattern: [1,1,1,1,1,1,1,1] },
       bass: { note: '1', duration: '8n' }, // Octave 1
       organ: { intervals: [0, 4, 7], duration: '1m' }, 
-      // [UPDATE] ギターパートを単音からパワーコード（ルート+5度）に変更
       guitar: [
         { time: '0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '0:1', note: ['G4', 'D5'], duration: '8n' }, { time: '0:2', note: ['B4', 'F#5'], duration: '4n'},
         { time: '1:0', note: ['C5', 'G5'], duration: '4n' }, { time: '1:2', note: ['B4', 'F#5'], duration: '4n'},
