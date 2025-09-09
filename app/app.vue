@@ -497,52 +497,55 @@ const handlePlayRawSample = async (payload: { url: string, folder: string }) => 
   }
 };
 
-// [DIAGNOSTIC] 診断ボタン用の再生ロジック
+// [FIX] 診断バスの非同期処理エラーを修正
 const handlePlayDiagnosticSound = async (type: 'sampler' | 'dist' | 'eq' | 'cab') => {
   if (!Tone || !cleanGuitarSampler || !guitarDistortion || !guitarEQ || !guitarCabinet || !masterComp) {
      alert('診断に必要な音源またはエフェクトが準備できていません。');
      return;
   }
   
-  // 診断用の独立したプレーヤーを作成し、干渉を防ぐ
-  const diagnosticPlayer = new Tone.Player({
-      url: `/eguitar2/${cleanGuitarUrls['C4']}`,
-      volume: tuningParams.value.target_eguitar.volume
-  }).toDestination();
-  await diagnosticPlayer.load;
+  // 1. 空のPlayerを生成
+  const diagnosticPlayer = new Tone.Player();
+  try {
+    // 2. 音源の読み込みを【await】で確実に待機する
+    await diagnosticPlayer.load(`/eguitar2/${cleanGuitarUrls['C4']}`);
+    diagnosticPlayer.volume.value = tuningParams.value.target_eguitar.volume;
 
-  // 既存のエフェクトノードを再利用
-  const dist = guitarDistortion;
-  const eq = guitarEQ;
-  const cab = guitarCabinet;
+    const dist = guitarDistortion;
+    const eq = guitarEQ;
+    const cab = guitarCabinet;
 
-  // 診断タイプに応じて接続を切り替え
-  switch (type) {
-    case 'sampler':
-      console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Destination");
-      diagnosticPlayer.connect(masterComp);
-      break;
-    case 'dist':
-      console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> Destination");
-      diagnosticPlayer.chain(dist, masterComp);
-      break;
-    case 'eq':
-       console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> EQ -> Destination");
-      diagnosticPlayer.chain(dist, eq, masterComp);
-      break;
-    case 'cab':
-       console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> EQ -> Cabinet -> Destination");
-      diagnosticPlayer.chain(dist, eq, cab, masterComp);
-      break;
+    // 3. 読み込み完了後、タイプに応じて接続
+    switch (type) {
+      case 'sampler':
+        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> MasterComp");
+        diagnosticPlayer.connect(masterComp);
+        break;
+      case 'dist':
+        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> MasterComp");
+        diagnosticPlayer.chain(dist, masterComp);
+        break;
+      case 'eq':
+        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> EQ -> MasterComp");
+        diagnosticPlayer.chain(dist, eq, masterComp);
+        break;
+      case 'cab':
+        console.log("[GEMINI_DIAGNOSTIC] Playing Sampler -> Distortion -> EQ -> Cabinet -> MasterComp");
+        diagnosticPlayer.chain(dist, eq, cab, masterComp);
+        break;
+    }
+    // 4. 接続完了後、再生を開始
+    diagnosticPlayer.start();
+    
+    diagnosticPlayer.onstop = () => {
+      diagnosticPlayer.dispose();
+    };
+  } catch (error) {
+    console.error("[GEMINI_DIAGNOSTIC] 診断サウンドの読み込みまたは再生に失敗:", error);
+    alert("診断用サウンドの再生に失敗しました。");
   }
-
-  diagnosticPlayer.start();
-  
-  // 再生終了後にプレーヤーを破棄
-  diagnosticPlayer.onstop = () => {
-    diagnosticPlayer.dispose();
-  };
 };
+
 
 const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => {
   if (tuningParams.value[payload.instrument]) {

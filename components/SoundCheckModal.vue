@@ -72,7 +72,6 @@
                      <span>{{ tuningParams['target_eguitar'].eqHigh.toFixed(1) }} dB</span>
                   </div>
                   
-                  <!-- [DIAGNOSTIC] 診断バスの実装 -->
                   <div class="sub-header">サウンド診断バス</div>
                   <div class="diagnostic-bus">
                     <button @click.prevent="playDiagnosticSound('sampler')">① Sampler単体</button>
@@ -161,7 +160,6 @@ const emit = defineEmits(['close', 'playSound', 'playRawSample', 'playDiagnostic
 const close = () => emit('close');
 const playSound = (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => emit('playSound', instrumentName, type);
 const playRawSample = (url: string, folder: string) => emit('playRawSample', { url, folder });
-// [DIAGNOSTIC] 診断バス用のemit
 const playDiagnosticSound = (type: 'sampler' | 'dist' | 'eq' | 'cab') => emit('playDiagnosticSound', type);
 const saveParams = () => emit('saveParams');
 const exportParams = () => emit('exportParams');
