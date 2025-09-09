@@ -701,7 +701,8 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       snare: { note: snareNote, pattern: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0] },
       ride: { note: rideNote, pattern: [1,1,1,1,1,1,1,1] },
       bass: { note: '1', duration: '8n' }, // Octave 1
-      organ: { notes: ['3', '5', '7'], duration: '1m' }, // Play chord as whole note
+      // [FIX] 不協和音の原因だったオルガンコードを、音楽的に正しい三和音（ルート、長3度、完全5度）に修正
+      organ: { intervals: [0, 4, 7], duration: '1m' }, 
       guitar: [
         { time: '0:0', note: 'E3', duration: '8n' }, { time: '0:1', note: 'G3', duration: '8n' }, { time: '0:2', note: 'B3', duration: '4n'},
         { time: '1:0', note: 'C4', duration: '4n' }, { time: '1:2', note: 'B3', duration: '4n'},
@@ -731,7 +732,7 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       }
       
       // Organ: Play one long chord per measure
-      const organChord = currentTone.Frequency(`${chordRoot}3`).harmonize(parts.organ.notes.map(n => parseInt(n)));
+      const organChord = currentTone.Frequency(`${chordRoot}3`).harmonize(parts.organ.intervals);
       organEvents.push({ time: `${measure}:0:0`, note: organChord, duration: parts.organ.duration });
 
       // Guitar: Play the riff every 4 bars
