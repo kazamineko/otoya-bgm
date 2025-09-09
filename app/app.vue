@@ -63,7 +63,7 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
-// [FINAL RECIPE] クランチサウンドを実現するための最終パラメータ
+// [MASTER RECIPE] マスターご指定の最終パラメータを適用
 const masterTunedParams: TuningParams = {
   "piano": { "volume": 0, "attack": 0.01, "release": 1 },
   "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
@@ -81,7 +81,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -12, "attack": 0.005, "release": 0.6, "distortion": 0.3, "eqLow": 1, "eqMid": -2, "eqHigh": 1.5 },
+  "target_eguitar": { "volume": -3.7, "attack": 0.005, "release": 0.6, "distortion": 0.29, "eqLow": 4.5, "eqMid": -7.5, "eqHigh": 0 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -692,7 +692,7 @@ const createRockSound = (rng: () => number): boolean => {
       const leadVelocity = isGhostNote ? vel * 0.3 : vel;
 
       const leadAction = {
-        'guitar': () => triggerGuitarSound(`${rootNote}4`, '4n', time, leadVelocity),
+        'guitar': () => triggerGuitarSound([`${rootNote}4`, `${rootNote}5`], '4n', time, leadVelocity),
         'synth': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '8n', time, leadVelocity),
         'organ': () => newElecOrganSampler?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity * 0.8),
       };
@@ -700,7 +700,7 @@ const createRockSound = (rng: () => number): boolean => {
       const padAction = {
           'guitar': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`], '2n', time, vel * 0.6),
           'synth': () => {
-              triggerGuitarSound(`${rootNote}4`, '8n', time, vel * 0.8);
+              triggerGuitarSound([`${rootNote}4`, `${rootNote}5`], '8n', time, vel * 0.8);
           },
           'organ': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}5`], '2n', time, vel * 0.6)
       };
@@ -747,10 +747,11 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       ride: { note: rideNote, pattern: [1,1,1,1,1,1,1,1] },
       bass: { note: '1', duration: '8n' }, // Octave 1
       organ: { intervals: [0, 4, 7], duration: '1m' }, 
+      // [UPDATE] ギターパートを単音からパワーコード（ルート+5度）に変更
       guitar: [
-        { time: '0:0', note: 'E4', duration: '8n' }, { time: '0:1', note: 'G4', duration: '8n' }, { time: '0:2', note: 'B4', duration: '4n'},
-        { time: '1:0', note: 'C5', duration: '4n' }, { time: '1:2', note: 'B4', duration: '4n'},
-        { time: '2:0', note: 'G4', duration: '2n' }, { time: '3:0', note: 'D5', duration: '2n' },
+        { time: '0:0', note: ['E4', 'B4'], duration: '8n' }, { time: '0:1', note: ['G4', 'D5'], duration: '8n' }, { time: '0:2', note: ['B4', 'F#5'], duration: '4n'},
+        { time: '1:0', note: ['C5', 'G5'], duration: '4n' }, { time: '1:2', note: ['B4', 'F#5'], duration: '4n'},
+        { time: '2:0', note: ['G4', 'D5'], duration: '2n' }, { time: '3:0', note: ['D5', 'A5'], duration: '2n' },
       ]
     };
 
