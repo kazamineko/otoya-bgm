@@ -32,7 +32,6 @@ let newElecOrganSampler: { sampler: ToneType.Sampler, baseNote: string } | null 
 
 let rawMp3Player: ToneType.Player | null = null;
 
-// [UPDATE] DistortionをChebyshevに変更
 let guitarChebyshev: ToneType.Chebyshev | null = null;
 let guitarEQ: ToneType.EQ3 | null = null;
 let guitarCabinet: ToneType.Convolver | null = null;
@@ -64,6 +63,7 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
+// [UPDATE] 「ぎゅおおおん」サウンドを実現するための黄金比パラメータ
 const masterTunedParams: TuningParams = {
   "piano": { "volume": 0, "attack": 0.01, "release": 1 },
   "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
@@ -81,7 +81,7 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": -6, "attack": 0.005, "release": 0.6, "distortion": 0.8, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
+  "target_eguitar": { "volume": -9, "attack": 0.005, "release": 0.6, "distortion": 0.9, "eqLow": 2, "eqMid": -9, "eqHigh": 3 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
@@ -126,7 +126,6 @@ watch(tuningParams, (newParams) => {
       if(guitarPostGain && eguitarTargetParams.volume !== undefined) guitarPostGain.volume.value = eguitarTargetParams.volume;
       if(eguitarTargetParams.attack !== undefined) cleanGuitarSampler.attack = eguitarTargetParams.attack;
       if(eguitarTargetParams.release !== undefined) cleanGuitarSampler.release = eguitarTargetParams.release;
-      // [UPDATE] DistortionスライダーがChebyshevのwet値を制御
       if(guitarChebyshev && eguitarTargetParams.distortion !== undefined) guitarChebyshev.wet.value = eguitarTargetParams.distortion;
       if(guitarEQ) {
         if(eguitarTargetParams.eqLow !== undefined) guitarEQ.low.value = eguitarTargetParams.eqLow;
@@ -220,8 +219,8 @@ const initializeAudio = async () => {
     });
     
     const guitarP = tuningParams.value.target_eguitar;
-    // [UPDATE] DistortionをChebyshevに換装。orderを高く設定して倍音を増やす。
-    guitarChebyshev = new Tone.Chebyshev(50);
+    // [FIX] Chebyshevの次数を音楽的な '2' に変更
+    guitarChebyshev = new Tone.Chebyshev(2);
     guitarChebyshev.wet.value = guitarP.distortion;
     guitarEQ = new Tone.EQ3(guitarP.eqLow, guitarP.eqMid, guitarP.eqHigh);
     guitarCabinet = new Tone.Convolver('/ir/ir-guitar-cab.wav');
@@ -914,7 +913,8 @@ const createLiteStyleRock = (rng: () => number): boolean => {
       @playDiagnosticSound="handlePlayDiagnosticSound"
       @update-param="handleUpdateParam"
       @save-params="handleSaveParams"
-      @export-params="handleResetParams"
+      @export-params="handleExportParams"
+      @reset-params="handleResetParams"
       @set-extreme-eq="handleSetExtremeEq"
     />
   </div>
