@@ -34,16 +34,10 @@ let newElecOrganSampler: { sampler: ToneType.Sampler, baseNote: string } | null 
 // DEBUG: Raw MP3 Player
 let rawMp3Player: ToneType.Player | null = null;
 
-// 旧ギターエフェクト群 (機能は温存)
-let guitarPitchShift: ToneType.PitchShift | null = null;
-let guitarVibrato: ToneType.Vibrato | null = null;
-let guitarEQ: ToneType.EQ3 | null = null;
-let guitarMidEQ: ToneType.EQ3 |
-null = null;
+// [RE-IMPLEMENT] ギター専用エフェクトチェーン
 let guitarDistortion: ToneType.Distortion | null = null;
-let guitarCabinetFilter: ToneType.Filter | null = null;
-let guitarComp: ToneType.Compressor | null = null;
-let guitarChorus: ToneType.Chorus | null = null;
+let guitarEQ: ToneType.EQ3 | null = null;
+let guitarCabinet: ToneType.Convolver | null = null;
 let bassEQNode: ToneType.EQ3 | null = null;
 
 let rawSamplePlayers: ToneType.Players |
@@ -88,22 +82,19 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { "volume": 0, "attack": 0.005, "release": 0.6, "detune": 0, "eqLow": 0, "eqMid": 0, "eqHigh": 0, "distortion": 0.00 },
+  // [UPDATE] ギターのチューニングパラメータにDistortionとEQを再設定
+  "target_eguitar": { "volume": -6, "attack": 0.005, "release": 0.6, "distortion": 0.4, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
 };
 
-// [NEW] 新しいクリーンギター音源のマッピング
 const cleanGuitarUrls = {
     'A2': 'A2.mp3', 'A3': 'A3.mp3', 'A4': 'A4.mp3', 'A5': 'A5.mp3',
     'C3': 'C3.mp3', 'C4': 'C4.mp3', 'C5': 'C5.mp3', 'C6': 'C6.mp3',
     'C#2': 'Cs2.mp3', 'D#3': 'Ds3.mp3', 'D#4': 'Ds4.mp3', 'D#5': 'Ds5.mp3',
     'E2': 'E2.mp3', 'F#2': 'Fs2.mp3', 'F#3': 'Fs3.mp3', 'F#4': 'Fs4.mp3', 'F#5': 'Fs5.mp3'
 };
-
-// [REMOVED] 旧HMRhyA音源のマッピングは不要なため完全に削除
-// const heavyMetalUrls = { ... };
 
 watch(tuningParams, (newParams) => {
   if (!isAudioInitialized.value || !Tone) return;
@@ -133,11 +124,17 @@ watch(tuningParams, (newParams) => {
   }
 
   const eguitarTargetParams = newParams.target_eguitar;
-  // [UPDATE] 新しいクリーンギターサンプラーのパラメータを更新
   if (cleanGuitarSampler && eguitarTargetParams) {
       if(eguitarTargetParams.volume !== undefined) cleanGuitarSampler.volume.value = eguitarTargetParams.volume;
       if(eguitarTargetParams.attack !== undefined) cleanGuitarSampler.attack = eguitarTargetParams.attack;
       if(eguitarTargetParams.release !== undefined) cleanGuitarSampler.release = eguitarTargetParams.release;
+      // [NEW] 新しいエフェクトチェーンのパラメータをチューニングと連動
+      if(guitarDistortion && eguitarTargetParams.distortion !== undefined) guitarDistortion.distortion = eguitarTargetParams.distortion;
+      if(guitarEQ) {
+        if(eguitarTargetParams.eqLow !== undefined) guitarEQ.low.value = eguitarTargetParams.eqLow;
+        if(eguitarTargetParams.eqMid !== undefined) guitarEQ.mid.value = eguitarTargetParams.eqMid;
+        if(eguitarTargetParams.eqHigh !== undefined) guitarEQ.high.value = eguitarTargetParams.eqHigh;
+      }
   }
 
   for (const instrumentName in newParams) {
@@ -223,6 +220,13 @@ const initializeAudio = async () => {
         mid: ebassTargetP.eqMid,
         high: ebassTargetP.eqHigh
     });
+    
+    // [NEW] ギターエフェクトチェーンのインスタンス化
+    const guitarP = tuningParams.value.target_eguitar;
+    guitarDistortion = new Tone.Distortion(guitarP.distortion);
+    guitarEQ = new Tone.EQ3(guitarP.eqLow, guitarP.eqMid, guitarP.eqHigh);
+    guitarCabinet = new Tone.Convolver('/ir/ir-guitar-cab.wav');
+
     console.log('[GEMINI_DEBUG_LOG] 全てのエフェクトノードをインスタンス化完了');
     
     loadingMessage.value = 'AI奏者を準備しています...';
@@ -235,7 +239,6 @@ const initializeAudio = async () => {
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み開始 (Players & Samplers)...');
     
     const guitarParams = tuningParams.value['target_eguitar'];
-    // [NEW] 新しいクリーンギターサンプラーの読み込み処理
     const cleanGuitarSamplerPromise = new Promise<void>(resolve => {
         cleanGuitarSampler = new Tone!.Sampler({
             urls: cleanGuitarUrls,
@@ -247,7 +250,7 @@ const initializeAudio = async () => {
         });
     });
     
-    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, cleanGuitarSamplerPromise]);
+    await Promise.all([targetGuitarPlayer.load, targetBassPlayer.load, cleanGuitarSamplerPromise, guitarCabinet.load]);
     console.log('[GEMINI_DEBUG_LOG] 音声ファイルの読み込み完了');
     
     loadingMessage.value = '楽器を最終調整しています...';
@@ -310,13 +313,13 @@ const initializeAudio = async () => {
     }
     
     console.log('[GEMINI_DEBUG_LOG] シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && cleanGuitarSampler) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && cleanGuitarSampler && guitarDistortion && guitarEQ && guitarCabinet) {
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
       
-      // [UPDATE] 新しいクリーンギターサンプラーをマスターコンプに直結
-      cleanGuitarSampler.connect(masterComp);
+      // [NEW] ギターのDI信号を、構築した仮想アンプリグを通してマスターコンプへ接続
+      cleanGuitarSampler.chain(guitarDistortion, guitarEQ, guitarCabinet, masterComp);
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
 
@@ -430,7 +433,6 @@ const stopMusic = () => {
   }
   
   try {
-    // [UPDATE] 新しいサンプラーもreleaseAllを呼び出す
     cleanGuitarSampler?.releaseAll();
     Object.values(samplers).forEach(s => s.sampler.releaseAll());
     Object.values(targetSamplers).forEach(s => s.sampler.releaseAll());
@@ -444,7 +446,6 @@ const stopMusic = () => {
 
 
 const triggerGuitarSound = (note: string | string[], duration: ToneType.Unit.Time, time: ToneType.Unit.Time, velocity: number) => {
-    // [UPDATE] 新しいクリーンギターサンプラーで音を再生
     cleanGuitarSampler?.triggerAttackRelease(note, duration, time, velocity);
 }
 
@@ -476,7 +477,6 @@ const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' |
         newRockBassSampler.sampler.triggerAttackRelease('E1', duration);
         return; 
       }
-      // [UPDATE] ギターのテスト再生を新しいクリーンギターサンプラーに変更
       if (instrumentName === 'target_eguitar' && now) {
         triggerGuitarSound('C4', '1n', now, 0.9);
       }
@@ -604,7 +604,6 @@ const createJazzSound = (rng: () => number): boolean => {
 
 const createRockSound = (rng: () => number): boolean => {
     console.log('[GEMINI_DEBUG_LOG] createRockSound: Checking samplers...');
-    // [UPDATE] 依存関係を新しいクリーンギターサンプラーに変更
     if (!Tone || !cleanGuitarSampler || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler) {
         return false;
     }
@@ -653,7 +652,7 @@ const createRockSound = (rng: () => number): boolean => {
       const leadVelocity = isGhostNote ? vel * 0.3 : vel;
 
       const leadAction = {
-        'guitar': () => triggerGuitarSound(`${rootNote}3`, '4n', time, leadVelocity),
+        'guitar': () => triggerGuitarSound(`${rootNote}4`, '4n', time, leadVelocity),
         'synth': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '8n', time, leadVelocity),
         'organ': () => newElecOrganSampler?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity * 0.8),
       };
@@ -661,7 +660,7 @@ const createRockSound = (rng: () => number): boolean => {
       const padAction = {
           'guitar': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`], '2n', time, vel * 0.6),
           'synth': () => {
-              triggerGuitarSound(`${rootNote}3`, '8n', time, vel * 0.8);
+              triggerGuitarSound(`${rootNote}4`, '8n', time, vel * 0.8);
           },
           'organ': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}5`], '2n', time, vel * 0.6)
       };
@@ -680,7 +679,6 @@ const createRockSound = (rng: () => number): boolean => {
 
 const createLiteStyleRock = (rng: () => number): boolean => {
     const currentTone = Tone;
-    // [UPDATE] 依存関係を新しいクリーンギターサンプラーに変更
     if (!currentTone || !cleanGuitarSampler || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash || !newRockBassSampler || !newElecOrganSampler) {
         console.error('[GEMINI_DIAG_LOG] createLiteStyleRock: 必須サンプラーがありません。');
         return false;

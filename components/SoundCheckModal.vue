@@ -34,7 +34,7 @@
             
             <div class="sliders" v-if="tuningParams[instrument] || tuningParams['target_' + instrument]">
               <template v-if="instrument === 'eguitar' || instrument === 'ebass'">
-                <div class="sub-header">{{ instrument === 'eguitar' ? 'HM-A サンプル設定' : 'Sampler 設定' }}</div>
+                <div class="sub-header">{{ instrument === 'eguitar' ? 'Clean Guitar Amp' : 'Sampler 設定' }}</div>
                 <div class="slider-container">
                   <label>Volume</label>
                   <input type="range" min="-40" max="6" step="0.1" :value="tuningParams['target_' + instrument].volume" @input="updateParam('target_' + instrument, 'volume', $event)">
@@ -53,30 +53,30 @@
                 <template v-if="instrument === 'eguitar'">
                    <div class="slider-container">
                     <label>Distortion</label>
-                    <input type="range" min="0" max="1" step="0.01" :value="tuningParams['target_eguitar'].distortion" @input="updateParam('target_eguitar', 'distortion', $event)" disabled>
-                    <span style="color: #999;">(Direct)</span>
+                    <input type="range" min="0" max="1" step="0.01" :value="tuningParams['target_eguitar'].distortion" @input="updateParam('target_eguitar', 'distortion', $event)">
+                    <span>{{ tuningParams['target_eguitar'].distortion.toFixed(2) }}</span>
                   </div>
                   <div class="slider-container">
                     <label>EQ Low</label>
-                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqLow" @input="updateParam('target_eguitar', 'eqLow', $event)" disabled>
-                    <span style="color: #999;">(Direct)</span>
+                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqLow" @input="updateParam('target_eguitar', 'eqLow', $event)">
+                    <span>{{ tuningParams['target_eguitar'].eqLow.toFixed(1) }} dB</span>
                   </div>
                   <div class="slider-container">
                     <label>EQ Mid</label>
-                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqMid" @input="updateParam('target_eguitar', 'eqMid', $event)" disabled>
-                     <span style="color: #999;">(Direct)</span>
+                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqMid" @input="updateParam('target_eguitar', 'eqMid', $event)">
+                     <span>{{ tuningParams['target_eguitar'].eqMid.toFixed(1) }} dB</span>
                   </div>
                   <div class="slider-container">
                     <label>EQ High</label>
-                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqHigh" @input="updateParam('target_eguitar', 'eqHigh', $event)" disabled>
-                     <span style="color: #999;">(Direct)</span>
+                    <input type="range" min="-12" max="12" step="0.5" :value="tuningParams['target_eguitar'].eqHigh" @input="updateParam('target_eguitar', 'eqHigh', $event)">
+                     <span>{{ tuningParams['target_eguitar'].eqHigh.toFixed(1) }} dB</span>
                   </div>
 
-                  <div class="sub-header">Raw MP3 Playback (HMRhyA)</div>
+                  <div class="sub-header">Raw MP3 Playback (eguitar2)</div>
                   <div class="raw-samples-container">
                     <div class="raw-sample-group">
                       <div class="play-buttons diagnostic-grid">
-                        <button v-for="(url, note) in heavyMetalUrls" :key="`hm-${note}`" @click.prevent="playRawSample(url, 'HMRhyA')">
+                        <button v-for="(url, note) in heavyMetalUrls" :key="`hm-${note}`" @click.prevent="playRawSample(url, 'eguitar2')">
                           {{ note }}: {{ url }}
                         </button>
                       </div>
