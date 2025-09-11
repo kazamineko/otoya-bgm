@@ -6,6 +6,9 @@ import AboutModal from '../components/AboutModal.vue';
 import SoundCheckModal from '../components/SoundCheckModal.vue';
 
 const guitarAudioLog = (...args: any[]) => { console.log('[OTOYA_GUITAR_LOG]', ...args); };
+// [GEMINI] 診断バス専用のロガーを追加
+const diagnosticLog = (...args: any[]) => { console.log('%c[OTOYA_DIAGNOSTIC]', 'color: #e67e22;', ...args); };
+
 
 const selectedMenu = ref<string | null>(null);
 const isPlaying = ref(false);
@@ -221,11 +224,10 @@ const initializeAudio = async () => {
     
     await Tone.loaded();
 
-    // [GEMINI] FIX: マスターの啓示に基づき、診断バスを再現する方式で強制暖機運転を行う
     if (Tone && guitarCompressor && guitarNoiseGate && guitarChebyshev && guitarEQ && guitarPostGain && guitarCabinet && masterComp) {
-        guitarAudioLog('ギター信号経路の強制暖機運転（診断バス再現方式）を開始...');
+        guitarAudioLog('ギター信号経路の強制暖機運転（マスター方式）を開始...');
         const primingPlayer = new Tone.Player();
-        const primingMute = new Tone.Volume(-Infinity); // 完全な無音化
+        const primingMute = new Tone.Volume(-Infinity);
         
         await primingPlayer.load(`/eguitar2/${cleanGuitarUrls['C4']}`);
         guitarAudioLog(' -> 暖機運転用の音源ロード完了');
@@ -240,7 +242,7 @@ const initializeAudio = async () => {
         primingPlayer.start();
         guitarAudioLog(' -> 暖機運転用の信号を発射');
 
-        await new Promise(resolve => setTimeout(resolve, 100)); // 100ms待機して全ノードを確実に起動
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         primingPlayer.dispose();
         primingMute.dispose();
@@ -260,111 +262,17 @@ const initializeAudio = async () => {
 
 onUnmounted(() => { stopMusic(); });
 
-const playMusic = async (menuName: string, seed?: string) => {
-  if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) return; }
-  if (isPlaying.value) stopMusic();
-  const randomPart = seed || Date.now().toString(36) + Math.random().toString(36).substring(2);
-  const newSeed = `${menuName}:${randomPart}`;
-  const rng = seedrandom(randomPart);
-  let musicGenerated = false;
-  switch (menuName) {
-    case '集中ブレンド': musicGenerated = createConcentrationSound(rng); break;
-    case 'リラックス・デカフェ': musicGenerated = createRelaxSound(rng); break;
-    case 'ジャズ・スペシャル': musicGenerated = createJazzSound(rng); break;
-    case 'Lo-Fi・ビター': musicGenerated = createLoFiSound(rng); break;
-    case 'ロック・ビート': musicGenerated = createRockSound(rng); break;
-    case 'LITE-Style・Post Rock': musicGenerated = createLiteStyleRock(rng); break;
-  }
-  if (musicGenerated && Tone) {
-    currentSeed.value = newSeed; 
-    Tone.Transport.start(); 
-    isPlaying.value = true; 
-    selectedMenu.value = menuName;
-  } else if (!seed) { 
-    alert('このメニューは現在準備中です。'); 
-  }
-};
-
-const stopMusic = () => {
-  if (!isPlaying.value || !Tone) return;
-  Tone.Transport.stop(); 
-  Tone.Transport.cancel(0);
-  scheduledEvents.forEach(event => { try { if (event && event.state === "started") event.stop(0); } catch (e) { console.warn(`イベント停止エラー:`, e); } });
-  scheduledEvents.forEach(event => { try { if (event && !event.disposed) event.dispose(); } catch (e) { console.warn(`イベント破棄エラー:`, e); } });
-  scheduledEvents.length = 0;
-  if (noise) { try { noise.stop(0); noise.dispose(); noise = null; } catch (e) { console.warn(`ノイズ停止エラー:`, e); } }
-  try {
-    cleanGuitarSampler?.releaseAll();
-    Object.values(samplers).forEach(s => s.sampler.releaseAll());
-    Object.values(targetSamplers).forEach(s => s.sampler.releaseAll());
-  } catch (e) { console.warn(`サンプラーリリースエラー:`, e); }
-  isPlaying.value = false;
-};
-
-
-const triggerGuitarSound = (note: string | string[], duration: ToneType.Unit.Time, time: ToneType.Unit.Time, velocity: number) => {
-    guitarAudioLog(`triggerGuitarSound: 発音リクエスト`, { note, duration, time, velocity });
-    if (cleanGuitarSampler) {
-      guitarAudioLog(` -> cleanGuitarSamplerは正常。triggerAttackReleaseを実行。`);
-      cleanGuitarSampler.triggerAttackRelease(note, duration, time, velocity);
-    } else {
-      guitarAudioLog(` -> [致命的エラー] cleanGuitarSamplerがnullのため、発音できません。`);
-    }
-}
-
-const togglePlayback = async () => { if (isPlaying.value) { stopMusic(); } else if (selectedMenu.value) { const [menuName, seed] = currentSeed.value.split(':'); if (menuName && seed) await playMusic(menuName, seed); } };
-const handleVolumeChange = (event: Event) => { const newVolume = parseFloat((event.target as HTMLInputElement).value); volume.value = newVolume; if (isAudioInitialized.value && Tone) { Tone.Destination.volume.value = Tone.gainToDb(newVolume); } };
-const openModal = () => { isModalVisible.value = true; };
-const closeModal = () => { isModalVisible.value = false; };
-const copySeed = () => { if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value); };
-const playFromSeed = async () => { 
-  const [menuName, seed] = seedInput.value.split(':');
-  const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート', 'LITE-Style・Post Rock']; 
-  if (menuName && seed && validMenus.includes(menuName)) { 
-    await playMusic(menuName, seed); 
-  } else { 
-    alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); 
-  } 
-};
-
-const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; };
-const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
-
-const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => {
-  if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; } }
-  
-  const duration = '2n';
-  const now = Tone?.now();
-  if (type === 'target_sampler') {
-      if (instrumentName === 'target_ebass' && newRockBassSampler) {
-        newRockBassSampler.sampler.triggerAttackRelease('E1', duration);
-        return; 
-      }
-      if (instrumentName === 'target_eguitar' && now) {
-        guitarAudioLog('サウンドチューニング画面から「最終アウトプット」がトリガーされました。');
-        triggerGuitarSound('C4', '1n', now, 0.9);
-      }
-  } else {
-      const samplerData = samplers[instrumentName];
-      if (type === 'sampler' && samplerData && samplerData.baseNote) { samplerData.sampler.triggerAttackRelease(samplerData.baseNote, duration); }
-      else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) { rawSamplePlayers.player(instrumentName).start(); }
-      else if (type === 'target' && instrumentName === 'eguitar' && targetGuitarPlayer) { targetGuitarPlayer.start(); }
-      else if (type === 'target' && instrumentName === 'ebass' && targetBassPlayer) { targetBassPlayer.start(); }
-  }
-};
-
-const handlePlayRawSample = async (payload: { url: string, folder: string }) => {
-  if (!rawMp3Player) return;
-  const fullUrl = `/${payload.folder}/${payload.url}`;
-  try {
-    if (rawMp3Player.state === 'started') { rawMp3Player.stop(); }
-    await rawMp3Player.load(fullUrl);
-    rawMp3Player.start();
-  } catch (e) { console.error(`Failed to load or play raw sample ${fullUrl}`, e); }
-};
+const playMusic = async (menuName: string, seed?: string) => { if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) return; } if (isPlaying.value) stopMusic(); const randomPart = seed || Date.now().toString(36) + Math.random().toString(36).substring(2); const newSeed = `${menuName}:${randomPart}`; const rng = seedrandom(randomPart); let musicGenerated = false; switch (menuName) { case '集中ブレンド': musicGenerated = createConcentrationSound(rng); break; case 'リラックス・デカフェ': musicGenerated = createRelaxSound(rng); break; case 'ジャズ・スペシャル': musicGenerated = createJazzSound(rng); break; case 'Lo-Fi・ビター': musicGenerated = createLoFiSound(rng); break; case 'ロック・ビート': musicGenerated = createRockSound(rng); break; case 'LITE-Style・Post Rock': musicGenerated = createLiteStyleRock(rng); break; } if (musicGenerated && Tone) { currentSeed.value = newSeed; Tone.Transport.start(); isPlaying.value = true; selectedMenu.value = menuName; } else if (!seed) { alert('このメニューは現在準備中です。'); } };
+const stopMusic = () => { if (!isPlaying.value || !Tone) return; Tone.Transport.stop(); Tone.Transport.cancel(0); scheduledEvents.forEach(event => { try { if (event && event.state === "started") event.stop(0); } catch (e) { console.warn(`イベント停止エラー:`, e); } }); scheduledEvents.forEach(event => { try { if (event && !event.disposed) event.dispose(); } catch (e) { console.warn(`イベント破棄エラー:`, e); } }); scheduledEvents.length = 0; if (noise) { try { noise.stop(0); noise.dispose(); noise = null; } catch (e) { console.warn(`ノイズ停止エラー:`, e); } } try { cleanGuitarSampler?.releaseAll(); Object.values(samplers).forEach(s => s.sampler.releaseAll()); Object.values(targetSamplers).forEach(s => s.sampler.releaseAll()); } catch (e) { console.warn(`サンプラーリリースエラー:`, e); } isPlaying.value = false; };
+const triggerGuitarSound = (note: string | string[], duration: ToneType.Unit.Time, time: ToneType.Unit.Time, velocity: number) => { guitarAudioLog(`triggerGuitarSound: 発音リクエスト`, { note, duration, time, velocity }); if (cleanGuitarSampler) { guitarAudioLog(` -> cleanGuitarSamplerは正常。triggerAttackReleaseを実行。`); cleanGuitarSampler.triggerAttackRelease(note, duration, time, velocity); } else { guitarAudioLog(` -> [致命的エラー] cleanGuitarSamplerがnullのため、発音できません。`); } }
+const togglePlayback = async () => { if (isPlaying.value) { stopMusic(); } else if (selectedMenu.value) { const [menuName, seed] = currentSeed.value.split(':'); if (menuName && seed) await playMusic(menuName, seed); } }; const handleVolumeChange = (event: Event) => { const newVolume = parseFloat((event.target as HTMLInputElement).value); volume.value = newVolume; if (isAudioInitialized.value && Tone) { Tone.Destination.volume.value = Tone.gainToDb(newVolume); } }; const openModal = () => { isModalVisible.value = true; }; const closeModal = () => { isModalVisible.value = false; }; const copySeed = () => { if(currentSeed.value) navigator.clipboard.writeText(currentSeed.value); };
+const playFromSeed = async () => { const [menuName, seed] = seedInput.value.split(':'); const validMenus = ['集中ブレンド', 'リラックス・デカフェ', 'ジャズ・スペシャル', 'Lo-Fi・ビター', 'ロック・ビート', 'LITE-Style・Post Rock']; if (menuName && seed && validMenus.includes(menuName)) { await playMusic(menuName, seed); } else { alert('レコード番号の形式が正しくないか、存在しないジャンルです。'); } };
+const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; }; const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
+const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => { if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; } } const duration = '2n'; const now = Tone?.now(); if (type === 'target_sampler') { if (instrumentName === 'target_ebass' && newRockBassSampler) { newRockBassSampler.sampler.triggerAttackRelease('E1', duration); return; } if (instrumentName === 'target_eguitar' && now) { guitarAudioLog('サウンドチューニング画面から「最終アウトプット」がトリガーされました。'); triggerGuitarSound('C4', '1n', now, 0.9); } } else { const samplerData = samplers[instrumentName]; if (type === 'sampler' && samplerData && samplerData.baseNote) { samplerData.sampler.triggerAttackRelease(samplerData.baseNote, duration); } else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) { rawSamplePlayers.player(instrumentName).start(); } else if (type === 'target' && instrumentName === 'eguitar' && targetGuitarPlayer) { targetGuitarPlayer.start(); } else if (type === 'target' && instrumentName === 'ebass' && targetBassPlayer) { targetBassPlayer.start(); } } };
+const handlePlayRawSample = async (payload: { url: string, folder: string }) => { if (!rawMp3Player) return; const fullUrl = `/${payload.folder}/${payload.url}`; try { if (rawMp3Player.state === 'started') { rawMp3Player.stop(); } await rawMp3Player.load(fullUrl); rawMp3Player.start(); } catch (e) { console.error(`Failed to load or play raw sample ${fullUrl}`, e); } };
 
 const handlePlayDiagnosticSound = async (type: 'sampler' | 'dist' | 'eq' | 'cab') => {
-  if (!Tone || !cleanGuitarSampler || !guitarChebyshev || !guitarEQ || !guitarCabinet || !masterComp || !guitarPostGain) {
+  if (!Tone || !cleanGuitarSampler || !guitarCompressor || !guitarNoiseGate || !guitarChebyshev || !guitarEQ || !guitarCabinet || !masterComp || !guitarPostGain) {
      alert('診断に必要な音源またはエフェクトが準備できていません。');
      return;
   }
@@ -372,18 +280,37 @@ const handlePlayDiagnosticSound = async (type: 'sampler' | 'dist' | 'eq' | 'cab'
   const diagnosticPlayer = new Tone.Player();
   try {
     await diagnosticPlayer.load(`/eguitar2/${cleanGuitarUrls['C4']}`);
-    const dist = guitarChebyshev; const postGain = guitarPostGain; const eq = guitarEQ; const cab = guitarCabinet;
     
+    // [GEMINI] FIX: 診断バスが「真実」を語るように、実際の信号経路と完全に一致させる
+    const comp = guitarCompressor;
+    const gate = guitarNoiseGate;
+    const dist = guitarChebyshev;
+    const eq = guitarEQ;
+    const postGain = guitarPostGain;
+    const cab = guitarCabinet;
+
     switch (type) {
-      case 'sampler': diagnosticPlayer.connect(masterComp); break;
-      case 'dist': diagnosticPlayer.chain(dist, masterComp); break;
-      case 'eq': diagnosticPlayer.chain(dist, eq, masterComp); break;
-      case 'cab': diagnosticPlayer.chain(dist, eq, postGain, cab, masterComp); break;
+      case 'sampler':
+        diagnosticLog("① Player -> Comp -> Gate -> MasterComp");
+        diagnosticPlayer.chain(comp, gate, masterComp);
+        break;
+      case 'dist':
+        diagnosticLog("② Player -> Comp -> Gate -> Chebyshev -> MasterComp");
+        diagnosticPlayer.chain(comp, gate, dist, masterComp);
+        break;
+      case 'eq':
+        diagnosticLog("③ Player -> Comp -> Gate -> Chebyshev -> EQ -> MasterComp");
+        diagnosticPlayer.chain(comp, gate, dist, eq, masterComp);
+        break;
+      case 'cab':
+        diagnosticLog("④ Player -> Comp -> Gate -> Chebyshev -> EQ -> PostGain -> Cabinet -> MasterComp (最終経路)");
+        diagnosticPlayer.chain(comp, gate, dist, eq, postGain, cab, masterComp);
+        break;
     }
     diagnosticPlayer.start();
     diagnosticPlayer.onstop = () => { diagnosticPlayer.dispose(); };
   } catch (error) {
-    console.error("診断サウンドの再生に失敗:", error);
+    diagnosticLog("診断サウンドの再生に失敗:", error);
     alert("診断用サウンドの再生に失敗しました。");
   }
 };
@@ -392,11 +319,7 @@ const handleUpdateParam = (payload: { instrument: string, param: string, value: 
 const handleSaveParams = () => { try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(tuningParams.value)); alert('現在の設定をブラウザに保存しました。'); } catch (e) { alert('設定の保存に失敗しました。'); } };
 const handleExportParams = () => { console.clear(); console.log(JSON.stringify(tuningParams.value, null, 2)); alert('現在の設定を開発者コンソールに出力しました。'); };
 const handleResetParams = () => { if (confirm('現在の調整を破棄し、全ての設定を初期値に戻します。よろしいですか？')) { tuningParams.value = JSON.parse(JSON.stringify(masterTunedParams)); } };
-const handleSetExtremeEq = (type: 'cut' | 'boost') => {
-  const value = type === 'cut' ? -12 : 12;
-  const currentParams = tuningParams.value.target_eguitar;
-  tuningParams.value.target_eguitar = { ...currentParams, eqLow: value, eqMid: value, eqHigh: value, };
-};
+const handleSetExtremeEq = (type: 'cut' | 'boost') => { const value = type === 'cut' ? -12 : 12; const currentParams = tuningParams.value.target_eguitar; tuningParams.value.target_eguitar = { ...currentParams, eqLow: value, eqMid: value, eqHigh: value, }; };
 
 // ---
 // SECTION: Music Generation Logic
