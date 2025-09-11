@@ -5,12 +5,8 @@ import type * as ToneType from 'tone';
 import AboutModal from '../components/AboutModal.vue';
 import SoundCheckModal from '../components/SoundCheckModal.vue';
 
-// --- [GEMINI] ログ収集機能の実装 ---
-const guitarAudioLog = (...args: any[]) => {
-  console.log('[OTOYA_GUITAR_LOG]', ...args);
-};
+const guitarAudioLog = (...args: any[]) => { console.log('[OTOYA_GUITAR_LOG]', ...args); };
 
-// --- UI状態変数 ---
 const selectedMenu = ref<string | null>(null);
 const isPlaying = ref(false);
 const volume = ref(0.5);
@@ -22,16 +18,13 @@ const seedInput = ref<string>('');
 const isLoading = ref<boolean>(false);
 const loadingMessage = ref<string>('');
 
-// --- 音声関連 ---
 let Tone: typeof ToneType | null = null;
 let samplers: { [key: string]: { sampler: ToneType.Sampler, baseNote?: string } } = {};
 let targetSamplers: { [key: string]: { sampler: ToneType.Sampler, baseNote: string } } = {};
-
 let cleanGuitarSampler: ToneType.Sampler | null = null;
 let newRockBassSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newSynthPianoSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let newElecOrganSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
-
 let rawMp3Player: ToneType.Player | null = null;
 
 let guitarCompressor: ToneType.Compressor | null = null;
@@ -60,7 +53,6 @@ let noise: ToneType.Noise | null = null;
 let isAudioInitialized = ref(false);
 
 type TuningParams = Record<string, any>;
-
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
@@ -229,18 +221,30 @@ const initializeAudio = async () => {
     
     await Tone.loaded();
 
-    // [GEMINI] FIX: 暖機運転のロジックを、確実な待機時間を持つ方式に修正
-    if (cleanGuitarSampler) {
-        guitarAudioLog('ギター信号経路の暖機運転（プライミング）を開始...');
-        const originalVolume = cleanGuitarSampler.volume.value;
-        cleanGuitarSampler.volume.value = -100; // 聞こえない音量に設定
-        cleanGuitarSampler.triggerAttackRelease('C4', '32n', Tone.now());
+    // [GEMINI] FIX: マスターの啓示に基づき、診断バスを再現する方式で強制暖機運転を行う
+    if (Tone && guitarCompressor && guitarNoiseGate && guitarChebyshev && guitarEQ && guitarPostGain && guitarCabinet && masterComp) {
+        guitarAudioLog('ギター信号経路の強制暖機運転（診断バス再現方式）を開始...');
+        const primingPlayer = new Tone.Player();
+        const primingMute = new Tone.Volume(-Infinity); // 完全な無音化
         
-        // JavaScriptの実行を50ミリ秒間停止し、AudioContextに処理時間を与える
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await primingPlayer.load(`/eguitar2/${cleanGuitarUrls['C4']}`);
+        guitarAudioLog(' -> 暖機運転用の音源ロード完了');
+        
+        primingPlayer.chain(
+            guitarCompressor, guitarNoiseGate, guitarChebyshev, 
+            guitarEQ, guitarPostGain, guitarCabinet, 
+            primingMute, masterComp
+        );
+        guitarAudioLog(' -> 暖機運転用の信号経路を構築完了');
 
-        cleanGuitarSampler.volume.value = originalVolume; // 元の音量に戻す
-        guitarAudioLog('プライミング完了。');
+        primingPlayer.start();
+        guitarAudioLog(' -> 暖機運転用の信号を発射');
+
+        await new Promise(resolve => setTimeout(resolve, 100)); // 100ms待機して全ノードを確実に起動
+
+        primingPlayer.dispose();
+        primingMute.dispose();
+        guitarAudioLog('プライミング完了。一時ノードを破棄しました。');
     }
     
     isAudioInitialized.value = true;
