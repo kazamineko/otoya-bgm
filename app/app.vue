@@ -76,7 +76,7 @@ const masterTunedParams: TuningParams = {
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "target_eguitar": { 
-    "preGain": 12,
+    "preGain": 0, // [AI-ASSISTANT-FIX] 初期値を0.0dBに変更
     "volume": -12,
     "attack": 0.005, "release": 0.6, 
     "distortion": 0.4, "eqLow": 0, "eqMid": 0, "eqHigh": 0,
@@ -247,7 +247,10 @@ const initializeAudio = async () => {
     
     await Tone.loaded();
     
-    await primeAudioSystem();
+    // [AI-ASSISTANT-FIX] START: マスターの指示に基づき、暖機運転処理をコメントアウトしてテスト
+    // await primeAudioSystem();
+    guitarAudioLog('マスターの指示により、暖機運転（primeAudioSystem）をスキップします。');
+    // [AI-ASSISTANT-FIX] END: 暖機運転処理をコメントアウトしてテスト
     
     isAudioInitialized.value = true;
     loadingMessage.value = '準備ができました';
@@ -329,7 +332,7 @@ const handleSetGuitarPreset = (presetName: 'default' | 'heavy') => {
   } else if (presetName === 'heavy') {
     guitarAudioLog("ギタープリセットを「激歪み」に設定します。");
     const heavyParams = {
-      preGain: 24,
+      preGain: 0, // [AI-ASSISTANT-FIX] 激歪みプリセットのPreGainを0.0dBに変更
       distortion: 0.9,
       compThreshold: -30,
       compRatio: 8,
@@ -340,7 +343,7 @@ const handleSetGuitarPreset = (presetName: 'default' | 'heavy') => {
       eqLow: 2,
       eqMid: -9,
       eqHigh: 3,
-      volume: -24,
+      volume: -18, // PreGainを下げた分、PostGainを少し上げる
       reverbWet: 0.15,
       attack: 0.005,
       release: 0.6,
@@ -348,6 +351,18 @@ const handleSetGuitarPreset = (presetName: 'default' | 'heavy') => {
     tuningParams.value.target_eguitar = heavyParams;
   }
 };
+
+// [AI-ASSISTANT-FIX] START: キャビネット通過後のサンプルを再生するハンドラを追加
+const handlePlayPostCabinetSample = (note: string) => {
+  if (!Tone || !cleanGuitarSampler) {
+    guitarAudioLog('キャビネット通過後サンプルを再生できません: オーディオの準備が不十分です。');
+    return;
+  }
+  guitarAudioLog(`ノート「${note}」のキャビネット通過後サウンドを再生します...`);
+  // cleanGuitarSamplerはすでに完全なエフェクトチェーンに接続されているため、トリガーするだけでよい
+  cleanGuitarSampler.triggerAttackRelease(note, '1n', Tone.now());
+};
+// [AI-ASSISTANT-FIX] END: キャビネット通過後のサンプルを再生するハンドラを追加
 
 const createConcentrationSound = (rng: () => number): boolean => { if (!Tone || !masterComp) return false; scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0; if (noise) { noise.stop(0); noise.dispose(); noise = null; } noise = new Tone.Noise("pink").start(0); const filter = new Tone.Filter(800, "lowpass").connect(masterComp); noise.connect(filter); const loop = new Tone.Loop((time) => { filter.frequency.rampTo(600 + rng() * 400, 4, time); }, "4m").start(0); scheduledEvents.push(loop); return true; };
 const createRelaxSound = (rng: () => number): boolean => { if (!samplers.pad) return false; scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0; const { sampler: padSampler, baseNote } = samplers.pad; if (!baseNote) return false; Tone?.Transport.scheduleOnce(time => { padSampler.triggerAttack(baseNote, time); }, 0); return true;  };
@@ -462,15 +477,14 @@ const createLiteStyleRock = (rng: () => number): boolean => { const currentTone 
       @reset-params="handleResetParams"
       @set-extreme-eq="handleSetExtremeEq"
       @set-guitar-preset="handleSetGuitarPreset"
+      @play-post-cabinet-sample="handlePlayPostCabinetSample"
     />
   </div>
 </template>
 
 <style>
 body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif; }
-/* [AI-ASSISTANT-FIX] START: 'align'プロパティを'align-items'に修正 */
 .background-container { background-image: url('/bg-main.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
-/* [AI-ASSISTANT-FIX] END: 'align'プロパティを'align-items'に修正 */
 .content-panel { background-color: rgba(255, 255, 255, 0.88); padding: 20px 40px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); backdrop-filter: blur(5px); width: 90%; max-width: 600px; text-align: center; }
 .title { color: #363636; font-weight: bold; margin-bottom: 8px; }
 .subtitle { color: #555; margin-top: 0; margin-bottom: 30px; }

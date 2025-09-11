@@ -19,10 +19,8 @@
               <div class="play-buttons">
                 <template v-if="instrument === 'eguitar'">
                   <button @click.prevent="playSound('target_eguitar', 'target_sampler')" title="最終的な音">最終アウトプット</button>
-                  <!-- [AI-ASSISTANT-FIX] START: プリセットボタンを追加 -->
                   <button @click.prevent="setGuitarPreset('default')" class="preset-button-default" title="マスター設定の初期値に戻します">初期値</button>
                   <button @click.prevent="setGuitarPreset('heavy')" class="preset-button-heavy" title="AIおすすめのハイゲインサウンドを適用します">激歪み</button>
-                  <!-- [AI-ASSISTANT-FIX] END: プリセットボタンを追加 -->
                   <button @click.prevent="playSound('eguitar', 'target')" title="最終的に目指すべき理想の音(WAV再生)">目標サウンド</button>
                   <a href="/eguitar/C5_s6_01.mp3" download="target-sound-C5.mp3" class="download-button" title="目標サウンドをダウンロード">DL</a>
                 </template>
@@ -39,13 +37,11 @@
             <div class="sliders" v-if="tuningParams[instrument] || tuningParams['target_' + instrument]">
               <template v-if="instrument === 'eguitar' && tuningParams.target_eguitar">
                 <div class="sub-header">Amp / Drive</div>
-                <!-- [AI-ASSISTANT-FIX] START: PreGainスライダーを追加 -->
                 <div class="slider-container">
                   <label>Pre Gain</label>
                   <input type="range" min="-12" max="30" step="0.5" :value="tuningParams.target_eguitar.preGain" @input="updateParam('target_eguitar', 'preGain', $event)">
                   <span>{{ tuningParams.target_eguitar.preGain.toFixed(1) }} dB</span>
                 </div>
-                <!-- [AI-ASSISTANT-FIX] END: PreGainスライダーを追加 -->
                 <div class="slider-container">
                   <label>Distortion</label>
                   <input type="range" min="0" max="1" step="0.01" :value="tuningParams.target_eguitar.distortion" @input="updateParam('target_eguitar', 'distortion', $event)">
@@ -129,6 +125,19 @@
                   <span>→</span>
                   <button @click.prevent="playDiagnosticSound('cabinet')">⑦ +Cabinet (最終)</button>
                 </div>
+
+                <!-- [AI-ASSISTANT-FIX] START: キャビネット通過後サウンドの再生UIを追加 -->
+                <div class="sub-header">キャビネット通過後サウンド (eguitar2)</div>
+                <div class="raw-samples-container">
+                  <div class="raw-sample-group">
+                    <div class="play-buttons diagnostic-grid">
+                      <button v-for="(url, note) in heavyMetalUrls" :key="`pc-${note}`" @click.prevent="playPostCabinetSample(note)" class="post-cab-button">
+                        {{ note }} を最終出力で再生
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <!-- [AI-ASSISTANT-FIX] END: キャビネット通過後サウンドの再生UIを追加 -->
 
                 <div class="sub-header">Raw MP3 Playback (eguitar2)</div>
                 <div class="raw-samples-container">
@@ -218,9 +227,7 @@ defineProps<{
 }>();
 
 type DiagnosticSoundType = 'sampler' | 'chebyshev' | 'compressor' | 'noisegate' | 'eq' | 'postgain' | 'cabinet';
-// [AI-ASSISTANT-FIX] START: setGuitarPresetのemit定義を追加
-const emit = defineEmits(['close', 'playSound', 'playRawSample', 'playDiagnosticSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq', 'setGuitarPreset']);
-// [AI-ASSISTANT-FIX] END: setGuitarPresetのemit定義を追加
+const emit = defineEmits(['close', 'playSound', 'playRawSample', 'playDiagnosticSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq', 'setGuitarPreset', 'playPostCabinetSample']);
 
 const close = () => emit('close');
 const playSound = (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => emit('playSound', instrumentName, type);
@@ -230,9 +237,11 @@ const saveParams = () => emit('saveParams');
 const exportParams = () => emit('exportParams');
 const resetParams = () => emit('resetParams');
 
-// [AI-ASSISTANT-FIX] START: プリセットボタン用のemit関数を追加
 const setGuitarPreset = (presetName: 'default' | 'heavy') => emit('setGuitarPreset', presetName);
-// [AI-ASSISTANT-FIX] END: プリセットボタン用のemit関数を追加
+
+// [AI-ASSISTANT-FIX] START: キャビネット通過後サウンド再生用のemit関数を追加
+const playPostCabinetSample = (note: string) => emit('playPostCabinetSample', note);
+// [AI-ASSISTANT-FIX] END: キャビネット通過後サウンド再生用のemit関数を追加
 
 const updateParam = (instrument: string, param: string, event: Event) => {
   const value = parseFloat((event.target as HTMLInputElement).value);
@@ -290,7 +299,6 @@ const updateParam = (instrument: string, param: string, event: Event) => {
   font-size: 12px;
 }
 .play-buttons button:hover { background-color: #555; }
-/* [AI-ASSISTANT-FIX] START: プリセットボタン用のスタイルを追加 */
 .preset-button-default {
   background-color: #205374;
 }
@@ -303,7 +311,6 @@ const updateParam = (instrument: string, param: string, event: Event) => {
 .preset-button-heavy:hover {
   background-color: #7a2020;
 }
-/* [AI-ASSISTANT-FIX] END: プリセットボタン用のスタイルを追加 */
 .download-button {
   background-color: #238636;
   color: white;
@@ -366,6 +373,18 @@ const updateParam = (instrument: string, param: string, event: Event) => {
 .diagnostic-grid button:hover {
     background-color: #073b4d;
 }
+/* [AI-ASSISTANT-FIX] START: キャビネット通過後サウンド再生ボタンのスタイルを追加 */
+.post-cab-button {
+  background-color: #238636;
+  font-size: 11px;
+  word-break: break-all;
+  text-align: left;
+  padding: 6px 8px;
+}
+.post-cab-button:hover {
+  background-color: #1a6328;
+}
+/* [AI-ASSISTANT-FIX] END: キャビネット通過後サウンド再生ボタンのスタイルを追加 */
 .raw-samples-container {
   margin-top: 15px;
   padding-top: 15px;
