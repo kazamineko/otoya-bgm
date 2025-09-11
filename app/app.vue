@@ -58,23 +58,24 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
+// [AI-ASSISTANT-FIX] START: マスター指示に基づきミックスバランスを調整
 const masterTunedParams: TuningParams = {
   "piano": { "volume": 0, "attack": 0.01, "release": 1 },
   "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
-  "ride": { "volume": -9, "attack": 0.01, "release": 0.5 },
-  "brush": { "volume": -9, "attack": 0.01, "release": 0.2 },
+  "ride": { "volume": -6, "attack": 0.01, "release": 0.5 }, // +3dB
+  "brush": { "volume": -6, "attack": 0.01, "release": 0.2 }, // +3dB
   "epiano": { "volume": -3, "attack": 0.01, "release": 1 },
   "kick": { "volume": 0, "attack": 0.01, "release": 0.2 },
   "snare": { "volume": -3, "attack": 0.01, "release": 0.2 },
   "pad": { "volume": -6, "attack": 0.1, "release": 1 },
   "sax": { "volume": -3, "attack": 0.01, "release": 1 },
   "trombone": { "volume": -3, "attack": 0.01, "release": 1 },
-  "rockKick": { "volume": 0, "attack": 0.01, "release": 0.2 },
-  "rockSnare": { "volume": -3, "attack": 0.01, "release": 0.2 },
-  "crash": { "volume": -9, "attack": 0.01, "release": 0.5 },
-  "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
+  "rockKick": { "volume": 3, "attack": 0.01, "release": 0.2 }, // +3dB
+  "rockSnare": { "volume": 0, "attack": 0.01, "release": 0.2 }, // +3dB
+  "crash": { "volume": -6, "attack": 0.01, "release": 0.5 }, // +3dB
+  "tomHigh": { "volume": -3, "attack": 0.01, "release": 0.4 }, // +3dB
+  "tomMid": { "volume": -3, "attack": 0.01, "release": 0.4 }, // +3dB
+  "tomFloor": { "volume": -3, "attack": 0.01, "release": 0.4 }, // +3dB
   "target_eguitar": {
     "preGain": 0,
     "distortion": 0.38,
@@ -87,15 +88,16 @@ const masterTunedParams: TuningParams = {
     "eqLow": 2,
     "eqMid": -9,
     "eqHigh": 3,
-    "volume": -18,
+    "volume": -21, // -18dBからさらに-3dB
     "reverbWet": 0.15,
     "attack": 0.005,
     "release": 0.6
   },
-  "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
+  "target_ebass": { "volume": 3, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 }, // +3dB
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
 };
+// [AI-ASSISTANT-FIX] END: マスター指示に基づきミックスバランスを調整
 
 const cleanGuitarUrls = {
     'A2': 'A2.mp3', 'A3': 'A3.mp3', 'A4': 'A4.mp3', 'A5': 'A5.mp3',
@@ -230,6 +232,10 @@ const initializeAudio = async () => {
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
       
       guitarAudioLog('ギター信号経路を、PreGain導入/Reverb SEND点変更を含む最終版に再構築します...');
+      // [AI-ASSISTANT-FIX] START: 幽霊信号を断つための.disconnect()を追加
+      cleanGuitarSampler.disconnect();
+      guitarAudioLog('  0. Sampler -> Default Outputを切断');
+      // [AI-ASSISTANT-FIX] END: 幽霊信号を断つための.disconnect()を追加
       cleanGuitarSampler.connect(guitarPreGain);   guitarAudioLog('  1. Sampler -> PreGain (信号増幅)');
       guitarPreGain.connect(guitarChebyshev);      guitarAudioLog('  2. PreGain -> Chebyshev (歪み)');
       guitarChebyshev.connect(guitarCompressor);   guitarAudioLog('  3. Chebyshev -> Compressor');
@@ -372,7 +378,6 @@ const createLoFiSound = (rng: () => number): boolean => { if (!Tone || !samplers
 const createJazzSound = (rng: () => number): boolean => { if (!Tone || !samplers.piano || !samplers.bass || !samplers.ride || !samplers.sax) return false; scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0; const { sampler: piano } = samplers.piano; const { sampler: bass } = samplers.bass; const { sampler: ride, baseNote: rideNote } = samplers.ride; const { sampler: sax } = samplers.sax; if(!rideNote) return false; Tone.Transport.bpm.value = 100 + rng() * 20; Tone.Transport.swing = 0.05; let isSolo = false; const chords = [ { time: '0:0', chord: ['D3', 'F3', 'A3', 'C4'] }, { time: '2:0', chord: ['G2', 'F3', 'B3', 'D4'] }, ]; const pianoPart = new Tone.Part<({ time: string, chord: string[] })>((time, value) => { if(!isSolo) piano.triggerAttackRelease(value.chord, '2n', time, 0.7); }, chords).start(0); pianoPart.loop = true; pianoPart.loopEnd = '4m'; const bassPart = new Tone.Sequence((time, note) => { bass.triggerAttackRelease(note, '4n', time, 0.9); }, ['D1', 'G1', 'C2', 'F1'], '2n').start(0); const ridePart = new Tone.Loop(time => { ride.triggerAttack(rideNote, time, 0.7); }, '4n').start(0); const saxPart = new Tone.Sequence((time, note) => { if(isSolo && note) sax.triggerAttackRelease(note, '8n', time, 0.8); }, ['G3', 'A3', null, 'C4', 'A3', 'G3', null, 'E3'], '8n').start(0); const soloToggle = new Tone.Loop(() => { isSolo = !isSolo }, '8m').start('4m'); scheduledEvents.push(pianoPart, bassPart, ridePart, saxPart, soloToggle); return true;  };
 const createRockSound = (rng: () => number): boolean => { if (!Tone || !cleanGuitarSampler || !samplers.rockKick || !samplers.rockSnare || !newRockBassSampler || !newSynthPianoSampler || !newElecOrganSampler) return false; scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0; const bpm = 130 + rng() * 20; Tone.Transport.bpm.value = bpm; Tone.Transport.swing = 0.05; const progression = ['E', 'G', 'A', 'A']; let leadInstrument: 'guitar' | 'synth' | 'organ' = 'guitar'; const kickSeq = new Tone.Sequence((time, note) => { if(note && samplers.rockKick?.baseNote) samplers.rockKick?.sampler.triggerAttack(samplers.rockKick.baseNote, time); }, [1, 0, 0, 0, 1, 0, 0, 0], "8n").start(0); const snareSeq = new Tone.Sequence((time, note) => { if(note && samplers.rockSnare?.baseNote) samplers.rockSnare?.sampler.triggerAttack(samplers.rockSnare.baseNote, time); }, [0, 1, 0, 1], "4n").start(0); const bassSeq = new Tone.Sequence((time, noteOn) => { if(noteOn && Tone){ const measure = Math.floor(Tone.Transport.getTicksAtTime(time) / (Tone.Transport.PPQ * 4)); const rootNote = progression[measure % 4]!; const note = rng() < 0.1 ? `${rootNote}2` : `${rootNote}1`; newRockBassSampler?.sampler.triggerAttackRelease(note, '8n', time); } }, [1, 1, 1, 1, 1, 1, 1, 1], "8n").start(0); const leadSwitchLoop = new Tone.Loop(time => { const choice = rng(); if (choice < 0.5) leadInstrument = 'guitar'; else if (choice < 0.75) leadInstrument = 'synth'; else leadInstrument = 'organ'; }, '4m').start(0); const mainLoop = new Tone.Loop((time) => { if (!Tone) return; const totalBeats = Math.floor(Tone.Transport.getTicksAtTime(time) / Tone.Transport.PPQ); const measure = Math.floor(totalBeats / 4); const rootNote = progression[measure % 4]!; const vel = 0.9 + rng() * 0.1; const isGhostNote = rng() < 0.15; const leadVelocity = isGhostNote ? vel * 0.3 : vel; const leadAction = { 'guitar': () => triggerGuitarSound([`${rootNote}4`, `${rootNote}5`], '4n', time, leadVelocity), 'synth': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`, `${rootNote}5`], '8n', time, leadVelocity), 'organ': () => newElecOrganSampler?.sampler.triggerAttackRelease([`${rootNote}3`, `${rootNote}4`], '4n', time, leadVelocity * 0.8), }; const padAction = { 'guitar': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}4`], '2n', time, vel * 0.6), 'synth': () => { triggerGuitarSound([`${rootNote}4`, `${rootNote}5`], '8n', time, vel * 0.8); }, 'organ': () => newSynthPianoSampler?.sampler.triggerAttackRelease([`${rootNote}5`], '2n', time, vel * 0.6) }; if (totalBeats % 4 === 0) { leadAction[leadInstrument](); } else { padAction[leadInstrument](); } }, "4n").start(0); scheduledEvents.push(kickSeq, snareSeq, bassSeq, mainLoop, leadSwitchLoop); return true;  };
 
-// [AI-ASSISTANT-FIX] START: ドラムパターンを16ビート基調のテクニカルなパターンに刷新
 const createLiteStyleRock = (rng: () => number): boolean => {
   const currentTone = Tone;
   if (!currentTone || !cleanGuitarSampler || !samplers.rockKick || !samplers.rockSnare || !samplers.ride || !samplers.crash || !newRockBassSampler || !newElecOrganSampler) {
@@ -394,11 +399,8 @@ const createLiteStyleRock = (rng: () => number): boolean => {
   const chordProgression = ['E', 'C', 'G', 'D'];
 
   const parts = {
-    // キック: Polyphia風のシンコペーションを多用した16ビートパターン
     kick: { note: kickNote, pattern: [1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 1, 0], velocity: 1.0 },
-    // スネア: 基本的な2・4拍子を維持
     snare: { note: snareNote, pattern: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], velocity: 0.9 },
-    // ライド(ハイハット代用): 16分を基本に、ベロシティで強弱をつけたパターン
     ride: { note: rideNote, pattern: [1.0, 0.6, 0.8, 0.6, 1.0, 0.6, 0.8, 0.6, 1.0, 0.6, 0.8, 0.6, 1.0, 0.6, 0.8, 0.6] },
     bass: { note: '1', duration: '8n' },
     organ: { intervals: [0, 4, 7], duration: '1m' },
@@ -417,9 +419,9 @@ const createLiteStyleRock = (rng: () => number): boolean => {
   for (let measure = 0; measure < songLength; measure++) {
     const chordRoot = chordProgression[measure % 4]!;
     
-    parts.kick.pattern.forEach((v, i) => { if(v) kickEvents.push({ time: `${measure}:0:${i*2}`, note: parts.kick.note, velocity: parts.kick.velocity }) });
-    parts.snare.pattern.forEach((v, i) => { if(v) snareEvents.push({ time: `${measure}:0:${i*2}`, note: parts.snare.note, velocity: parts.snare.velocity }) });
-    parts.ride.pattern.forEach((v, i) => { if(v) rideEvents.push({ time: `${measure}:0:${i*2}`, note: parts.ride.note, velocity: v }) });
+    parts.kick.pattern.forEach((v, i) => { if(v) kickEvents.push({ time: `${measure}:0:${i}`, note: parts.kick.note, velocity: parts.kick.velocity }) });
+    parts.snare.pattern.forEach((v, i) => { if(v) snareEvents.push({ time: `${measure}:0:${i}`, note: parts.snare.note, velocity: parts.snare.velocity }) });
+    parts.ride.pattern.forEach((v, i) => { if(v) rideEvents.push({ time: `${measure}:0:${i}`, note: parts.ride.note, velocity: v }) });
 
     if (measure > 0 && measure % 8 === 0) crashEvents.push({ time: `${measure}:0:0`, note: crashNote, velocity: 0.9 });
     
@@ -439,7 +441,6 @@ const createLiteStyleRock = (rng: () => number): boolean => {
 
   const kickPart = new currentTone.Part(((time, value) => kick.triggerAttack(value.note, time, value.velocity)), kickEvents).start(0);
   const snarePart = new currentTone.Part(((time, value) => snare.triggerAttack(value.note, time, value.velocity)), snareEvents).start(0);
-  // ライドのトリガーをベロシティ対応に変更
   const ridePart = new currentTone.Part(((time, value) => ride.triggerAttack(value.note, time, value.velocity)), rideEvents).start(0);
   const crashPart = new currentTone.Part(((time, value) => crash.triggerAttack(value.note, time, value.velocity)), crashEvents).start(0);
   const bassPart = new currentTone.Part(((time, value) => bassSampler.triggerAttackRelease(value.note, value.duration, time)), bassEvents).start(0);
@@ -455,7 +456,6 @@ const createLiteStyleRock = (rng: () => number): boolean => {
   });
   return true;
 };
-// [AI-ASSISTANT-FIX] END: ドラムパターンを16ビート基調のテクニカルなパターンに刷新
 </script>
 
 <template>
