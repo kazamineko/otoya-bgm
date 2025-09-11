@@ -28,6 +28,7 @@ let newSynthPianoSampler: { sampler: ToneType.Sampler, baseNote: string } | null
 let newElecOrganSampler: { sampler: ToneType.Sampler, baseNote: string } | null = null;
 let rawMp3Player: ToneType.Player | null = null;
 
+let guitarPreGain: ToneType.Volume | null = null;
 let guitarCompressor: ToneType.Compressor | null = null;
 let guitarNoiseGate: ToneType.Gate | null = null;
 let guitarChebyshev: ToneType.Chebyshev | null = null;
@@ -75,7 +76,9 @@ const masterTunedParams: TuningParams = {
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "target_eguitar": { 
-    "volume": -9, "attack": 0.005, "release": 0.6, 
+    "preGain": 12,
+    "volume": -12,
+    "attack": 0.005, "release": 0.6, 
     "distortion": 0.4, "eqLow": 0, "eqMid": 0, "eqHigh": 0,
     "compThreshold": -24, "compRatio": 4, "compAttack": 0.003, "compRelease": 0.1,
     "gateThreshold": -50, "gateSmoothing": 0.1,
@@ -102,6 +105,7 @@ watch(tuningParams, (newParams) => {
 
   const eguitarTargetParams = newParams.target_eguitar;
   if (cleanGuitarSampler && eguitarTargetParams) {
+      if(guitarPreGain && eguitarTargetParams.preGain !== undefined) guitarPreGain.volume.value = eguitarTargetParams.preGain;
       if(guitarPostGain && eguitarTargetParams.volume !== undefined) guitarPostGain.volume.value = eguitarTargetParams.volume;
       if(eguitarTargetParams.attack !== undefined) cleanGuitarSampler.attack = eguitarTargetParams.attack;
       if(eguitarTargetParams.release !== undefined) cleanGuitarSampler.release = eguitarTargetParams.release;
@@ -133,7 +137,6 @@ const primeAudioSystem = async () => {
     if (!Tone) return;
     guitarAudioLog('ギター信号経路の強制暖機運転（マスターズ・リチュアル）を開始...');
     
-    // [AI-ASSISTANT-FIX] 新しい診断ステップに合わせてプライミング処理を更新
     const diagnosticSteps: DiagnosticSoundType[] = ['sampler', 'chebyshev', 'compressor', 'noisegate', 'eq', 'postgain', 'cabinet'];
     const interval = 0.4;
 
@@ -182,6 +185,7 @@ const initializeAudio = async () => {
     
     guitarAudioLog('ギターエフェクトノードのインスタンス化開始...');
     const guitarP = tuningParams.value.target_eguitar;
+    guitarPreGain = new Tone.Volume(guitarP.preGain);
     guitarCompressor = new Tone.Compressor({ threshold: guitarP.compThreshold, ratio: guitarP.compRatio, attack: guitarP.compAttack, release: guitarP.compRelease });
     guitarNoiseGate = new Tone.Gate({ threshold: guitarP.gateThreshold, smoothing: guitarP.gateSmoothing });
     guitarChebyshev = new Tone.Chebyshev(2); guitarChebyshev.wet.value = guitarP.distortion;
@@ -212,26 +216,24 @@ const initializeAudio = async () => {
     const newBassUrls = { 'E1': 'ebass-new_E.mp3', 'F1': 'ebass-new_F.mp3', 'F#1': 'ebass-new_Fs.mp3', 'G1': 'ebass-new_G.mp3', 'G#1': 'ebass-new_Gs.mp3', 'A1': 'ebass-new_A.mp3', 'A#1': 'ebass-new_As.mp3', 'B1': 'ebass-new_B.mp3', 'C2': 'ebass-new_C.mp3', 'C#2': 'ebass-new_Cs.mp3', 'D2': 'ebass-new_D.mp3', 'D#2': 'ebass-new_Ds.mp3', 'E2': 'ebass-new_E2.mp3', }; const newRockBassParams = tuningParams.value['target_ebass']; const loadedNewRockBassSampler = new Tone.Sampler({ urls: newBassUrls, baseUrl: "/ebass/", volume: newRockBassParams.volume, attack: newRockBassParams.attack, release: newRockBassParams.release }); newRockBassSampler = { sampler: loadedNewRockBassSampler, baseNote: 'A1' }; const newSynthPianoUrls = { 'C2': 'spiano-C2v100.mp3', 'F#1': 'spiano-Fs1v100.mp3', 'C3': 'spiano-C3v100.mp3', 'F#2': 'spiano-Fs2v100.mp3', 'C4': 'spiano-C4v100.mp3', 'F#3': 'spiano-Fs3v100.mp3', 'C5': 'spiano-C5v100.mp3', 'F#4': 'spiano-Fs4v100.mp3', 'C6': 'spiano-C6v100.mp3', 'F#5': 'spiano-Fs5v100.mp3', 'C7': 'spiano-C7v100.mp3', 'F#6': 'spiano-Fs6v100.mp3', }; const newSynthPianoParams = tuningParams.value['spiano']; const loadedNewSynthPianoSampler = new Tone.Sampler({ urls: newSynthPianoUrls, baseUrl: "/keys/", volume: newSynthPianoParams.volume, attack: newSynthPianoParams.attack, release: newSynthPianoParams.release }); newSynthPianoSampler = { sampler: loadedNewSynthPianoSampler, baseNote: 'C4' }; samplers['spiano'] = newSynthPianoSampler; const newElecOrganUrls = { 'C2': 'eorgan-C2.mp3', 'E2': 'eorgan-E2.mp3', 'G#2': 'eorgan-Gs2.mp3', 'C3': 'eorgan-C3.mp3', 'E3': 'eorgan-E3.mp3', 'G#3': 'eorgan-Gs3.mp3', 'C4': 'eorgan-C4.mp3', 'E4': 'eorgan-E4.mp3', 'G#4': 'eorgan-Gs4.mp3', 'C5': 'eorgan-C5.mp3', 'E5': 'eorgan-E5.mp3', 'G#5': 'eorgan-Gs5.mp3', 'C6': 'eorgan-C6.mp3', 'E6': 'eorgan-E6.mp3', 'G#6': 'eorgan-Gs6.mp3', 'C7': 'eorgan-C7.mp3' }; const newElecOrganParams = tuningParams.value['eorgan']; const loadedNewElecOrganSampler = new Tone.Sampler({ urls: newElecOrganUrls, baseUrl: "/keys/", volume: newElecOrganParams.volume, attack: newElecOrganParams.attack, release: newElecOrganParams.release }); newElecOrganSampler = { sampler: loadedNewElecOrganSampler, baseNote: 'C4' }; samplers['eorgan'] = newElecOrganSampler; for (const name of Object.keys(allSamplePaths)) { const params = tuningParams.value[name]; if (!params) continue; const urls: Record<string, string> = { 'C4': allSamplePaths[name]! }; const sampler = new Tone.Sampler({ urls, baseUrl: "/", volume: params.volume, attack: params.attack, release: params.release }); if (name.startsWith('target_')) { targetSamplers[name] = { sampler, baseNote: 'C4' }; } else { samplers[name] = { sampler, baseNote: 'C4' }; } }
     
     guitarAudioLog('シグナルチェーンの接続開始...');
-    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && cleanGuitarSampler && guitarCompressor && guitarNoiseGate && guitarChebyshev && guitarEQ && guitarCabinet && guitarPostGain && guitarReverbSend) {
+    if (masterComp && reverb && chorus && delay && rideFilter && drumBusComp && bassEQNode && newRockBassSampler && cleanGuitarSampler && guitarPreGain && guitarCompressor && guitarNoiseGate && guitarChebyshev && guitarEQ && guitarCabinet && guitarPostGain && guitarReverbSend) {
       newRockBassSampler.sampler.chain(bassEQNode, drumBusComp);
       newSynthPianoSampler.sampler.fan(masterComp, reverb, delay);
       newElecOrganSampler.sampler.fan(masterComp, reverb, delay);
       
-      // [AI-ASSISTANT-FIX] START: ギターエフェクトチェーンの接続順序を修正
-      guitarAudioLog('ギター信号経路を、音楽制作の標準的なゲインステージングに基づき再構築します...');
-      cleanGuitarSampler.connect(guitarChebyshev); guitarAudioLog('  1. Sampler -> Chebyshev (歪み)');
-      guitarChebyshev.connect(guitarCompressor);  guitarAudioLog('  2. Chebyshev -> Compressor');
-      guitarCompressor.connect(guitarNoiseGate);   guitarAudioLog('  3. Compressor -> NoiseGate');
-      guitarNoiseGate.connect(guitarEQ);          guitarAudioLog('  4. NoiseGate -> EQ');
-      guitarEQ.connect(guitarPostGain);           guitarAudioLog('  5. EQ -> PostGain (Volume)');
-      guitarPostGain.connect(guitarCabinet);      guitarAudioLog('  6. PostGain -> Cabinet (IR)');
-
-      // ドライ音とウェット音への分岐
-      guitarCabinet.connect(masterComp);          guitarAudioLog('  7a. Cabinet -> MasterComp (ドライ音)');
-      guitarCabinet.connect(guitarReverbSend);    guitarAudioLog('  7b. Cabinet -> ReverbSend (ウェット音用分岐)');
-      guitarReverbSend.connect(reverb);           guitarAudioLog('  8. ReverbSend -> Reverb');
-      guitarAudioLog('ギター信号経路の再構築完了。');
-      // [AI-ASSISTANT-FIX] END: ギターエフェクトチェーンの接続順序を修正
+      guitarAudioLog('ギター信号経路を、PreGain導入/Reverb SEND点変更を含む最終版に再構築します...');
+      cleanGuitarSampler.connect(guitarPreGain);   guitarAudioLog('  1. Sampler -> PreGain (信号増幅)');
+      guitarPreGain.connect(guitarChebyshev);      guitarAudioLog('  2. PreGain -> Chebyshev (歪み)');
+      guitarChebyshev.connect(guitarCompressor);   guitarAudioLog('  3. Chebyshev -> Compressor');
+      guitarCompressor.connect(guitarNoiseGate);    guitarAudioLog('  4. Compressor -> NoiseGate');
+      guitarNoiseGate.connect(guitarEQ);           guitarAudioLog('  5. NoiseGate -> EQ');
+      guitarEQ.connect(guitarPostGain);            guitarAudioLog('  6. EQ -> PostGain (最終音量)');
+      
+      guitarPostGain.connect(guitarCabinet);       guitarAudioLog('  7a. PostGain -> Cabinet -> MasterComp (ドライ音)');
+      guitarCabinet.connect(masterComp);
+      guitarPostGain.connect(guitarReverbSend);    guitarAudioLog('  7b. PostGain -> ReverbSend (ウェット音)');
+      guitarReverbSend.connect(reverb);            guitarAudioLog('  8. ReverbSend -> Reverb');
+      guitarAudioLog('ギター信号経路の最終構築完了。');
       
       const rockDrumKit = ['rockKick', 'rockSnare', 'crash', 'tomHigh', 'tomMid', 'tomFloor', 'ride'];
       for (const [name, data] of Object.entries(samplers)) { if (rockDrumKit.includes(name)) { if (name === 'ride') { data.sampler.chain(rideFilter, drumBusComp); } else { data.sampler.connect(drumBusComp); } } else { data.sampler.fan(masterComp, reverb, chorus, delay); } }
@@ -268,10 +270,9 @@ const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; }; co
 const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => { if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; } } const duration = '2n'; const now = Tone?.now(); if (type === 'target_sampler') { if (instrumentName === 'target_ebass' && newRockBassSampler) { newRockBassSampler.sampler.triggerAttackRelease('E1', duration); return; } if (instrumentName === 'target_eguitar' && now) { guitarAudioLog('サウンドチューニング画面から「最終アウトプット」がトリガーされました。'); triggerGuitarSound('C4', '1n', now, 0.9); } } else { const samplerData = samplers[instrumentName]; if (type === 'sampler' && samplerData && samplerData.baseNote) { samplerData.sampler.triggerAttackRelease(samplerData.baseNote, duration); } else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) { rawSamplePlayers.player(instrumentName).start(); } else if (type === 'target' && instrumentName === 'eguitar' && targetGuitarPlayer) { targetGuitarPlayer.start(); } else if (type === 'target' && instrumentName === 'ebass' && targetBassPlayer) { targetBassPlayer.start(); } } };
 const handlePlayRawSample = async (payload: { url: string, folder: string }) => { if (!rawMp3Player) return; const fullUrl = `/${payload.folder}/${payload.url}`; try { if (rawMp3Player.state === 'started') { rawMp3Player.stop(); } await rawMp3Player.load(fullUrl); rawMp3Player.start(); } catch (e) { console.error(`Failed to load or play raw sample ${fullUrl}`, e); } };
 
-// [AI-ASSISTANT-FIX] START: 診断バスのロジックを全面的に修正・拡張
 type DiagnosticSoundType = 'sampler' | 'chebyshev' | 'compressor' | 'noisegate' | 'eq' | 'postgain' | 'cabinet';
 const handlePlayDiagnosticSound = async (type: DiagnosticSoundType, isPriming: boolean = false) => {
-  if (!Tone || !cleanGuitarSampler || !guitarChebyshev || !guitarCompressor || !guitarNoiseGate || !guitarEQ || !guitarPostGain || !guitarCabinet || !masterComp) {
+  if (!Tone || !cleanGuitarSampler || !guitarPreGain || !guitarChebyshev || !guitarCompressor || !guitarNoiseGate || !guitarEQ || !guitarPostGain || !guitarCabinet || !masterComp) {
      if (!isPriming) alert('診断に必要な音源またはエフェクトが準備できていません。');
      return;
   }
@@ -279,36 +280,36 @@ const handlePlayDiagnosticSound = async (type: DiagnosticSoundType, isPriming: b
   const diagnosticPlayer = new Tone.Player();
   try {
     await diagnosticPlayer.load(`/eguitar2/${cleanGuitarUrls['C4']}`);
-    const cheb = guitarChebyshev; const comp = guitarCompressor; const gate = guitarNoiseGate; const eq = guitarEQ; const postGain = guitarPostGain; const cab = guitarCabinet;
+    const pre = guitarPreGain; const cheb = guitarChebyshev; const comp = guitarCompressor; const gate = guitarNoiseGate; const eq = guitarEQ; const post = guitarPostGain; const cab = guitarCabinet;
     
     switch (type) {
       case 'sampler':
-        diagnosticLog("① Player -> MasterComp (エフェクトなし)");
-        diagnosticPlayer.connect(masterComp);
+        diagnosticLog("① Player -> PreGain -> MasterComp (クリーンブーストのみ)");
+        diagnosticPlayer.chain(pre, masterComp);
         break;
       case 'chebyshev':
-        diagnosticLog("② Player -> Chebyshev -> MasterComp");
-        diagnosticPlayer.chain(cheb, masterComp);
+        diagnosticLog("② Player -> PreGain -> Chebyshev -> MasterComp");
+        diagnosticPlayer.chain(pre, cheb, masterComp);
         break;
       case 'compressor':
-        diagnosticLog("③ Player -> Chebyshev -> Compressor -> MasterComp");
-        diagnosticPlayer.chain(cheb, comp, masterComp);
+        diagnosticLog("③ Player -> PreGain -> Chebyshev -> Compressor -> MasterComp");
+        diagnosticPlayer.chain(pre, cheb, comp, masterComp);
         break;
       case 'noisegate':
-        diagnosticLog("④ Player -> Chebyshev -> Compressor -> NoiseGate -> MasterComp");
-        diagnosticPlayer.chain(cheb, comp, gate, masterComp);
+        diagnosticLog("④ Player -> ... -> Compressor -> NoiseGate -> MasterComp");
+        diagnosticPlayer.chain(pre, cheb, comp, gate, masterComp);
         break;
       case 'eq':
-        diagnosticLog("⑤ Player -> Chebyshev -> Compressor -> NoiseGate -> EQ -> MasterComp");
-        diagnosticPlayer.chain(cheb, comp, gate, eq, masterComp);
+        diagnosticLog("⑤ Player -> ... -> NoiseGate -> EQ -> MasterComp");
+        diagnosticPlayer.chain(pre, cheb, comp, gate, eq, masterComp);
         break;
       case 'postgain':
-        diagnosticLog("⑥ Player -> Chebyshev -> Compressor -> NoiseGate -> EQ -> PostGain -> MasterComp");
-        diagnosticPlayer.chain(cheb, comp, gate, eq, postGain, masterComp);
+        diagnosticLog("⑥ Player -> ... -> EQ -> PostGain -> MasterComp");
+        diagnosticPlayer.chain(pre, cheb, comp, gate, eq, post, masterComp);
         break;
       case 'cabinet':
         diagnosticLog("⑦ Player -> ... (Full Chain) ... -> Cabinet -> MasterComp (最終経路)");
-        diagnosticPlayer.chain(cheb, comp, gate, eq, postGain, cab, masterComp);
+        diagnosticPlayer.chain(pre, cheb, comp, gate, eq, post, cab, masterComp);
         break;
     }
     diagnosticPlayer.start();
@@ -318,9 +319,36 @@ const handlePlayDiagnosticSound = async (type: DiagnosticSoundType, isPriming: b
     if (!isPriming) alert("診断用サウンドの再生に失敗しました。");
   }
 };
-// [AI-ASSISTANT-FIX] END: 診断バスのロジックを全面的に修正・拡張
 
 const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => { if (tuningParams.value[payload.instrument]) { const updatedInstrumentParams = { ...tuningParams.value[payload.instrument] }; updatedInstrumentParams[payload.param] = payload.value; tuningParams.value[payload.instrument] = updatedInstrumentParams; } }; const handleSaveParams = () => { try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(tuningParams.value)); alert('現在の設定をブラウザに保存しました。'); } catch (e) { alert('設定の保存に失敗しました。'); } }; const handleExportParams = () => { console.clear(); console.log(JSON.stringify(tuningParams.value, null, 2)); alert('現在の設定を開発者コンソールに出力しました。'); }; const handleResetParams = () => { if (confirm('現在の調整を破棄し、全ての設定を初期値に戻します。よろしいですか？')) { tuningParams.value = JSON.parse(JSON.stringify(masterTunedParams)); } }; const handleSetExtremeEq = (type: 'cut' | 'boost') => { const value = type === 'cut' ? -12 : 12; const currentParams = tuningParams.value.target_eguitar; tuningParams.value.target_eguitar = { ...currentParams, eqLow: value, eqMid: value, eqHigh: value, }; };
+
+const handleSetGuitarPreset = (presetName: 'default' | 'heavy') => {
+  if (presetName === 'default') {
+    guitarAudioLog("ギタープリセットを「初期値」に設定します。");
+    tuningParams.value.target_eguitar = { ...masterTunedParams.target_eguitar };
+  } else if (presetName === 'heavy') {
+    guitarAudioLog("ギタープリセットを「激歪み」に設定します。");
+    const heavyParams = {
+      preGain: 24,
+      distortion: 0.9,
+      compThreshold: -30,
+      compRatio: 8,
+      compAttack: 0.001,
+      compRelease: 0.2,
+      gateThreshold: -40,
+      gateSmoothing: 0.05,
+      eqLow: 2,
+      eqMid: -9,
+      eqHigh: 3,
+      volume: -24,
+      reverbWet: 0.15,
+      attack: 0.005,
+      release: 0.6,
+    };
+    tuningParams.value.target_eguitar = heavyParams;
+  }
+};
+
 const createConcentrationSound = (rng: () => number): boolean => { if (!Tone || !masterComp) return false; scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0; if (noise) { noise.stop(0); noise.dispose(); noise = null; } noise = new Tone.Noise("pink").start(0); const filter = new Tone.Filter(800, "lowpass").connect(masterComp); noise.connect(filter); const loop = new Tone.Loop((time) => { filter.frequency.rampTo(600 + rng() * 400, 4, time); }, "4m").start(0); scheduledEvents.push(loop); return true; };
 const createRelaxSound = (rng: () => number): boolean => { if (!samplers.pad) return false; scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0; const { sampler: padSampler, baseNote } = samplers.pad; if (!baseNote) return false; Tone?.Transport.scheduleOnce(time => { padSampler.triggerAttack(baseNote, time); }, 0); return true;  };
 const createLoFiSound = (rng: () => number): boolean => { if (!Tone || !samplers.epiano || !samplers.kick || !samplers.snare) return false; scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0; const kickSeq = new Tone.Sequence((time, note) => { if(note && samplers.kick?.baseNote) samplers.kick.sampler.triggerAttackRelease(samplers.kick.baseNote, '8n', time, 0.9 + rng() * 0.1); }, [1,0,1,0,1,0,1,0], "8n").start(0); const snareSeq = new Tone.Sequence((time, note) => { if(note && samplers.snare?.baseNote) samplers.snare.sampler.triggerAttackRelease(samplers.snare.baseNote, '8n', time, 0.8 + rng() * 0.2); }, [0,1,0,1], "4n").start(0); const chordLoop = new Tone.Loop((time) => { const chords = [['C2', 'Eb2', 'G2'], ['A1', 'C2', 'E2']]; let currentChord = chords[Math.floor(rng() * 2)]!; if(samplers.epiano) samplers.epiano.sampler.triggerAttackRelease(currentChord, '2n', time, 0.7 + rng() * 0.2);  }, "1n").start(0); scheduledEvents.push(kickSeq, snareSeq, chordLoop); return true;  };
@@ -433,13 +461,16 @@ const createLiteStyleRock = (rng: () => number): boolean => { const currentTone 
       @export-params="handleExportParams"
       @reset-params="handleResetParams"
       @set-extreme-eq="handleSetExtremeEq"
+      @set-guitar-preset="handleSetGuitarPreset"
     />
   </div>
 </template>
 
 <style>
 body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif; }
+/* [AI-ASSISTANT-FIX] START: 'align'プロパティを'align-items'に修正 */
 .background-container { background-image: url('/bg-main.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+/* [AI-ASSISTANT-FIX] END: 'align'プロパティを'align-items'に修正 */
 .content-panel { background-color: rgba(255, 255, 255, 0.88); padding: 20px 40px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); backdrop-filter: blur(5px); width: 90%; max-width: 600px; text-align: center; }
 .title { color: #363636; font-weight: bold; margin-bottom: 8px; }
 .subtitle { color: #555; margin-top: 0; margin-bottom: 30px; }
