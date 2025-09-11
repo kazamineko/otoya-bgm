@@ -6,9 +6,7 @@ import AboutModal from '../components/AboutModal.vue';
 import SoundCheckModal from '../components/SoundCheckModal.vue';
 
 const guitarAudioLog = (...args: any[]) => { console.log('[OTOYA_GUITAR_LOG]', ...args); };
-// [GEMINI] 診断バス専用のロガーを追加
 const diagnosticLog = (...args: any[]) => { console.log('%c[OTOYA_DIAGNOSTIC]', 'color: #e67e22;', ...args); };
-
 
 const selectedMenu = ref<string | null>(null);
 const isPlaying = ref(false);
@@ -131,6 +129,47 @@ watch(tuningParams, (newParams) => {
   for (const instrumentName in newParams) { const exclusionList = ['target_ebass', 'spiano', 'eorgan', 'target_eguitar']; if (exclusionList.includes(instrumentName)) continue; const activeSampler = samplers[instrumentName] || targetSamplers[instrumentName]; if (activeSampler) { const sampler = activeSampler.sampler; const params = newParams[instrumentName]!; if(params.volume !== undefined) sampler.volume.value = params.volume; if(params.attack !== undefined) sampler.attack = params.attack; if(params.release !== undefined) sampler.release = params.release; } }
 }, { deep: true });
 
+const primeAudioSystem = async () => {
+    if (!Tone) return;
+    guitarAudioLog('ギター信号経路の強制暖機運転（マスター方式・改）を開始...');
+    
+    const diagnosticSteps: ToneType.Unit.Time[] = ["4n", "4n", "4n", "4n"];
+    let cumulativeTime = 0;
+
+    for (let i = 0; i < diagnosticSteps.length; i++) {
+        const step = i + 1;
+        const scheduledTime = Tone.now() + cumulativeTime;
+
+        const primingPlayer = new Tone.Player();
+        const primingMute = new Tone.Volume(-Infinity).toDestination();
+
+        // [GEMINI] FIX: loadメソッドにURLを渡す
+        await primingPlayer.load(`/eguitar2/${cleanGuitarUrls['C4']}`);
+
+        diagnosticLog(` -> 暖機ステップ ${step}: 信号発射を予約 (at ${scheduledTime})`);
+        
+        const nodes = [guitarCompressor, guitarNoiseGate, guitarChebyshev, guitarEQ, guitarPostGain, guitarCabinet, primingMute];
+        const chain = nodes.slice(0, step === 1 ? 2 : step + 1);
+        if (step === 4) chain.push(primingMute);
+
+        primingPlayer.chain(...chain as any);
+        primingPlayer.start(scheduledTime);
+
+        primingPlayer.onstop = () => {
+            primingPlayer.dispose();
+            primingMute.dispose();
+            diagnosticLog(` -> 暖機ステップ ${step}: 一時ノードを破棄完了`);
+        };
+        primingPlayer.stop(scheduledTime + Tone.Time(diagnosticSteps[i]).toSeconds());
+
+        cumulativeTime += Tone.Time(diagnosticSteps[i]).toSeconds();
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, cumulativeTime * 1000 + 100));
+    
+    guitarAudioLog('プライミング完了。全ての回路が起動しました。');
+};
+
 const initializeAudio = async () => {
   guitarAudioLog('initializeAudio: 開始');
   isLoading.value = true;
@@ -223,31 +262,8 @@ const initializeAudio = async () => {
     rawSamplePlayers = await new Promise<ToneType.Players>((resolve) => { const p = new Tone!.Players({ urls: allSamplePaths, baseUrl: "/", onload: () => resolve(p) }).toDestination(); });
     
     await Tone.loaded();
-
-    if (Tone && guitarCompressor && guitarNoiseGate && guitarChebyshev && guitarEQ && guitarPostGain && guitarCabinet && masterComp) {
-        guitarAudioLog('ギター信号経路の強制暖機運転（マスター方式）を開始...');
-        const primingPlayer = new Tone.Player();
-        const primingMute = new Tone.Volume(-Infinity);
-        
-        await primingPlayer.load(`/eguitar2/${cleanGuitarUrls['C4']}`);
-        guitarAudioLog(' -> 暖機運転用の音源ロード完了');
-        
-        primingPlayer.chain(
-            guitarCompressor, guitarNoiseGate, guitarChebyshev, 
-            guitarEQ, guitarPostGain, guitarCabinet, 
-            primingMute, masterComp
-        );
-        guitarAudioLog(' -> 暖機運転用の信号経路を構築完了');
-
-        primingPlayer.start();
-        guitarAudioLog(' -> 暖機運転用の信号を発射');
-
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        primingPlayer.dispose();
-        primingMute.dispose();
-        guitarAudioLog('プライミング完了。一時ノードを破棄しました。');
-    }
+    
+    await primeAudioSystem();
     
     isAudioInitialized.value = true;
     loadingMessage.value = '準備ができました';
@@ -261,7 +277,6 @@ const initializeAudio = async () => {
 };
 
 onUnmounted(() => { stopMusic(); });
-
 const playMusic = async (menuName: string, seed?: string) => { if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) return; } if (isPlaying.value) stopMusic(); const randomPart = seed || Date.now().toString(36) + Math.random().toString(36).substring(2); const newSeed = `${menuName}:${randomPart}`; const rng = seedrandom(randomPart); let musicGenerated = false; switch (menuName) { case '集中ブレンド': musicGenerated = createConcentrationSound(rng); break; case 'リラックス・デカフェ': musicGenerated = createRelaxSound(rng); break; case 'ジャズ・スペシャル': musicGenerated = createJazzSound(rng); break; case 'Lo-Fi・ビター': musicGenerated = createLoFiSound(rng); break; case 'ロック・ビート': musicGenerated = createRockSound(rng); break; case 'LITE-Style・Post Rock': musicGenerated = createLiteStyleRock(rng); break; } if (musicGenerated && Tone) { currentSeed.value = newSeed; Tone.Transport.start(); isPlaying.value = true; selectedMenu.value = menuName; } else if (!seed) { alert('このメニューは現在準備中です。'); } };
 const stopMusic = () => { if (!isPlaying.value || !Tone) return; Tone.Transport.stop(); Tone.Transport.cancel(0); scheduledEvents.forEach(event => { try { if (event && event.state === "started") event.stop(0); } catch (e) { console.warn(`イベント停止エラー:`, e); } }); scheduledEvents.forEach(event => { try { if (event && !event.disposed) event.dispose(); } catch (e) { console.warn(`イベント破棄エラー:`, e); } }); scheduledEvents.length = 0; if (noise) { try { noise.stop(0); noise.dispose(); noise = null; } catch (e) { console.warn(`ノイズ停止エラー:`, e); } } try { cleanGuitarSampler?.releaseAll(); Object.values(samplers).forEach(s => s.sampler.releaseAll()); Object.values(targetSamplers).forEach(s => s.sampler.releaseAll()); } catch (e) { console.warn(`サンプラーリリースエラー:`, e); } isPlaying.value = false; };
 const triggerGuitarSound = (note: string | string[], duration: ToneType.Unit.Time, time: ToneType.Unit.Time, velocity: number) => { guitarAudioLog(`triggerGuitarSound: 発音リクエスト`, { note, duration, time, velocity }); if (cleanGuitarSampler) { guitarAudioLog(` -> cleanGuitarSamplerは正常。triggerAttackReleaseを実行。`); cleanGuitarSampler.triggerAttackRelease(note, duration, time, velocity); } else { guitarAudioLog(` -> [致命的エラー] cleanGuitarSamplerがnullのため、発音できません。`); } }
@@ -270,25 +285,15 @@ const playFromSeed = async () => { const [menuName, seed] = seedInput.value.spli
 const openSoundCheckModal = () => { isSoundCheckModalVisible.value = true; }; const closeSoundCheckModal = () => { isSoundCheckModalVisible.value = false; };
 const handlePlaySound = async (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => { if (!isAudioInitialized.value) { await initializeAudio(); if (!isAudioInitialized.value) { alert('音源の初期化に失敗しました。'); return; } } const duration = '2n'; const now = Tone?.now(); if (type === 'target_sampler') { if (instrumentName === 'target_ebass' && newRockBassSampler) { newRockBassSampler.sampler.triggerAttackRelease('E1', duration); return; } if (instrumentName === 'target_eguitar' && now) { guitarAudioLog('サウンドチューニング画面から「最終アウトプット」がトリガーされました。'); triggerGuitarSound('C4', '1n', now, 0.9); } } else { const samplerData = samplers[instrumentName]; if (type === 'sampler' && samplerData && samplerData.baseNote) { samplerData.sampler.triggerAttackRelease(samplerData.baseNote, duration); } else if (type === 'raw' && rawSamplePlayers && rawSamplePlayers.has(instrumentName)) { rawSamplePlayers.player(instrumentName).start(); } else if (type === 'target' && instrumentName === 'eguitar' && targetGuitarPlayer) { targetGuitarPlayer.start(); } else if (type === 'target' && instrumentName === 'ebass' && targetBassPlayer) { targetBassPlayer.start(); } } };
 const handlePlayRawSample = async (payload: { url: string, folder: string }) => { if (!rawMp3Player) return; const fullUrl = `/${payload.folder}/${payload.url}`; try { if (rawMp3Player.state === 'started') { rawMp3Player.stop(); } await rawMp3Player.load(fullUrl); rawMp3Player.start(); } catch (e) { console.error(`Failed to load or play raw sample ${fullUrl}`, e); } };
-
 const handlePlayDiagnosticSound = async (type: 'sampler' | 'dist' | 'eq' | 'cab') => {
   if (!Tone || !cleanGuitarSampler || !guitarCompressor || !guitarNoiseGate || !guitarChebyshev || !guitarEQ || !guitarCabinet || !masterComp || !guitarPostGain) {
      alert('診断に必要な音源またはエフェクトが準備できていません。');
      return;
   }
-  
   const diagnosticPlayer = new Tone.Player();
   try {
     await diagnosticPlayer.load(`/eguitar2/${cleanGuitarUrls['C4']}`);
-    
-    // [GEMINI] FIX: 診断バスが「真実」を語るように、実際の信号経路と完全に一致させる
-    const comp = guitarCompressor;
-    const gate = guitarNoiseGate;
-    const dist = guitarChebyshev;
-    const eq = guitarEQ;
-    const postGain = guitarPostGain;
-    const cab = guitarCabinet;
-
+    const comp = guitarCompressor; const gate = guitarNoiseGate; const dist = guitarChebyshev; const eq = guitarEQ; const postGain = guitarPostGain; const cab = guitarCabinet;
     switch (type) {
       case 'sampler':
         diagnosticLog("① Player -> Comp -> Gate -> MasterComp");
@@ -314,17 +319,7 @@ const handlePlayDiagnosticSound = async (type: 'sampler' | 'dist' | 'eq' | 'cab'
     alert("診断用サウンドの再生に失敗しました。");
   }
 };
-
-const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => { if (tuningParams.value[payload.instrument]) { const updatedInstrumentParams = { ...tuningParams.value[payload.instrument] }; updatedInstrumentParams[payload.param] = payload.value; tuningParams.value[payload.instrument] = updatedInstrumentParams; } };
-const handleSaveParams = () => { try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(tuningParams.value)); alert('現在の設定をブラウザに保存しました。'); } catch (e) { alert('設定の保存に失敗しました。'); } };
-const handleExportParams = () => { console.clear(); console.log(JSON.stringify(tuningParams.value, null, 2)); alert('現在の設定を開発者コンソールに出力しました。'); };
-const handleResetParams = () => { if (confirm('現在の調整を破棄し、全ての設定を初期値に戻します。よろしいですか？')) { tuningParams.value = JSON.parse(JSON.stringify(masterTunedParams)); } };
-const handleSetExtremeEq = (type: 'cut' | 'boost') => { const value = type === 'cut' ? -12 : 12; const currentParams = tuningParams.value.target_eguitar; tuningParams.value.target_eguitar = { ...currentParams, eqLow: value, eqMid: value, eqHigh: value, }; };
-
-// ---
-// SECTION: Music Generation Logic
-// ---
-
+const handleUpdateParam = (payload: { instrument: string, param: string, value: any }) => { if (tuningParams.value[payload.instrument]) { const updatedInstrumentParams = { ...tuningParams.value[payload.instrument] }; updatedInstrumentParams[payload.param] = payload.value; tuningParams.value[payload.instrument] = updatedInstrumentParams; } }; const handleSaveParams = () => { try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(tuningParams.value)); alert('現在の設定をブラウザに保存しました。'); } catch (e) { alert('設定の保存に失敗しました。'); } }; const handleExportParams = () => { console.clear(); console.log(JSON.stringify(tuningParams.value, null, 2)); alert('現在の設定を開発者コンソールに出力しました。'); }; const handleResetParams = () => { if (confirm('現在の調整を破棄し、全ての設定を初期値に戻します。よろしいですか？')) { tuningParams.value = JSON.parse(JSON.stringify(masterTunedParams)); } }; const handleSetExtremeEq = (type: 'cut' | 'boost') => { const value = type === 'cut' ? -12 : 12; const currentParams = tuningParams.value.target_eguitar; tuningParams.value.target_eguitar = { ...currentParams, eqLow: value, eqMid: value, eqHigh: value, }; };
 const createConcentrationSound = (rng: () => number): boolean => { if (!Tone || !masterComp) return false; scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0; if (noise) { noise.stop(0); noise.dispose(); noise = null; } noise = new Tone.Noise("pink").start(0); const filter = new Tone.Filter(800, "lowpass").connect(masterComp); noise.connect(filter); const loop = new Tone.Loop((time) => { filter.frequency.rampTo(600 + rng() * 400, 4, time); }, "4m").start(0); scheduledEvents.push(loop); return true; };
 const createRelaxSound = (rng: () => number): boolean => { if (!samplers.pad) return false; scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0; const { sampler: padSampler, baseNote } = samplers.pad; if (!baseNote) return false; Tone?.Transport.scheduleOnce(time => { padSampler.triggerAttack(baseNote, time); }, 0); return true;  };
 const createLoFiSound = (rng: () => number): boolean => { if (!Tone || !samplers.epiano || !samplers.kick || !samplers.snare) return false; scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0; const kickSeq = new Tone.Sequence((time, note) => { if(note && samplers.kick?.baseNote) samplers.kick.sampler.triggerAttackRelease(samplers.kick.baseNote, '8n', time, 0.9 + rng() * 0.1); }, [1,0,1,0,1,0,1,0], "8n").start(0); const snareSeq = new Tone.Sequence((time, note) => { if(note && samplers.snare?.baseNote) samplers.snare.sampler.triggerAttackRelease(samplers.snare.baseNote, '8n', time, 0.8 + rng() * 0.2); }, [0,1,0,1], "4n").start(0); const chordLoop = new Tone.Loop((time) => { const chords = [['C2', 'Eb2', 'G2'], ['A1', 'C2', 'E2']]; let currentChord = chords[Math.floor(rng() * 2)]!; if(samplers.epiano) samplers.epiano.sampler.triggerAttackRelease(currentChord, '2n', time, 0.7 + rng() * 0.2);  }, "1n").start(0); scheduledEvents.push(kickSeq, snareSeq, chordLoop); return true;  };
