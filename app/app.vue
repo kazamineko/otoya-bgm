@@ -58,6 +58,7 @@ type TuningParams = Record<string, any>;
 const tuningParams = ref<TuningParams>({});
 const LOCAL_STORAGE_KEY = 'otoya-tuning-params-v12-pro';
 
+// [AI-ASSISTANT-FIX] START: マスターによる最終調整パラメータを反映
 const masterTunedParams: TuningParams = {
   "piano": { "volume": 0, "attack": 0.01, "release": 1 },
   "bass": { "volume": -3, "attack": 0.01, "release": 0.5 },
@@ -75,19 +76,28 @@ const masterTunedParams: TuningParams = {
   "tomHigh": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomMid": { "volume": -6, "attack": 0.01, "release": 0.4 },
   "tomFloor": { "volume": -6, "attack": 0.01, "release": 0.4 },
-  "target_eguitar": { 
-    "preGain": 0, // [AI-ASSISTANT-FIX] 初期値を0.0dBに変更
-    "volume": -12,
-    "attack": 0.005, "release": 0.6, 
-    "distortion": 0.4, "eqLow": 0, "eqMid": 0, "eqHigh": 0,
-    "compThreshold": -24, "compRatio": 4, "compAttack": 0.003, "compRelease": 0.1,
-    "gateThreshold": -50, "gateSmoothing": 0.1,
-    "reverbWet": 0.25
+  "target_eguitar": {
+    "preGain": 0,
+    "distortion": 0.38,
+    "compThreshold": -30,
+    "compRatio": 8,
+    "compAttack": 0.001,
+    "compRelease": 0.2,
+    "gateThreshold": -40,
+    "gateSmoothing": 0.05,
+    "eqLow": 2,
+    "eqMid": -9,
+    "eqHigh": 3,
+    "volume": -18,
+    "reverbWet": 0.15,
+    "attack": 0.005,
+    "release": 0.6
   },
   "target_ebass": { "volume": 0, "attack": 0.018, "release": 1.3, "eqLow": 0, "eqMid": 0, "eqHigh": 0 },
   "spiano": { "volume": -15, "attack": 0.01, "release": 1.5 },
   "eorgan": { "volume": -12, "attack": 0.05, "release": 1 }
 };
+// [AI-ASSISTANT-FIX] END: マスターによる最終調整パラメータを反映
 
 const cleanGuitarUrls = {
     'A2': 'A2.mp3', 'A3': 'A3.mp3', 'A4': 'A4.mp3', 'A5': 'A5.mp3',
@@ -247,10 +257,9 @@ const initializeAudio = async () => {
     
     await Tone.loaded();
     
-    // [AI-ASSISTANT-FIX] START: マスターの指示に基づき、暖機運転処理をコメントアウトしてテスト
-    // await primeAudioSystem();
-    guitarAudioLog('マスターの指示により、暖機運転（primeAudioSystem）をスキップします。');
-    // [AI-ASSISTANT-FIX] END: 暖機運転処理をコメントアウトしてテスト
+    // [AI-ASSISTANT-FIX] START: マスターの指示に基づき、暖機運転処理を再度有効化
+    await primeAudioSystem();
+    // [AI-ASSISTANT-FIX] END: 暖機運転処理を再度有効化
     
     isAudioInitialized.value = true;
     loadingMessage.value = '準備ができました';
@@ -332,7 +341,7 @@ const handleSetGuitarPreset = (presetName: 'default' | 'heavy') => {
   } else if (presetName === 'heavy') {
     guitarAudioLog("ギタープリセットを「激歪み」に設定します。");
     const heavyParams = {
-      preGain: 0, // [AI-ASSISTANT-FIX] 激歪みプリセットのPreGainを0.0dBに変更
+      preGain: 0,
       distortion: 0.9,
       compThreshold: -30,
       compRatio: 8,
@@ -343,7 +352,7 @@ const handleSetGuitarPreset = (presetName: 'default' | 'heavy') => {
       eqLow: 2,
       eqMid: -9,
       eqHigh: 3,
-      volume: -18, // PreGainを下げた分、PostGainを少し上げる
+      volume: -18,
       reverbWet: 0.15,
       attack: 0.005,
       release: 0.6,
@@ -352,17 +361,14 @@ const handleSetGuitarPreset = (presetName: 'default' | 'heavy') => {
   }
 };
 
-// [AI-ASSISTANT-FIX] START: キャビネット通過後のサンプルを再生するハンドラを追加
 const handlePlayPostCabinetSample = (note: string) => {
   if (!Tone || !cleanGuitarSampler) {
     guitarAudioLog('キャビネット通過後サンプルを再生できません: オーディオの準備が不十分です。');
     return;
   }
   guitarAudioLog(`ノート「${note}」のキャビネット通過後サウンドを再生します...`);
-  // cleanGuitarSamplerはすでに完全なエフェクトチェーンに接続されているため、トリガーするだけでよい
   cleanGuitarSampler.triggerAttackRelease(note, '1n', Tone.now());
 };
-// [AI-ASSISTANT-FIX] END: キャビネット通過後のサンプルを再生するハンドラを追加
 
 const createConcentrationSound = (rng: () => number): boolean => { if (!Tone || !masterComp) return false; scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0; if (noise) { noise.stop(0); noise.dispose(); noise = null; } noise = new Tone.Noise("pink").start(0); const filter = new Tone.Filter(800, "lowpass").connect(masterComp); noise.connect(filter); const loop = new Tone.Loop((time) => { filter.frequency.rampTo(600 + rng() * 400, 4, time); }, "4m").start(0); scheduledEvents.push(loop); return true; };
 const createRelaxSound = (rng: () => number): boolean => { if (!samplers.pad) return false; scheduledEvents.forEach(e => e.dispose()); scheduledEvents.length = 0; const { sampler: padSampler, baseNote } = samplers.pad; if (!baseNote) return false; Tone?.Transport.scheduleOnce(time => { padSampler.triggerAttack(baseNote, time); }, 0); return true;  };
