@@ -104,13 +104,19 @@
 
                 <div class="sub-header">サウンド診断バス</div>
                 <div class="diagnostic-bus">
-                  <button @click.prevent="playDiagnosticSound('sampler')">① Sampler単体</button>
+                  <button @click.prevent="playDiagnosticSound('sampler')">① Sampler</button>
                   <span>→</span>
-                  <button @click.prevent="playDiagnosticSound('dist')">② ＋ Distortion</button>
+                  <button @click.prevent="playDiagnosticSound('chebyshev')">② +Chebyshev</button>
                   <span>→</span>
-                  <button @click.prevent="playDiagnosticSound('eq')">③ ＋ EQ</button>
+                  <button @click.prevent="playDiagnosticSound('compressor')">③ +Comp</button>
+                  <br/>
+                  <button @click.prevent="playDiagnosticSound('noisegate')">④ +NoiseGate</button>
                   <span>→</span>
-                  <button @click.prevent="playDiagnosticSound('cab')">④ ＋ Cabinet (最終)</button>
+                  <button @click.prevent="playDiagnosticSound('eq')">⑤ +EQ</button>
+                  <span>→</span>
+                  <button @click.prevent="playDiagnosticSound('postgain')">⑥ +PostGain</button>
+                  <span>→</span>
+                  <button @click.prevent="playDiagnosticSound('cabinet')">⑦ +Cabinet (最終)</button>
                 </div>
 
                 <div class="sub-header">Raw MP3 Playback (eguitar2)</div>
@@ -200,12 +206,13 @@ defineProps<{
   heavyMetalUrls: Record<string, string>;
 }>();
 
+type DiagnosticSoundType = 'sampler' | 'chebyshev' | 'compressor' | 'noisegate' | 'eq' | 'postgain' | 'cabinet';
 const emit = defineEmits(['close', 'playSound', 'playRawSample', 'playDiagnosticSound', 'updateParam', 'saveParams', 'exportParams', 'resetParams', 'setExtremeEq']);
 
 const close = () => emit('close');
 const playSound = (instrumentName: string, type: 'sampler' | 'raw' | 'target' | 'target_sampler') => emit('playSound', instrumentName, type);
 const playRawSample = (url: string, folder: string) => emit('playRawSample', { url, folder });
-const playDiagnosticSound = (type: 'sampler' | 'dist' | 'eq' | 'cab') => emit('playDiagnosticSound', type);
+const playDiagnosticSound = (type: DiagnosticSoundType) => emit('playDiagnosticSound', type);
 const saveParams = () => emit('saveParams');
 const exportParams = () => emit('exportParams');
 const resetParams = () => emit('resetParams');
@@ -295,6 +302,8 @@ const updateParam = (instrument: string, param: string, event: Event) => {
   justify-content: space-around;
   align-items: center;
   padding: 10px 0;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 .diagnostic-bus button {
   background-color: #c74848;
